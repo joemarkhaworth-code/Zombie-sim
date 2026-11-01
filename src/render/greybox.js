@@ -1,13 +1,14 @@
 // Greybox renderer: plain coloured squares and letters. Only reads world state.
 // Each tile is drawn according to the player's visibility level for it:
 //   3 = full colour, 2 and 1 = slightly darker, 0 = black (not drawn).
-// Tiles out of sight but in the player's map memory are drawn greyed out, as last
-// seen. Creatures are never drawn from memory (they move).
+// Tiles out of sight but in the player's map memory are drawn from their snapshot
+// (terrain + things as last seen, not the live tile), greyed out. Creatures are
+// never drawn from memory.
 // (The art pass will use dithering for levels 2 and 1 instead of plain darkening.)
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testgrid.js';
 import { query } from '../sim/world.js';
-import { rememberedTile } from '../sim/systems/vision.js';
+import { rememberedAt } from '../sim/systems/memory.js';
 
 const C = CONFIG.colours;
 const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall };
@@ -26,26 +27,33 @@ export function drawWorld(ctx, world, layout, inspect = null) {
     return vx >= 0 && vy >= 0 && vx < cols && vy < rows && x >= 0 && y >= 0 && x < world.width && y < world.height;
   };
 
-  // 1. Tiles
+  // 1. Tiles: live if in sight, else the remembered snapshot greyed out.
+  ctx.font = `bold ${Math.floor(s * 0.75)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   for (let vy = 0; vy < rows; vy++) {
     for (let vx = 0; vx < cols; vx++) {
       const x = camX + vx, y = camY + vy;
       if (!onScreen(x, y)) continue;
+      const px = ox + vx * s, py = oy + vy * s;
       if (levelAt(x, y)) {
         ctx.fillStyle = TILE_COLOUR[world.tiles[y * world.width + x]];
-      } else {
-        const remembered = player ? rememberedTile(world, player, x, y) : null;
-        if (remembered === null) continue;
-        ctx.fillStyle = MEMORY_COLOUR[remembered];
+        ctx.fillRect(px, py, s - 1, s - 1);
+        continue;
       }
-      ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
+      const snap = player ? rememberedAt(world, player, x, y) : null;
+      if (!snap) continue;
+      ctx.fillStyle = MEMORY_COLOUR[snap.tile];
+      ctx.fillRect(px, py, s - 1, s - 1);
+      const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
+      if (thing) {
+        ctx.fillStyle = C.memoryThing;
+        ctx.fillText(thing.char, px + s / 2, py + s / 2 + 1);
+      }
     }
   }
 
   // 2. Entities on visible tiles
-  ctx.font = `bold ${Math.floor(s * 0.75)}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   for (const e of query(world, 'Position', 'Glyph')) {
     const { x, y } = e.Position;
     if (!onScreen(x, y) || !levelAt(x, y)) continue;

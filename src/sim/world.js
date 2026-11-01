@@ -5,6 +5,7 @@ import { createRng } from './rng.js';
 import { generateTestGrid, TILE_INFO } from './gen/testgrid.js';
 import { createEventBus } from './events.js';
 import { installVision, refreshAllVision } from './systems/vision.js';
+import { installMemory, createMemory } from './systems/memory.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -30,7 +31,6 @@ export function createWorld(seed) {
     Player: {},
     Prey: {},
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
-    Memory: { tiles: new Uint8Array(width * height) }, // per tile: 0 = never seen, else tile type + 1 as last seen
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },
@@ -47,7 +47,9 @@ export function createWorld(seed) {
     Name: { name: 'zombie' },
   });
 
+  world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
   installVision(world);
+  installMemory(world);
   refreshAllVision(world);
   return world;
 }

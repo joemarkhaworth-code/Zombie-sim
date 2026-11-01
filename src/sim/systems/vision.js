@@ -81,21 +81,7 @@ export function updateVision(world, e) {
   const own = oy * world.width + ox;
   visible.set(own, Math.max(visible.get(own) ?? 0, 1));
   e.Vision.visible = visible;
-  if (e.Memory) remember(world, e);
-}
-
-// Map memory: anything with a Memory component remembers each tile it has seen,
-// as it was when last seen (tile type + 1; 0 = never seen).
-function remember(world, e) {
-  const mem = e.Memory.tiles;
-  for (const idx of e.Vision.visible.keys()) mem[idx] = world.tiles[idx] + 1;
-}
-
-// What a viewer remembers at (x, y): a tile type, or null if never seen.
-export function rememberedTile(world, e, x, y) {
-  if (!e.Memory || !inBounds(world, x, y)) return null;
-  const m = e.Memory.tiles[y * world.width + x];
-  return m ? m - 1 : null;
+  world.events.emit('vision_updated', { id: e.id });
 }
 
 export function refreshAllVision(world) {

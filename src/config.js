@@ -40,6 +40,7 @@ export const CONFIG = {
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out
     memoryWall: '#3c3c3c',
+    memoryThing: '#6a6a6a',          // remembered items/doors: grey letter on the greyed tile
     inspect: '#ffffff',              // outline on the long-pressed tile
     player: '#ffff00',
     zombie: '#40c040',

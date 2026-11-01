@@ -1,7 +1,8 @@
 // Turns sim events into one short status-line message per turn.
 // Lives on the render side: the sim never produces text. Pure JS (no DOM), so it's headless-testable.
 
-import { canSee, visibilityAt, rememberedTile } from '../sim/systems/vision.js';
+import { canSee, visibilityAt } from '../sim/systems/vision.js';
+import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
 
@@ -77,20 +78,26 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
 }
 
 // Long-press inspect: a one-line description of what the player knows about (x, y).
-//  - In sight: the creature standing there (if noticed), else the tile.
-//  - Out of sight but remembered: the tile as last seen.
+//  - In sight: a creature standing there (if noticed), else the top thing on the
+//    tile (item, door...), else the terrain. All live.
+//  - Out of sight but remembered: the snapshot from when it was last seen, never
+//    the live tile, and never creatures.
 //  - Never seen: unexplored.
 export function describeTile(world, x, y) {
   const player = world.entities.get(world.playerId);
   if (!player || !inBounds(world, x, y)) return 'Nothing there.';
   if (visibilityAt(world, player, x, y) > 0) {
     if (x === player.Position.x && y === player.Position.y) return "That's you.";
-    for (const e of query(world, 'Position', 'Name')) {
-      if (e.Position.x === x && e.Position.y === y && canSee(world, player, e)) return `A ${e.Name.name}.`;
-    }
+    const here = query(world, 'Position', 'Name').filter((e) => e.Position.x === x && e.Position.y === y);
+    const creature = here.find((e) => e.Actor && canSee(world, player, e));
+    if (creature) return `A ${creature.Name.name}.`;
+    const thing = here.filter((e) => !e.Actor).pop();
+    if (thing) return `A ${thing.Name.name}.`;
     return TILE_DESC[tileAt(world, x, y)];
   }
-  const remembered = rememberedTile(world, player, x, y);
-  if (remembered !== null) return `${TILE_DESC[remembered].slice(0, -1)}, out of sight.`;
-  return 'Unexplored.';
+  const snap = rememberedAt(world, player, x, y);
+  if (!snap) return 'Unexplored.';
+  const thing = snap.things[snap.things.length - 1];
+  const what = thing ? `A ${thing.name}.` : TILE_DESC[snap.tile];
+  return `${what.slice(0, -1)}, out of sight.`;
 }

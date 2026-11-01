@@ -2,7 +2,9 @@
 // Usage: node tests/headless.js [turns] [seed]
 import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius, rememberedTile } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
+import { rememberedAt } from '../src/sim/systems/memory.js';
+import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
@@ -78,12 +80,16 @@ for (const seed of SEEDS) {
     if (m && m.priority === PRIORITY.danger) sawDanger = true;
     for (const k of playerOf(world).Vision.visible.keys()) everSeen.add(k);
   }
-  // Map memory = exactly the tiles ever seen, each remembered as it is (tiles don't change yet).
+  // Map memory = exactly the tiles ever seen; terrain matches (tiles don't change yet); no creatures.
   const mem = playerOf(world).Memory.tiles;
   for (let i = 0; i < mem.length; i++) {
     assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i}`);
-    if (mem[i]) assert(mem[i] - 1 === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
+    if (mem[i]) {
+      assert(mem[i].tile === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
+      assert(mem[i].things.length === 0, `seed ${seed}: a creature got into memory at ${i}`);
+    }
   }
+  assert(JSON.parse(JSON.stringify(mem)).length === mem.length, 'memory should be plain, saveable data');
   assert(counts.turn_ended === acted, `seed ${seed}: turn_ended ${counts.turn_ended} != ${acted}`);
   assert(counts.action_attempted === TURNS, `seed ${seed}: action_attempted ${counts.action_attempted} != ${TURNS}`);
   assert(counts.move_blocked > 0 && counts.entity_moved > 0 && counts.entity_staggered > 0 && counts.prey_spotted > 0 && counts.entity_seen > 0, `seed ${seed}: missing events ${JSON.stringify(counts)}`);
@@ -110,7 +116,7 @@ function openWorld(walls = []) {
     w.tiles[y * w.width + x] = edge ? TILE.WALL : TILE.FLOOR;
   }
   for (const [x, y] of walls) w.tiles[y * w.width + x] = TILE.WALL;
-  playerOf(w).Memory.tiles.fill(0); // forget the generated map
+  playerOf(w).Memory.tiles.fill(null); // forget the generated map
   return w;
 }
 function place(w, e, x, y) { e.Position.x = x; e.Position.y = y; refreshAllVision(w); }
@@ -194,15 +200,15 @@ const range = (e) => sightRadius(e);
   const p = playerOf(w), z = zombieOf(w);
   p.Position.x = 4; p.Position.y = 4;
   place(w, z, 18, 26);
-  assert(rememberedTile(w, p, 3, 3) === TILE.WALL, 'memory: seen wall remembered');
+  assert(rememberedAt(w, p, 3, 3).tile === TILE.WALL, 'memory: seen wall remembered');
   assert(describeTile(w, 3, 3) === 'A wall.', `inspect: visible wall, got ${describeTile(w, 3, 3)}`);
   assert(describeTile(w, 5, 5) === 'Open ground.', 'inspect: visible floor');
   assert(describeTile(w, 4, 4) === "That's you.", 'inspect: own tile');
   place(w, p, 18, 12); // walk away: (3,3) is now beyond the light range
   assert(visibilityAt(w, p, 3, 3) === 0, 'memory: (3,3) should be out of sight now');
-  assert(rememberedTile(w, p, 3, 3) === TILE.WALL, 'memory: wall still remembered out of sight');
+  assert(rememberedAt(w, p, 3, 3).tile === TILE.WALL, 'memory: wall still remembered out of sight');
   assert(describeTile(w, 3, 3) === 'A wall, out of sight.', `inspect: remembered wall, got ${describeTile(w, 3, 3)}`);
-  assert(rememberedTile(w, p, 2, 26) === null && describeTile(w, 2, 26) === 'Unexplored.', 'inspect: never-seen tile');
+  assert(rememberedAt(w, p, 2, 26) === null && describeTile(w, 2, 26) === 'Unexplored.', 'inspect: never-seen tile');
   place(w, z, 18, 6);
   assert(describeTile(w, 18, 6) === 'A zombie.', 'inspect: visible zombie');
   place(w, p, 2, 26);
@@ -214,6 +220,37 @@ const range = (e) => sightRadius(e);
   playerAct(w, { type: 'wait' });
   assert(log.message.text === 'You wait.', 'inspect: next action replaces the inspect text');
   console.log('memory + inspect OK');
+}
+
+{ // Memory is a snapshot: it shows how a tile looked when last seen, not how it is now.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  p.Position.x = 4; p.Position.y = 4;
+  const beans = addEntity(w, { Position: { x: 5, y: 5 }, Glyph: { char: '%', fg: '#fff', bg: '#000' }, Name: { name: 'tin of beans' } });
+  place(w, z, 6, 6); // zombie in view: must not be remembered
+  let snap = rememberedAt(w, p, 5, 5);
+  assert(snap.things.length === 1 && snap.things[0].name === 'tin of beans', 'snapshot: item remembered');
+  assert(rememberedAt(w, p, 6, 6).things.length === 0, 'snapshot: creature not remembered');
+
+  place(w, p, 18, 26); // walk far away; (5,5) and (8,4) now out of sight
+  assert(visibilityAt(w, p, 5, 5) === 0 && visibilityAt(w, p, 8, 4) === 0, 'snapshot: test tiles should be out of sight');
+  // The world changes behind your back.
+  w.entities.get(beans).Position.x = 7; // someone moves the beans
+  w.tiles[4 * w.width + 8] = TILE.WALL; // a wall goes up where there was floor
+  assert(rememberedAt(w, p, 5, 5).things[0]?.name === 'tin of beans', 'snapshot: still remembers beans where they were');
+  assert(describeTile(w, 5, 5) === 'A tin of beans, out of sight.', `snapshot: inspect shows remembered beans, got ${describeTile(w, 5, 5)}`);
+  assert(rememberedAt(w, p, 8, 4).tile === TILE.FLOOR && describeTile(w, 8, 4) === 'Open ground, out of sight.', 'snapshot: remembers the old floor, not the new wall');
+
+  place(w, p, 4, 4); // come back: snapshots refresh
+  assert(rememberedAt(w, p, 5, 5).things.length === 0, 'snapshot: beans gone from old spot once seen again');
+  assert(rememberedAt(w, p, 7, 5).things[0]?.name === 'tin of beans', 'snapshot: beans remembered at new spot');
+  assert(rememberedAt(w, p, 8, 4).tile === TILE.WALL, 'snapshot: new wall remembered once seen');
+  assert(describeTile(w, 7, 5) === 'A tin of beans.', 'inspect: visible item');
+  // Something appears in view while you stand still: remembered after the turn.
+  addEntity(w, { Position: { x: 6, y: 3 }, Glyph: { char: '/', fg: '#fff', bg: '#000' }, Name: { name: 'cricket bat' } });
+  playerAct(w, { type: 'wait' });
+  assert(rememberedAt(w, p, 6, 3).things[0]?.name === 'cricket bat', 'snapshot: item appearing in view is remembered without moving');
+  console.log('memory snapshots: stale until seen again, no creatures OK');
 }
 
 { // A zombie that can see you closes in, and the status line says so.
