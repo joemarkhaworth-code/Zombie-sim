@@ -106,7 +106,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
   ev.on('ground_noise', (d) => {
     if (!isPlayer(d.id)) return;
-    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.' }[d.tile];
+    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.' }[d.tile];
     say(t || 'Noisy ground.', PRIORITY.info);
   });
   ev.on('use_failed', (d) => {

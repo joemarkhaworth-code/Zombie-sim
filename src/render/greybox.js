@@ -18,6 +18,8 @@ const TILE_COLOUR = {
   [TILE.DRYSTONE]: C.drystone, [TILE.HEDGE]: C.hedge, [TILE.TREE]: C.tree, [TILE.POND]: C.pond,
   [TILE.FELL]: C.fell, [TILE.BRACKEN]: C.bracken, [TILE.ROCK]: C.rock, [TILE.SCREE]: C.scree,
   [TILE.LAKE]: C.lake, [TILE.SHORE]: C.shore,
+  [TILE.ROAD]: C.road, [TILE.PAVEMENT]: C.pavement, [TILE.GINNEL]: C.ginnel, [TILE.YARD]: C.yard,
+  [TILE.GATE]: C.gate, [TILE.PATH]: C.path, [TILE.PLOT]: C.plot, [TILE.GRAVE]: C.grass,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
 const greyOf = (hex) => {
@@ -26,6 +28,13 @@ const greyOf = (hex) => {
 };
 const MEMORY_COLOUR = Object.fromEntries(Object.entries(TILE_COLOUR).map(([k, v]) => [k, greyOf(v)]));
 MEMORY_COLOUR[TILE.FLOOR] = C.memoryFloor; MEMORY_COLOUR[TILE.WALL] = C.memoryWall; MEMORY_COLOUR[TILE.BUSH] = C.memoryBush;
+
+// Road centre line: which side of this road tile has the other lane (+1 east, -1 west, 0 none).
+function roadLine(world, x, y) {
+  const r = (dx) => x + dx >= 0 && x + dx < world.width && world.tiles[y * world.width + x + dx] === TILE.ROAD;
+  return { line: r(1) && !r(-1) ? 1 : r(-1) && !r(1) ? -1 : 0 };
+}
+const markInfo = (world, t, x, y) => (t === TILE.BRIDGE ? waterSides(world, x, y) : t === TILE.ROAD ? roadLine(world, x, y) : null);
 
 // Which sides of (x, y) touch water - a bridge draws its parapets there.
 const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND]);
@@ -50,6 +59,30 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
+  if (t === TILE.ROAD) { // faded centre line between the two lanes of tarmac
+    if (water && water.line) { ctx.fillStyle = dim(C.roadMark); ctx.fillRect(water.line > 0 ? px + s - 2 : px - 1, py + s * 0.2, 2, s * 0.4); }
+    return;
+  }
+  if (t === TILE.PAVEMENT || t === TILE.GINNEL) { // flagstones: big square slabs
+    ctx.fillStyle = dim(C.pavementMark); const h = Math.max(1, Math.floor(s / 16));
+    ctx.fillRect(px, py + s * 0.5, s - 1, h); ctx.fillRect(px + s * 0.5, py, h, s - 1); return;
+  }
+  if (t === TILE.YARD) { ctx.fillStyle = dim(C.yardMark); const d = Math.max(2, Math.floor(s / 10)); for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) ctx.fillRect(px + (0.17 + i * 0.33) * s - d / 2, py + (0.17 + j * 0.33) * s - d / 2, d, d); return; }
+  if (t === TILE.LANE) { ctx.fillStyle = dim(C.laneMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.25, 0.3], [0.7, 0.55], [0.4, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
+  if (t === TILE.PATH) { ctx.fillStyle = dim(C.pathMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.3, 0.25], [0.6, 0.5], [0.35, 0.75]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
+  if (t === TILE.PLOT) { ctx.fillStyle = dim(C.plotMark); const d = Math.max(2, Math.floor(s / 10)); ctx.fillRect(px + s / 2 - d / 2, py + s / 2 - d / 2, d, d); return; }
+  if (t === TILE.GATE) { // a five-bar gate: wooden bars and a brace
+    ctx.fillStyle = dim(C.gateMark); const h = Math.max(2, Math.floor(s / 10));
+    for (const fy of [0.25, 0.5, 0.75]) ctx.fillRect(px + s * 0.1, py + fy * s - h / 2, s * 0.8, h);
+    ctx.fillRect(px + s * 0.1, py + s * 0.2, h, s * 0.6); ctx.fillRect(px + s * 0.9 - h, py + s * 0.2, h, s * 0.6);
+    return;
+  }
+  if (t === TILE.GRAVE) { // headstone on grass
+    ctx.fillStyle = dim(C.graveStone);
+    ctx.fillRect(px + s * 0.3, py + s * 0.35, s * 0.4, s * 0.45);
+    ctx.beginPath(); ctx.arc(px + s * 0.5, py + s * 0.35, s * 0.2, Math.PI, 0); ctx.fill();
+    return;
+  }
   if (t === TILE.BRIDGE) {
     // Plain road surface (walkable, like the lane) with a low parapet on each side over the water.
     if (water) {
@@ -127,7 +160,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         const t = world.tiles[y * world.width + x];
         ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
-        drawTileMark(ctx, t, px, py, s, false, t === TILE.BRIDGE ? waterSides(world, x, y) : null);
+        drawTileMark(ctx, t, px, py, s, false, markInfo(world, t, x, y));
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
@@ -136,7 +169,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       if (!snap) continue;
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
-      drawTileMark(ctx, snap.tile, px, py, s, true, snap.tile === TILE.BRIDGE ? waterSides(world, x, y) : null);
+      drawTileMark(ctx, snap.tile, px, py, s, true, markInfo(world, snap.tile, x, y));
       drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
       drawGlass(ctx, px, py, s, snap.glass || 0, C.memoryGlass);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing

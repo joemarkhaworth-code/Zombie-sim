@@ -5,21 +5,29 @@ export const CONFIG = {
   world: { map: 'village' },
   grid: { width: 20, height: 28 },   // test grid size
   village: {
-    width: 48, height: 64,
-    floorHalf: [5, 9],               // valley floor half-width at the valley head / near the lake
-    intake: 5,                       // intake fields between the floor and the fell wall
-    lakeRows: 12,                    // the lake fills the foot of the dale
-    gills: 3,                        // side streams off the fells
-    roadOffset: 3,                   // road runs this far from the beck
-    bridgeAt: 0.5,                   // the bridge (village centre) sits this far down to the lake
-    villageRows: 13,                 // plots within this many rows of the bridge (a tight village)
-    plots: 8, plotW: [6, 8], plotH: [5, 6], // empty building plots (14b builds on them)
-    gardenHedge: 0.15,               // garden boundaries that are hedges (the rest dry-stone; hedges are rare in the Lakes)
-    laneGateChance: 0.08,            // gaps in the walled lane
-    fields: 16, fieldGateChance: 0.04, // walled enclosures on floor + intake
-    fellWalls: 3,                    // walls climbing the open fell
-    screeFrom: 6,                    // scree only this far up the fellside
-    beckTrees: 0.3, woodRows: 14, woodDensity: 0.55, fieldTrees: 14,
+    // Generated in layers (see src/sim/gen/village.js): valley, road + bridge, high street,
+    // ginnels + yards, green + church, outskirts.
+    width: 56, height: 76,
+    floorHalf: [6, 10],              // valley floor half-width outside the village (head / foot)
+    villageHalf: 16,                 // the floor widens round the village to fit the street
+    intake: 5,                       // lower fellside walled into intake fields, below the fell wall
+    lakeRows: 8,                     // the lake at the foot of the dale
+    gills: 2,                        // side streams off the fell
+    roadDrift: 0.15,                 // chance per row the road bends a tile outside the village
+    bridgeAt: 0.44,                  // the bridge (village centre) this far down the map
+    streetRows: [15, 17],            // high street rows above / below the bridge
+    plotDepth: 5, yardDepth: 4,      // building plots front the pavement; walled yards behind (incl. back wall)
+    unitRows: [3, 4],                // frontage of a terraced plot along the street
+    unitsPerRow: [2, 3],             // plots per terrace row (a ginnel between rows)
+    pubRows: 5,                      // the pub: a wider plot by the bridge
+    greenRows: 4, churchRows: 9,     // the green, then the walled graveyard with the church plot
+    graves: 0.75,                    // chance of a gravestone on each grave spot
+    backHedge: 0.2,                  // field edge behind a back lane is sometimes a hedge (else dry stone)
+    farms: 2, farmW: 9, farmH: 8,    // walled farmyard with a farmhouse and a barn, at the end of a side lane
+    fields: 18,                      // walled fields off the road and lanes
+    fieldGate: 0.8, fellGate: 0.4,   // gates between fields / from a field onto the open fell
+    screeFrom: 5,                    // scree only this far up the open fell
+    beckTrees: 0.3, woodRadius: 6, woodDensity: 0.55, fieldTrees: 12,
   },
 
   testGrid: {
@@ -167,7 +175,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 1, key: 'zombie-sim-save' },
+  save: { version: 2, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -189,7 +197,22 @@ export const CONFIG = {
     background: '#000000',
     floor: '#203020',
     grass: '#2f5a24',
-    lane: '#6a6050',
+    lane: '#6a6050',                 // gravel back lanes and farm tracks
+    laneMark: '#544c3e',
+    road: '#3e3e44',                 // tarmac main road
+    roadMark: '#c8c8a0',             // faded centre line
+    pavement: '#9a978e',             // flagstones
+    pavementMark: '#78756d',
+    ginnel: '#6e6a62',               // narrow flagged passage
+    yard: '#5e5850',                 // cobbles
+    yardMark: '#48433c',
+    gate: '#3a3024',
+    gateMark: '#b08850',             // wooden bars
+    path: '#8c7a54',                 // worn earth
+    pathMark: '#6c5c3c',
+    plot: '#3a302a',                 // bare earth: empty building plot (14b builds here)
+    plotMark: '#5a4a3e',
+    graveStone: '#a8a8a0',
     stream: '#2f6fb0',
     streamMark: '#9cc8f0',
     bridge: '#a99f88',               // paved like the road (walkable), not like a wall

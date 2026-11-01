@@ -19,13 +19,14 @@ export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
   const { width, height } = map === 'village' ? CONFIG.village : CONFIG.grid;
   const rng = createRng(seed);
-  let tiles, plots = [], lane = null, green = null, bridgeRow = null;
-  if (map === 'village') ({ tiles, plots, lane, green, bridgeRow } = generateVillage(rng, width, height));
+  let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null;
+  if (map === 'village') ({ tiles, plots, green, graveyard, farms, bridgeRow, start: villageStart } = generateVillage(rng, width, height));
   else tiles = generateTestGrid(rng, width, height);
   const world = {
     seed, rng, width, height, map,
-    plots, // village: empty building plots { x, y, w, h, gate, side } for step 14b
-    green, bridgeRow, // village: the green { x, y, w, h } and the row of the village bridge
+    plots, // village: empty building plots { x, y, w, h, kind, front, back? } for step 14b
+    // kind: cottage | pub | shop | church | farmhouse | barn. front = the tile outside the front door.
+    green, graveyard, farms, bridgeRow, // village: the green and graveyard { x, y, w, h }, farmyards, the bridge row
     tiles,
     light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
@@ -45,7 +46,7 @@ export function createWorld(seed, opts = {}) {
 
   // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.
   // Village: on the road at the bridge (the village centre).
-  const start = map === 'village' ? nearestTileOf(world, width >> 1, bridgeRow, TILE.LANE) : nearestOpenTile(world, width >> 1, height >> 1);
+  const start = map === 'village' ? villageStart : nearestOpenTile(world, width >> 1, height >> 1);
   world.playerId = addEntity(world, {
     Position: { x: start.x, y: start.y },
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
@@ -155,16 +156,6 @@ function spawnTile(world, from, minDist) {
   if (far.length) { const t = far[world.rng.int(far.length)]; return { x: t.x, y: t.y }; }
   const t = open.reduce((a, b) => (b.d > a.d ? b : a));
   return { x: t.x, y: t.y };
-}
-
-function nearestTileOf(world, cx, cy, type) {
-  let best = null, bd = Infinity;
-  for (let y = 0; y < world.height; y++) for (let x = 0; x < world.width; x++) {
-    if (world.tiles[y * world.width + x] !== type || !isPassable(world, x, y)) continue;
-    const d = (x - cx) ** 2 + (y - cy) ** 2;
-    if (d < bd) { bd = d; best = { x, y }; }
-  }
-  return best || nearestOpenTile(world, cx, cy);
 }
 
 function nearestOpenTile(world, cx, cy) {
