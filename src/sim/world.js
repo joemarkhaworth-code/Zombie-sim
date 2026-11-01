@@ -28,6 +28,7 @@ export function createWorld(seed) {
     inputs: [],   // every player input, in order, so runs replay from seed + inputs
     playerId: null,
     gameOver: null, // set when the player dies: { cause, killerId, killerName, turn }
+    stats: { kills: 0 }, // run stats for the death page (zombies killed by the player)
   };
   installBleeding(world); // world.blood
   installStructures(world); // world.structures, world.glass, world.tileHp

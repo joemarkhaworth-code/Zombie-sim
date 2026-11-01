@@ -139,12 +139,15 @@ export const CONFIG = {
     searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
+  // Time: how many player turns make a day (day/night, step 15, will build on this).
+  time: { turnsPerDay: 300 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
   save: { version: 1, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
-    blinkMs: 400,                    // health blocks blink this fast while bleeding
+    blinkMs: 400,
+    deathTapDelayMs: 1000,           // ignore taps this long after dying, so you see the page                    // health blocks blink this fast while bleeding
   },
   view: {
     tilesAcross: 11,                 // camera width in tiles (odd keeps the player centred)
@@ -204,6 +207,9 @@ export const CONFIG = {
     bagButtonText: '#000000',
     aimTile: 'rgba(255,255,0,0.22)', // valid target tiles while aiming
     aimCreature: 'rgba(255,64,0,0.45)', // valid target with a creature on it        // one-shot action waiting for a target (SHOVE)
+    // Teletext's 8 colours (death page).
+    ttBlack: '#000000', ttRed: '#ff0000', ttGreen: '#00ff00', ttYellow: '#ffff00',
+    ttBlue: '#0000ff', ttMagenta: '#ff00ff', ttCyan: '#00ffff', ttWhite: '#ffffff',
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',

@@ -2,6 +2,7 @@
 // after it. With no message, the seed shows on the right.
 import { CONFIG } from '../config.js';
 import { PRIORITY } from './messages.js';
+import { dayOf } from '../sim/time.js';
 
 // Health: one block per point, filled or empty. Blinks (blink=true hides filled
 // blocks) while you're bleeding.
@@ -28,7 +29,7 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillStyle = C.statusTurn;
-  const turnText = `T${world.turn}`;
+  const turnText = `D${dayOf(world.turn)}`; // the day you're on
   ctx.fillText(turnText, 8, h / 2);
   const healthX = 8 + ctx.measureText(turnText + ' ').width;
   const msgX = drawHealth(ctx, world, healthX, h, blink) + 8;
@@ -67,24 +68,77 @@ export function drawButtons(ctx, world, layout, ui = {}) {
   }
 }
 
-// Death screen: dark overlay, big red title, how you died, the turn, and a prompt.
-export function drawDeath(ctx, layout, text) {
+// Death page: a Ceefax-style Teletext page, P302. A 40 x 25 character grid in the
+// 8 Teletext colours, stretched tall like a real Teletext screen, with blocky mosaic
+// bands, a headline, the run's numbers and a flashing prompt. flash toggles the prompt.
+export function drawCeefax(ctx, layout, t, flash) {
   const C = CONFIG.colours;
-  const { width: w, height: h } = layout;
-  ctx.fillStyle = 'rgba(0,0,0,0.8)';
-  ctx.fillRect(0, 0, w, h);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = C.healthFull;
-  ctx.font = `bold ${Math.floor(w / 7)}px monospace`;
-  ctx.fillText(text.title, w / 2, h * 0.38);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${Math.floor(w / 18)}px monospace`;
-  ctx.fillText(text.how, w / 2, h * 0.48, w - 16);
-  ctx.fillStyle = C.statusTurn;
-  ctx.fillText(text.turn, w / 2, h * 0.54);
-  ctx.fillStyle = C.buttonOnBg;
-  ctx.fillText('Tap to restart', w / 2, h * 0.66);
+  const COLS = 40, ROWS = 25;
+  const W = layout.width, H = layout.height;
+  const cw = W / COLS, ch = H / ROWS;
+  const font = Math.min(cw / 0.6, ch * 0.9);
+  ctx.fillStyle = C.ttBlack;
+  ctx.fillRect(0, 0, W, H);
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+
+  const bg = (row, col, len, colour, rows = 1) => { ctx.fillStyle = colour; ctx.fillRect(col * cw, row * ch, len * cw, rows * ch); };
+  // Text in character cells, stretched vertically (Teletext glyphs are tall). dbl = double height.
+  const put = (row, col, text, colour, dbl = false) => {
+    const sy = (dbl ? 2 * ch : ch) / (font * 1.15);
+    ctx.save();
+    ctx.translate(0, row * ch + ch * 0.05);
+    ctx.scale(1, sy);
+    ctx.font = `bold ${font}px monospace`;
+    ctx.fillStyle = colour;
+    for (let i = 0; i < text.length && col + i < COLS; i++) ctx.fillText(text[i], (col + i) * cw + (cw - font * 0.6) / 2, 0);
+    ctx.restore();
+  };
+  // Mosaic: a band of chunky 2x3 sub-cell blocks (Teletext "graphics" characters).
+  const mosaic = (row, colour, on) => {
+    for (let col = 0; col < COLS; col++) {
+      for (let sy = 0; sy < 3; sy++) for (let sx = 0; sx < 2; sx++) {
+        if (on(col, sx, sy)) { ctx.fillStyle = colour; ctx.fillRect((col + sx / 2) * cw, row * ch + (sy * ch) / 3, cw / 2 + 0.5, ch / 3 + 0.5); }
+      }
+    }
+  };
+  // A labelled row: label on the left in cyan, dotted leader, value right-aligned in white.
+  const row = (r, label, value) => {
+    const v = String(value);
+    put(r, 1, label, C.ttCyan);
+    put(r, 2 + label.length, '.'.repeat(Math.max(1, COLS - 4 - label.length - v.length)), C.ttBlue);
+    put(r, COLS - 1 - v.length, v, C.ttWhite);
+  };
+
+  // Header line: page number, service name, day.
+  put(0, 0, t.page, C.ttWhite);
+  put(0, 5, 'CEEFAX 302', C.ttYellow);
+  const day = `DAY ${t.day}`;
+  put(0, COLS - 1 - day.length, day, C.ttWhite);
+
+  // Title band: blue, mosaic edges, service title.
+  bg(2, 0, COLS, C.ttBlue, 3);
+  mosaic(2, C.ttYellow, (col, sx, sy) => sy === 0 && (col + sx) % 2 === 0);
+  put(3, 2, 'LAKE DISTRICT NEWS', C.ttYellow);
+  mosaic(4, C.ttRed, (col, sx, sy) => sy === 2);
+
+  // Double-height headline.
+  put(6, 1, t.headline.slice(0, 38), C.ttWhite, true);
+
+  // The run.
+  row(9, 'DAYS SURVIVED', t.days);
+  put(11, 1, 'CAUSE OF DEATH', C.ttCyan);
+  put(12, 3, t.cause.slice(0, 36), C.ttYellow);
+  row(14, 'ZOMBIES KILLED', t.kills);
+  row(16, 'TURNS', t.turns);
+  row(18, 'SEED', t.seed);
+
+  // Flashing prompt.
+  if (flash) put(21, 11, 'TAP FOR A NEW GAME', C.ttGreen);
+
+  // Fastext row: four coloured keys.
+  [['New game', C.ttRed], ['Index', C.ttGreen], ['Weather', C.ttYellow], ['Sport', C.ttCyan]]
+    .forEach(([label, colour], i) => put(24, i * 10, label, colour));
 }
 
 // Inventory panel ("BAG"): an 8-bit list filling the map area. Header with slots used and

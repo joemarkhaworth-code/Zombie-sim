@@ -3,6 +3,7 @@
 
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
+import { dayOf, daysSurvived } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
@@ -191,9 +192,31 @@ export function describeTile(world, x, y) {
   return `${what.slice(0, -1)}, out of sight.`;
 }
 
-// Death screen lines, from world.gameOver.
-export function deathText(gameOver) {
-  const how = gameOver.cause === 'bleeding' ? 'You bled to death.'
-    : gameOver.killerName ? `Killed by a ${gameOver.killerName}.` : 'You died.';
-  return { title: 'YOU DIED', how, turn: `Turn ${gameOver.turn}` };
+// Death page wording (Ceefax P302), from world.gameOver + world.stats.
+const CAUSES = {
+  bite: (k) => `Bitten by a ${k || 'zombie'}`,
+  hit: (k) => `Beaten by a ${k || 'stranger'}`,
+  bleeding: () => 'Bled out',
+  shot: (k) => `Shot by a ${k || 'stranger'}`,
+  thrown: (k) => `Hit by something ${k ? `a ${k} threw` : 'thrown'}`,
+  shove: () => 'Slammed into a wall',
+};
+const HEADLINES = {
+  bite: 'SURVIVOR BITTEN',
+  bleeding: 'SURVIVOR BLEEDS OUT',
+  shot: 'SURVIVOR SHOT DEAD',
+};
+export function deathText(world) {
+  const g = world.gameOver;
+  const cause = (CAUSES[g.cause] || (() => 'Died'))(g.killerName);
+  return {
+    page: 'P302',
+    headline: HEADLINES[g.cause] || 'SURVIVOR FOUND DEAD',
+    days: daysSurvived(g.turn),
+    day: dayOf(g.turn),
+    cause,
+    kills: world.stats ? world.stats.kills : 0,
+    turns: g.turn,
+    seed: world.seed,
+  };
 }

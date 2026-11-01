@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
+import { drawStatus, drawButtons, drawCeefax, drawBag, bagLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
@@ -111,7 +111,10 @@ function render() {
   drawStatus(ctx, world, layout, messages.message, blink);
   if (bagOpen) drawBag(ctx, world, layout, { confirmNew });
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
-  if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
+  if (world.gameOver) {
+    if (!diedAt) diedAt = performance.now();
+    drawCeefax(ctx, layout, deathText(world), blink);
+  }
 }
 
 // Touch: a quick tap acts. Holding still for longPressMs inspects the tile under
@@ -163,7 +166,10 @@ canvas.addEventListener('pointerup', (e) => {
   const d = down;
   down = null;
   clearTimeout(d.timer);
-  if (world.gameOver) { restart(); return; }
+  if (world.gameOver) {
+    if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) restart(); // a moment to read the page
+    return;
+  }
   if (d.longPressed || d.moved) return;
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
@@ -187,11 +193,12 @@ function restart() {
   location.href = location.pathname;
 }
 
-// Health blocks blink while you're bleeding.
+// Health blocks blink while you're bleeding; the death page's prompt flashes.
 let blink = false;
+let diedAt = 0;
 setInterval(() => {
   const p = world.entities.get(world.playerId);
-  if (p && p.Bleeding && p.Bleeding.level > 0) { blink = !blink; render(); }
+  if (world.gameOver || (p && p.Bleeding && p.Bleeding.level > 0)) { blink = !blink; render(); }
   else if (blink) { blink = false; render(); }
 }, CONFIG.ui.blinkMs);
 

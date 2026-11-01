@@ -36,6 +36,7 @@ export function serialize(world) {
     rng: world.rng.state,
     inputs: world.inputs,
     sightings: [...world.sightings],
+    stats: world.stats,
     tilesArrays: Object.fromEntries(TILE_ARRAYS.map((k) => [k, Array.from(world[k])])),
     testBuilding: tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : null,
     entities,
@@ -67,6 +68,7 @@ export function deserialize(json, createWorld) {
   world.inputs = data.inputs;
   world.rng.state = data.rng;
   world.sightings = new Set(data.sightings);
+  world.stats = { kills: 0, ...(data.stats || {}) }; // older saves had no stats: start from 0
   world.testBuilding = data.testBuilding ? buildingInfo(data.testBuilding) : null;
   world.gameOver = null;
   world.noise.fill(0);

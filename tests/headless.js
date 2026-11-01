@@ -10,6 +10,8 @@ import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/ite
 import { validTargets } from '../src/sim/systems/ranged.js';
 import { makeDoor, makeWindow, structureAt } from '../src/sim/systems/structures.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
+import { dayOf, daysSurvived } from '../src/sim/time.js';
+import { deathText } from '../src/render/messages.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -1092,6 +1094,37 @@ console.log('save: exact round trip, loaded games play on identically OK');
   assert(p2.Memory.tiles.filter(Boolean).length === p.Memory.tiles.filter(Boolean).length, 'save: memory snapshots survive');
   assert(structureAt(w2, door.Position.x, door.Position.y)?.id === door.id, 'save: structure lookup rebuilt');
   console.log('save: old/corrupt saves refused; inventory, doors, memory survive OK');
+}
+
+// 13. Days and the death page.
+{
+  const N = CONFIG.time.turnsPerDay;
+  assert(dayOf(0) === 1 && dayOf(N - 1) === 1 && dayOf(N) === 2 && daysSurvived(N - 1) === 0 && daysSurvived(2 * N) === 2, 'time: days from turns');
+  // Kills count only zombies the player kills.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  z.Health.hp = 1; p.Melee.hitChance = 1; z.Brain.seesPrey = true; z.Brain.trackingId = p.id;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(w.stats.kills === 1, 'stats: killing a zombie counts');
+  assert(deserialize(serialize(w), createWorld).stats.kills === 1, 'stats: kills are saved');
+  const old = JSON.parse(serialize(w)); delete old.stats;
+  assert(deserialize(JSON.stringify(old), createWorld).stats.kills === 0, 'stats: older saves without stats still load');
+  // Death page wording.
+  const w2 = openWorld();
+  const p2 = playerOf(w2), z2 = zombieOf(w2);
+  place(w2, p2, 10, 10); place(w2, z2, 11, 10);
+  p2.Health.hp = 1; z2.Melee.hitChance = 1; w2.turn = 2 * N + 5;
+  for (let i = 0; i < 6 && !w2.gameOver; i++) playerAct(w2, { type: 'wait' });
+  const t = deathText(w2);
+  assert(t.page === 'P302' && t.cause === 'Bitten by a zombie' && t.days === 2 && t.seed === w2.seed && t.kills === 0, `death page: ${JSON.stringify(t)}`);
+  const w3 = openWorld();
+  const p3 = playerOf(w3);
+  place(w3, zombieOf(w3), 18, 26); place(w3, p3, 5, 5);
+  p3.Health.hp = 1; p3.Bleeding = { level: 3, timer: 0 };
+  for (let i = 0; i < 10 && !w3.gameOver; i++) playerAct(w3, { type: 'wait' });
+  assert(deathText(w3).cause === 'Bled out', 'death page: bled out');
+  console.log('days + death page: days, kills (saved), causes OK');
 }
 
 console.log('PASS');

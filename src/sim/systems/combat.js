@@ -56,6 +56,7 @@ export function damage(world, e, amount, { killerId = null, cause = 'unknown' } 
 export function kill(world, e, { killerId = null, cause = 'unknown' } = {}) {
   const { x, y } = e.Position;
   const name = e.Name ? e.Name.name : 'something';
+  if (world.stats && killerId === world.playerId && e.id !== world.playerId && e.Brain) world.stats.kills++;
   world.entities.delete(e.id);
   addBlood(world, x, y, 1);
   addEntity(world, {
