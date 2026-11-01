@@ -1016,7 +1016,8 @@ function roomWorld({ locked = false } = {}) {
 
 { // Materials table: every material has the same fields, and properties drive behaviour.
   for (const [name, m] of Object.entries(CONFIG.materials)) {
-    for (const k of ['hp', 'flammability', 'seeThrough', 'hitNoise', 'breakNoise']) assert(k in m, `materials: ${name} is missing ${k}`);
+    for (const k of ['hp', 'flammability', 'heatDamage', 'seeThrough', 'hitNoise', 'breakNoise']) assert(k in m, `materials: ${name} is missing ${k}`);
+    assert(m.heatDamage >= 1 && m.heatDamage <= 3, `materials: ${name} heatDamage must be 1-3 (fire hurts everything)`);
     assert(m.flammability >= 0 && m.flammability <= 3 && m.hitNoise >= 0 && m.hitNoise <= 3 && m.breakNoise >= 0 && m.breakNoise <= 3, `materials: ${name} levels must be 0-3`);
   }
   for (const n of ['stone', 'slate', 'brick', 'wood', 'glass', 'corrugatedMetal', 'thatch']) assert(CONFIG.materials[n], `materials: ${n} defined`);

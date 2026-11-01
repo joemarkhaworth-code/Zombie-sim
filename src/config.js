@@ -29,19 +29,22 @@ export const CONFIG = {
   },
   // Materials: what walls, doors, windows and barricades are made of.
   //   hp           - blows to break it (at 1 damage per blow)
-  //   flammability - 0-3, how readily it burns (used by fire, step 19)
+  //   flammability - 0-3, does it catch fire and spread flames (fire, step 19)
+  //   heatDamage   - 1-3, how fast fire wears it down even if it never catches:
+  //                  everything suffers in a fire (glass shatters, slate splits,
+  //                  metal buckles, stone and brick spall and lose their mortar)
   //   seeThrough   - does sight pass through it while it's intact
   //   hitNoise     - noise level of each blow against it
   //   breakNoise   - noise level when it finally breaks
   //   shards       - leaves broken glass when it breaks
   materials: {
-    stone:           { hp: 20, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
-    slate:           { hp: 16, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
-    brick:           { hp: 18, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
-    wood:            { hp: 6,  flammability: 2, seeThrough: false, hitNoise: 2, breakNoise: 2 },
-    glass:           { hp: 1,  flammability: 0, seeThrough: true,  hitNoise: 3, breakNoise: 3, shards: true },
-    corrugatedMetal: { hp: 8,  flammability: 0, seeThrough: false, hitNoise: 3, breakNoise: 3 }, // clangs
-    thatch:          { hp: 4,  flammability: 3, seeThrough: false, hitNoise: 1, breakNoise: 1 },
+    stone:           { hp: 20, flammability: 0, heatDamage: 1, seeThrough: false, hitNoise: 2, breakNoise: 3 },
+    slate:           { hp: 16, flammability: 0, heatDamage: 2, seeThrough: false, hitNoise: 2, breakNoise: 3 }, // splits and cracks
+    brick:           { hp: 18, flammability: 0, heatDamage: 1, seeThrough: false, hitNoise: 2, breakNoise: 3 },
+    wood:            { hp: 6,  flammability: 2, heatDamage: 3, seeThrough: false, hitNoise: 2, breakNoise: 2 },
+    glass:           { hp: 1,  flammability: 0, heatDamage: 3, seeThrough: true,  hitNoise: 3, breakNoise: 3, shards: true }, // shatters in heat
+    corrugatedMetal: { hp: 8,  flammability: 0, heatDamage: 2, seeThrough: false, hitNoise: 3, breakNoise: 3 }, // buckles; clangs
+    thatch:          { hp: 4,  flammability: 3, heatDamage: 3, seeThrough: false, hitNoise: 1, breakNoise: 1 },
   },
   // What things are made of (for now; step 14 picks per building).
   build: {
