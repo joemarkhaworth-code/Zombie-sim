@@ -128,7 +128,8 @@ export const CONFIG = {
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
     health: 4,
-    melee: { damage: 1, hitChance: 0.6, woundChance: 0.4, verb: 'bite' },
+    // Rebalanced: most bites land; 3 bites kill a healthy player (6 health); bites usually draw blood.
+    melee: { damage: 2, hitChance: 0.85, woundChance: 0.7, verb: 'bite' },
     eyesight: 2,                     // poor eyes: half the light range, so you usually see them first
     hearing: 3,                      // good ears: hear your footsteps up to 3 tiles away in the open
     footsteps: 0,                    // shuffle quietly (raise to let zombies hear each other)
@@ -136,8 +137,8 @@ export const CONFIG = {
     staggerChance: 0.2,
     reactActions: 1,                 // on first noticing prey (or being hit), spend this many actions reacting before attacking
     groanNoise: 1,                   // reacting is a groan: noise level (warns you, and other zombies may hear)
-    searchActions: 4,                // after reaching a last-seen spot or noise, shuffle about this many moves
-    searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
+    searchActions: 12,               // after reaching a last-seen spot or noise, search this many moves (~24 of your turns)
+    searchRadius: 3,                 // ...within this many tiles of it. Any new noise heard restarts the hunt there.              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
   // Time: the clock runs on scheduler ticks (a normal step or wait = 1 tick, a sneaking

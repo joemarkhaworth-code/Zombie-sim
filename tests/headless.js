@@ -360,7 +360,7 @@ const range = (e) => sightRadius(e);
   let lost = false;
   w.events.on('prey_lost', () => { lost = true; });
   let reached = false;
-  for (let i = 0; i < 60 && !lost; i++) {
+  for (let i = 0; i < 120 && !lost; i++) {
     playerAct(w, { type: 'wait' });
     if (cheb(z.Position, seenAt) <= 1) reached = true;
   }
@@ -402,7 +402,7 @@ const range = (e) => sightRadius(e);
   assert(heard && heard.x === 5 && heard.y === 11, 'hear: zombie should hear footsteps 3 tiles away');
   assert(z.Brain.goal && z.Brain.goal.why === 'heard', 'hear: zombie should head for the noise');
   assert(w.noise[11 * w.width + 5] === CONFIG.noise.radiusByLevel[CONFIG.player.footsteps], 'hear: heatmap records the noise');
-  for (let i = 0; i < 40 && !investigated; i++) playerAct(w, { type: 'wait' });
+  for (let i = 0; i < 80 && !investigated; i++) playerAct(w, { type: 'wait' });
   assert(investigated, 'hear: zombie should reach the noise and give up');
   assert(cheb(z.Position, { x: 5, y: 11 }) <= CONFIG.zombie.searchRadius, 'hear: zombie should end up searching around the noise');
   assert(w.noise.every((v) => v === 0), 'hear: waiting is silent and the heatmap clears');
@@ -1152,6 +1152,28 @@ console.log('save: exact round trip, loaded games play on identically OK');
   for (let i = 0; i < 10 && !w3.gameOver; i++) playerAct(w3, { type: 'wait' });
   assert(deathText(w3).cause === 'Bled out', 'death page: bled out');
   console.log('days + death page: days, kills (saved), causes OK');
+}
+
+// 14. Zombie balance targets.
+{
+  const Z = CONFIG.zombie.melee, P = CONFIG.player.health;
+  const bitesToKill = Math.ceil(P / Z.damage);
+  assert(Z.hitChance >= 0.8, 'balance: most zombie attacks land');
+  assert(bitesToKill >= 3 && bitesToKill <= 4, `balance: 3-4 bites kill a healthy player (now ${bitesToKill})`);
+  assert(Z.woundChance > CONFIG.player.melee.woundChance && Z.woundChance >= 0.6, 'balance: bites usually cause bleeding');
+  // Persistence: searches for a long while, and a new noise mid-search restarts the hunt there.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  w.light.fill(0);
+  place(w, p, 3, 3); place(w, z, 14, 14);
+  z.Brain.goal = { x: 14, y: 14, why: 'heard' }; // already at the spot: about to search
+  let searchMoves = 0, gaveUp = false;
+  w.events.on('noise_investigated', () => { gaveUp = true; });
+  for (let i = 0; i < 12 && !gaveUp; i++) { playerAct(w, { type: 'wait' }); if (z.Brain.goal && z.Brain.goal.search !== undefined) searchMoves++; }
+  assert(!gaveUp && z.Brain.goal && z.Brain.goal.search !== undefined, 'persist: still searching after 12 turns');
+  makeNoise(w, 18, 20, 2, p.id); // something new
+  assert(z.Brain.goal.x === 18 && z.Brain.goal.y === 20 && z.Brain.goal.search === undefined, 'persist: a new noise renews its interest and sends it there');
+  console.log(`balance: hit ${Z.hitChance}, ${bitesToKill} bites to kill, wound ${Z.woundChance}; long search, noise renews OK`);
 }
 
 console.log('PASS');
