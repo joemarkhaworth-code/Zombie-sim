@@ -19,7 +19,7 @@ Look: simple 8-bit, inspired by old RPGs and UK Teletext. Until the art pass, ev
 - Built entirely from a phone with Claude Code. Play-tested in a mobile browser.
 - Stack: plain JavaScript (ES modules), HTML canvas, rot.js (scheduler, FOV, pathfinding, noise, map gen). No build step unless needed.
 - Deploys to GitHub Pages on every push to main.
-- Touch-first controls: tap an adjacent tile to move/act, tap your own tile to wait, long-press any tile to inspect it. Portrait orientation.
+- Touch-first controls: tap anywhere to step one tile in that direction (8-way), tap on yourself to wait, long-press any tile to inspect it. Big tiles with the camera following the player. Portrait orientation.
 - One system per session. Before finishing, the game must load and be playable, the headless test run must pass, and the change must be committed.
 
 ## Architecture rules

@@ -27,27 +27,31 @@ function resize() {
   canvas.style.height = `${h}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const statusHeight = 32;
-  const tileSize = Math.floor(Math.min(w / world.width, (h - statusHeight) / world.height));
+  const tileSize = Math.floor(w / CONFIG.view.tilesAcross);
+  const cols = CONFIG.view.tilesAcross;
+  const rows = Math.floor((h - statusHeight) / tileSize);
   layout = {
-    width: w, height: h, statusHeight, tileSize,
-    offsetX: Math.floor((w - tileSize * world.width) / 2),
-    offsetY: statusHeight + Math.floor((h - statusHeight - tileSize * world.height) / 2),
+    width: w, height: h, statusHeight, tileSize, cols, rows,
+    offsetX: Math.floor((w - tileSize * cols) / 2),
+    offsetY: statusHeight + Math.floor((h - statusHeight - tileSize * rows) / 2),
   };
   render();
 }
 
+// Keep the player centred; stop at the map edges when the map is bigger than the view.
+function updateCamera() {
+  const p = world.entities.get(world.playerId).Position;
+  const clamp = (v, size, view) => (size <= view ? Math.floor((size - view) / 2) : Math.max(0, Math.min(v, size - view)));
+  layout.camX = clamp(p.x - (layout.cols >> 1), world.width, layout.cols);
+  layout.camY = clamp(p.y - (layout.rows >> 1), world.height, layout.rows);
+}
+
 function render() {
+  updateCamera();
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout);
   drawStatus(ctx, world, layout);
-}
-
-function screenToTile(px, py) {
-  return {
-    x: Math.floor((px - layout.offsetX) / layout.tileSize),
-    y: Math.floor((py - layout.offsetY) / layout.tileSize),
-  };
 }
 
 // Tap = short press without much movement. (Long-press inspect comes in step 5.)
@@ -61,17 +65,27 @@ canvas.addEventListener('pointerup', (e) => {
   const held = performance.now() - down.t;
   down = null;
   if (moved > CONFIG.input.tapMaxMovePx || held > CONFIG.input.tapMaxMs) return;
-  onTap(screenToTile(e.clientX, e.clientY));
+  onTap(e.clientX, e.clientY);
 });
 canvas.addEventListener('pointercancel', () => { down = null; });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-function onTap(tile) {
+// Tap anywhere: step one tile in that direction (8-way). Tap on yourself: wait.
+function onTap(px, py) {
   const p = world.entities.get(world.playerId).Position;
-  const dx = tile.x - p.x;
-  const dy = tile.y - p.y;
-  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return; // only adjacent tiles
-  const action = dx === 0 && dy === 0 ? { type: 'wait' } : { type: 'move', dx, dy };
+  const s = layout.tileSize;
+  const cx = layout.offsetX + (p.x - layout.camX + 0.5) * s;
+  const cy = layout.offsetY + (p.y - layout.camY + 0.5) * s;
+  const ddx = px - cx, ddy = py - cy;
+  let action;
+  if (Math.hypot(ddx, ddy) < s * CONFIG.input.waitRadiusTiles) {
+    action = { type: 'wait' };
+  } else {
+    const sector = Math.round(Math.atan2(ddy, ddx) / (Math.PI / 4)); // -4..4
+    const dirs = { 0: [1, 0], 1: [1, 1], 2: [0, 1], 3: [-1, 1], 4: [-1, 0], '-4': [-1, 0], '-3': [-1, -1], '-2': [0, -1], '-1': [1, -1] };
+    const [dx, dy] = dirs[sector];
+    action = { type: 'move', dx, dy };
+  }
   if (playerAct(world, action)) render();
 }
 
