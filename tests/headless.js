@@ -2,12 +2,12 @@
 // Usage: node tests/headless.js [turns] [seed]
 import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius, rememberedTile } from '../src/sim/systems/vision.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
 import { createEventBus } from '../src/sim/events.js';
-import { createMessageLog, PRIORITY } from '../src/render/messages.js';
+import { createMessageLog, PRIORITY, describeTile } from '../src/render/messages.js';
 
 const TURNS = Number(process.argv[2] ?? 5000);
 const SEEDS = process.argv[3] ? [Number(process.argv[3])] : [1, 42, 12345, 999999];
@@ -65,6 +65,7 @@ for (const seed of SEEDS) {
   }
   const log = createMessageLog(world);
   let sawDanger = false;
+  const everSeen = new Set(playerOf(world).Vision.visible.keys());
   const driver = createRng(seed ^ 0xabcdef); // fake player input, separate from the sim RNG
   let acted = 0;
   for (let i = 0; i < TURNS; i++) {
@@ -75,6 +76,13 @@ for (const seed of SEEDS) {
     const m = log.message;
     if (m) assert(typeof m.text === 'string' && m.text.length <= 32, `seed ${seed}: bad message ${JSON.stringify(m)}`);
     if (m && m.priority === PRIORITY.danger) sawDanger = true;
+    for (const k of playerOf(world).Vision.visible.keys()) everSeen.add(k);
+  }
+  // Map memory = exactly the tiles ever seen, each remembered as it is (tiles don't change yet).
+  const mem = playerOf(world).Memory.tiles;
+  for (let i = 0; i < mem.length; i++) {
+    assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i}`);
+    if (mem[i]) assert(mem[i] - 1 === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
   }
   assert(counts.turn_ended === acted, `seed ${seed}: turn_ended ${counts.turn_ended} != ${acted}`);
   assert(counts.action_attempted === TURNS, `seed ${seed}: action_attempted ${counts.action_attempted} != ${TURNS}`);
@@ -102,6 +110,7 @@ function openWorld(walls = []) {
     w.tiles[y * w.width + x] = edge ? TILE.WALL : TILE.FLOOR;
   }
   for (const [x, y] of walls) w.tiles[y * w.width + x] = TILE.WALL;
+  playerOf(w).Memory.tiles.fill(0); // forget the generated map
   return w;
 }
 function place(w, e, x, y) { e.Position.x = x; e.Position.y = y; refreshAllVision(w); }
@@ -178,6 +187,33 @@ const range = (e) => sightRadius(e);
   assert(canSee(w, p, z), 'onscreen: zombie should be in sight');
   assert(offLog.message?.text !== 'A zombie comes into view.', 'onscreen: off-screen zombie should not be announced');
   console.log('onscreen: off-screen zombies not announced OK');
+}
+
+{ // Map memory keeps seen tiles after you leave; inspect describes what you know.
+  const w = openWorld([[3, 3]]);
+  const p = playerOf(w), z = zombieOf(w);
+  p.Position.x = 4; p.Position.y = 4;
+  place(w, z, 18, 26);
+  assert(rememberedTile(w, p, 3, 3) === TILE.WALL, 'memory: seen wall remembered');
+  assert(describeTile(w, 3, 3) === 'A wall.', `inspect: visible wall, got ${describeTile(w, 3, 3)}`);
+  assert(describeTile(w, 5, 5) === 'Open ground.', 'inspect: visible floor');
+  assert(describeTile(w, 4, 4) === "That's you.", 'inspect: own tile');
+  place(w, p, 18, 12); // walk away: (3,3) is now beyond the light range
+  assert(visibilityAt(w, p, 3, 3) === 0, 'memory: (3,3) should be out of sight now');
+  assert(rememberedTile(w, p, 3, 3) === TILE.WALL, 'memory: wall still remembered out of sight');
+  assert(describeTile(w, 3, 3) === 'A wall, out of sight.', `inspect: remembered wall, got ${describeTile(w, 3, 3)}`);
+  assert(rememberedTile(w, p, 2, 26) === null && describeTile(w, 2, 26) === 'Unexplored.', 'inspect: never-seen tile');
+  place(w, z, 18, 6);
+  assert(describeTile(w, 18, 6) === 'A zombie.', 'inspect: visible zombie');
+  place(w, p, 2, 26);
+  assert(describeTile(w, 18, 6) === 'Open ground, out of sight.', 'inspect: zombie not remembered, only the ground');
+  assert(describeTile(w, -1, 0) === 'Nothing there.', 'inspect: off the map');
+  const log = createMessageLog(w);
+  log.show(describeTile(w, 3, 3));
+  assert(log.message.text === 'A wall, out of sight.', 'inspect: shows in status bar');
+  playerAct(w, { type: 'wait' });
+  assert(log.message.text === 'You wait.', 'inspect: next action replaces the inspect text');
+  console.log('memory + inspect OK');
 }
 
 { // A zombie that can see you closes in, and the status line says so.

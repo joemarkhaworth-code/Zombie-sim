@@ -30,6 +30,7 @@ export function createWorld(seed) {
     Player: {},
     Prey: {},
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
+    Memory: { tiles: new Uint8Array(width * height) }, // per tile: 0 = never seen, else tile type + 1 as last seen
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },

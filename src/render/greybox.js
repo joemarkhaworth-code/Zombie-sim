@@ -1,17 +1,22 @@
 // Greybox renderer: plain coloured squares and letters. Only reads world state.
 // Each tile is drawn according to the player's visibility level for it:
 //   3 = full colour, 2 and 1 = slightly darker, 0 = black (not drawn).
+// Tiles out of sight but in the player's map memory are drawn greyed out, as last
+// seen. Creatures are never drawn from memory (they move).
 // (The art pass will use dithering for levels 2 and 1 instead of plain darkening.)
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testgrid.js';
 import { query } from '../sim/world.js';
+import { rememberedTile } from '../sim/systems/vision.js';
 
 const C = CONFIG.colours;
 const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall };
+const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall };
 
 // layout: { tileSize, offsetX, offsetY, camX, camY, cols, rows }
 // camX/camY = world tile shown at the top-left of the view.
-export function drawWorld(ctx, world, layout) {
+// inspect: optional { x, y } tile to outline (long-press).
+export function drawWorld(ctx, world, layout, inspect = null) {
   const { tileSize: s, offsetX: ox, offsetY: oy, camX, camY, cols, rows } = layout;
   const player = world.entities.get(world.playerId);
   const visible = player ? player.Vision.visible : new Map();
@@ -25,8 +30,14 @@ export function drawWorld(ctx, world, layout) {
   for (let vy = 0; vy < rows; vy++) {
     for (let vx = 0; vx < cols; vx++) {
       const x = camX + vx, y = camY + vy;
-      if (!onScreen(x, y) || !levelAt(x, y)) continue;
-      ctx.fillStyle = TILE_COLOUR[world.tiles[y * world.width + x]];
+      if (!onScreen(x, y)) continue;
+      if (levelAt(x, y)) {
+        ctx.fillStyle = TILE_COLOUR[world.tiles[y * world.width + x]];
+      } else {
+        const remembered = player ? rememberedTile(world, player, x, y) : null;
+        if (remembered === null) continue;
+        ctx.fillStyle = MEMORY_COLOUR[remembered];
+      }
       ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
     }
   }
@@ -56,5 +67,12 @@ export function drawWorld(ctx, world, layout) {
       ctx.fillStyle = `rgba(0,0,0,${a})`;
       ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
     }
+  }
+
+  // 4. Inspect outline
+  if (inspect && onScreen(inspect.x, inspect.y)) {
+    ctx.strokeStyle = C.inspect;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox + (inspect.x - camX) * s + 1, oy + (inspect.y - camY) * s + 1, s - 3, s - 3);
   }
 }

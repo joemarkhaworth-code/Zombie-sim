@@ -4,7 +4,7 @@ import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
 import { drawStatus } from './render/ui.js';
-import { createMessageLog } from './render/messages.js';
+import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -57,25 +57,57 @@ function render() {
   updateCamera();
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
-  drawWorld(ctx, world, layout);
+  drawWorld(ctx, world, layout, inspect);
   drawStatus(ctx, world, layout, messages.message);
 }
 
-// Tap = short press without much movement. (Long-press inspect comes in step 5.)
+// Touch: a quick tap acts. Holding still for longPressMs inspects the tile under
+// the finger (shown in the status bar, with an outline). Inspecting takes no turn
+// and isn't recorded as input.
 let down = null;
+let inspect = null; // { x, y } of the last inspected tile, until the next action
+
 canvas.addEventListener('pointerdown', (e) => {
-  down = { x: e.clientX, y: e.clientY, t: performance.now() };
+  const at = { x: e.clientX, y: e.clientY };
+  down = {
+    ...at, moved: false, longPressed: false,
+    timer: setTimeout(() => {
+      if (!down || down.moved) return;
+      down.longPressed = true;
+      onLongPress(at.x, at.y);
+    }, CONFIG.input.longPressMs),
+  };
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > CONFIG.input.tapMaxMovePx) {
+    down.moved = true;
+    clearTimeout(down.timer);
+  }
 });
 canvas.addEventListener('pointerup', (e) => {
   if (!down) return;
-  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-  const held = performance.now() - down.t;
+  const d = down;
   down = null;
-  if (moved > CONFIG.input.tapMaxMovePx || held > CONFIG.input.tapMaxMs) return;
+  clearTimeout(d.timer);
+  if (d.longPressed || d.moved) return;
   onTap(e.clientX, e.clientY);
 });
-canvas.addEventListener('pointercancel', () => { down = null; });
+canvas.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function screenToTile(px, py) {
+  return {
+    x: layout.camX + Math.floor((px - layout.offsetX) / layout.tileSize),
+    y: layout.camY + Math.floor((py - layout.offsetY) / layout.tileSize),
+  };
+}
+
+function onLongPress(px, py) {
+  inspect = screenToTile(px, py);
+  messages.show(describeTile(world, inspect.x, inspect.y));
+  if (navigator.vibrate) navigator.vibrate(15); // small buzz so you know it registered
+  render();
+}
 
 // Tap anywhere: step one tile in that direction (8-way). Tap on yourself: wait.
 function onTap(px, py) {
@@ -93,6 +125,7 @@ function onTap(px, py) {
     const [dx, dy] = dirs[sector];
     action = { type: 'move', dx, dy };
   }
+  inspect = null;
   playerAct(world, action);
   render(); // even a failed move (bump) shows a message
 }

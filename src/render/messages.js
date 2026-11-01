@@ -1,7 +1,9 @@
 // Turns sim events into one short status-line message per turn.
 // Lives on the render side: the sim never produces text. Pure JS (no DOM), so it's headless-testable.
 
-import { canSee } from '../sim/systems/vision.js';
+import { canSee, visibilityAt, rememberedTile } from '../sim/systems/vision.js';
+import { TILE_DESC } from '../sim/gen/testgrid.js';
+import { inBounds, tileAt, query } from '../sim/world.js';
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
@@ -69,5 +71,26 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
 
   return {
     get message() { return current; },
+    // Show text right now (e.g. inspect). Cleared by the next action like any message.
+    show(text, priority = PRIORITY.info) { current = { text, priority }; },
   };
+}
+
+// Long-press inspect: a one-line description of what the player knows about (x, y).
+//  - In sight: the creature standing there (if noticed), else the tile.
+//  - Out of sight but remembered: the tile as last seen.
+//  - Never seen: unexplored.
+export function describeTile(world, x, y) {
+  const player = world.entities.get(world.playerId);
+  if (!player || !inBounds(world, x, y)) return 'Nothing there.';
+  if (visibilityAt(world, player, x, y) > 0) {
+    if (x === player.Position.x && y === player.Position.y) return "That's you.";
+    for (const e of query(world, 'Position', 'Name')) {
+      if (e.Position.x === x && e.Position.y === y && canSee(world, player, e)) return `A ${e.Name.name}.`;
+    }
+    return TILE_DESC[tileAt(world, x, y)];
+  }
+  const remembered = rememberedTile(world, player, x, y);
+  if (remembered !== null) return `${TILE_DESC[remembered].slice(0, -1)}, out of sight.`;
+  return 'Unexplored.';
 }

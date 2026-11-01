@@ -30,13 +30,17 @@ export const CONFIG = {
   },
   view: { tilesAcross: 11 },        // camera width in tiles (odd keeps the player centred)
   input: {
-    tapMaxMs: 500, tapMaxMovePx: 20,
+    longPressMs: 450,                // hold this long without moving = inspect (shorter = tap)
+    tapMaxMovePx: 20,
     waitRadiusTiles: 0.7,            // tap this close to the player = wait
   },
   colours: {
     background: '#000000',
     floor: '#203020',
     wall: '#707070',
+    memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out
+    memoryWall: '#3c3c3c',
+    inspect: '#ffffff',              // outline on the long-pressed tile
     player: '#ffff00',
     zombie: '#40c040',
     zombieText: '#000000',

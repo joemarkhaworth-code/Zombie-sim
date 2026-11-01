@@ -6,6 +6,11 @@ export const TILE_INFO = {
   [TILE.FLOOR]: { name: 'floor', blocks: false, opaque: false },
   [TILE.WALL]: { name: 'wall', blocks: true, opaque: true },
 };
+// Short description for long-press inspect (render side picks the wording).
+export const TILE_DESC = {
+  [TILE.FLOOR]: 'Open ground.',
+  [TILE.WALL]: 'A wall.',
+};
 
 export function generateTestGrid(rng, width, height) {
   const tiles = new Uint8Array(width * height);
