@@ -15,7 +15,12 @@ const seed = params.has('seed')
   : Math.floor(Math.random() * 1e9);
 const world = createWorld(seed);
 window.world = world; // handy for debugging from the console
-const messages = createMessageLog(world);
+const messages = createMessageLog(world, {
+  onScreen: (x, y) => {
+    updateCamera(); // the player may have just moved
+    return x >= layout.camX && y >= layout.camY && x < layout.camX + layout.cols && y < layout.camY + layout.rows;
+  },
+});
 
 let layout;
 

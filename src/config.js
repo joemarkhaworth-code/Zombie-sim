@@ -6,23 +6,24 @@ export const CONFIG = {
     actionCost: 100,                 // energy spent per action
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
   },
-  vision: {
-    // sight level 0-3 -> radius in tiles. Keep the top level <= half of view.tilesAcross,
-    // so anything you can see is on screen.
-    rangeByLevel: [1, 2, 4, 5],
-    // Visibility level 0-3 of a seen tile = min(clarity, light).
-    // Clarity falls off with distance: within 50% of sight radius -> 3, within 80% -> 2, beyond -> 1.
-    clarityBands: [0.5, 0.8],
-    minLevelToSpot: 1,               // lowest visibility level at which a creature is noticed
+  // Light: how far anyone can see in the open, and how well-lit each tile is.
+  // Day/night and weather will lower both later.
+  light: {
+    range: 15,                       // clear day: covers the whole portrait screen (5 across x ~10 up/down each side)
+    ambient: 3,                      // light level 0-3 on every tile
   },
-  light: { ambient: 3 },             // light level 0-3 on every tile until day/night and light sources
+  vision: {
+    // Eyesight 0-3 scales the light range: 3 = sees as far as the light allows.
+    eyesightFactor: [0, 0.25, 0.5, 1],
+    minLevelToSpot: 1,               // lowest visibility (light) level at which a creature is noticed
+  },
   render: {
     dimAlpha: [1, 0.45, 0.25, 0],    // black overlay per visibility level 0-3 (0 is not drawn at all)
   },
-  player: { speed: 100, sight: 3 },  // speed = energy per tick; 100 = one action per tick
+  player: { speed: 100, eyesight: 3 },  // speed = energy per tick; 100 = one action per tick
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
-    sight: 2,                        // zombies see less far than you
+    eyesight: 2,                     // poor eyes: half the light range, so you usually see them first
     wanderChance: 0.5,               // with nothing to chase, chance to shuffle a step
     staggerChance: 0.2,              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start

@@ -11,4 +11,4 @@ Every new system must read from or affect at least one existing system. One line
 | Status bar (step 3) | action_attempted, entity_waited, move_blocked, turn_ended + positions | one-line message shown to the player |
 | Vision (step 4) | opaque tiles, entity positions, sight level | what the player sees (rendering), what zombies can chase, entity_seen events |
 | Shamble (step 4 update) | Vision (can it see Prey?), last-seen memory | zombie chases, searches last-seen spot, or wanders |
-| Visibility levels (step 4b) | distance from viewer, world.light (0-3) | how bright tiles are drawn; whether creatures are noticed (minLevelToSpot). Future: day/night, weather, stealth lower it |
+| Visibility levels (step 4b) | line of sight, light range (config), world.light (0-3), eyesight | how bright tiles are drawn; whether creatures are noticed (minLevelToSpot). Future: day/night, weather, stealth lower it |

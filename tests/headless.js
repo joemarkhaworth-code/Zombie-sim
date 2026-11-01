@@ -2,7 +2,7 @@
 // Usage: node tests/headless.js [turns] [seed]
 import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee, lineClear, visibilityAt } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
@@ -106,7 +106,7 @@ function openWorld(walls = []) {
 }
 function place(w, e, x, y) { e.Position.x = x; e.Position.y = y; refreshAllVision(w); }
 const seesTile = (w, e, x, y) => e.Vision.visible.has(y * w.width + x);
-const range = (lvl) => CONFIG.vision.rangeByLevel[lvl];
+const range = (e) => sightRadius(e);
 
 { // Walls block sight; range is limited.
   const w = openWorld([[7, 5]]);
@@ -115,12 +115,17 @@ const range = (lvl) => CONFIG.vision.rangeByLevel[lvl];
   place(w, zombieOf(w), 18, 26);
   assert(seesTile(w, p, 7, 5), 'fov: wall itself should be visible');
   assert(!seesTile(w, p, 8, 5) && !seesTile(w, p, 9, 5), 'fov: tiles behind a wall should be hidden');
-  assert(seesTile(w, p, 5, 5 + range(CONFIG.player.sight) - 1), 'fov: tile within range should be visible');
-  assert(!seesTile(w, p, 5, 5 + range(CONFIG.player.sight) + 1), 'fov: tile beyond range should be hidden');
-  console.log('fov: walls block sight, range limited OK');
+  assert(seesTile(w, p, 5, 5 + range(p) - 1), 'fov: far tile in the open should be visible on a clear day');
+  place(w, p, 2, 2);
+  assert(!seesTile(w, p, 2 + range(p) + 1, 2 + range(p) + 1), 'fov: tile beyond light range should be hidden');
+  const saved = CONFIG.light.range;
+  CONFIG.light.range = 3; refreshAllVision(w);
+  assert(seesTile(w, p, 2, 5) && !seesTile(w, p, 2, 7), 'fov: shorter light range should shorten sight');
+  CONFIG.light.range = saved; refreshAllVision(w);
+  console.log('fov: walls block sight, light range limits distance OK');
 }
 
-{ // No peeking through diagonal gaps; sight is symmetric; sight fits on screen.
+{ // No peeking through diagonal gaps; sight is symmetric; clear-day light covers the screen.
   const w = openWorld([[11, 10], [10, 11]]);
   const p = playerOf(w);
   place(w, p, 10, 10);
@@ -135,45 +140,51 @@ const range = (lvl) => CONFIG.vision.rangeByLevel[lvl];
       assert(lineClear(w2, ax, ay, bx, by) === lineClear(w2, bx, by, ax, ay), `fov: asymmetric between ${ax},${ay} and ${bx},${by}`);
     }
   }
-  const maxSight = Math.max(...CONFIG.vision.rangeByLevel);
-  assert(maxSight <= Math.floor(CONFIG.view.tilesAcross / 2), 'config: sight range is wider than the screen');
-  console.log('fov: diagonal gaps blocked, symmetric, fits on screen OK');
+  // Tall phone (20:9): ~5 tiles each side, ~11 up/down -> corner ~12.1 tiles away.
+  assert(CONFIG.light.range >= Math.ceil(Math.hypot(Math.floor(CONFIG.view.tilesAcross / 2), 11)), 'config: clear-day light range does not cover the screen');
+  console.log('fov: diagonal gaps blocked, symmetric, light covers screen OK');
 }
 
-{ // Visibility levels: 1-3, fade with distance, capped by light; darkness hides zombies.
+{ // Visibility levels come from light, not distance; darkness hides; spot threshold.
   const w = openWorld();
   const p = playerOf(w), z = zombieOf(w);
   place(w, p, 10, 14); place(w, z, 18, 26);
   const lv = (x, y) => visibilityAt(w, p, x, y);
-  for (const v of p.Vision.visible.values()) assert(v >= 1 && v <= 3, `levels: out of range ${v}`);
-  const r = range(CONFIG.player.sight);
-  assert(lv(10, 14) === 3 && lv(11, 14) === 3, 'levels: nearby tiles should be level 3');
-  assert(lv(10, 14 + r) >= 1 && lv(10, 14 + r) < 3, `levels: edge of sight should be dimmer, got ${lv(10, 14 + r)}`);
-  assert(lv(10, 14 + r + 2) === 0, 'levels: beyond sight should be 0');
-  const levels = new Set(p.Vision.visible.values());
-  assert(levels.has(1) && levels.has(2) && levels.has(3), `levels: expected all of 1,2,3, got ${[...levels]}`);
+  for (const v of p.Vision.visible.values()) assert(v === CONFIG.light.ambient, `levels: clear day should be uniform, got ${v}`);
+  assert(lv(10, 14) === 3 && lv(10, 24) === 3, 'levels: near and far tiles equally visible in daylight');
 
-  w.light.fill(1); refreshAllVision(w);
-  assert(Math.max(...p.Vision.visible.values()) === 1, 'levels: light 1 should cap visibility at 1');
+  w.light[16 * w.width + 10] = 1; w.light[17 * w.width + 10] = 2; refreshAllVision(w);
+  assert(lv(10, 16) === 1 && lv(10, 17) === 2 && lv(10, 18) === 3, 'levels: visibility should equal tile light');
 
   w.light.fill(0); place(w, z, 11, 14);
   assert(lv(10, 14) === 1, 'levels: you always see your own tile');
   assert(lv(11, 14) === 0 && !canSee(w, p, z) && !canSee(w, z, p), 'levels: in pitch dark nobody sees anybody');
 
-  w.light.fill(CONFIG.light.ambient); place(w, z, 10, 14 + r);
+  w.light.fill(CONFIG.light.ambient); w.light[20 * w.width + 10] = 1; place(w, z, 10, 20);
   const saved = CONFIG.vision.minLevelToSpot;
-  CONFIG.vision.minLevelToSpot = 3;
-  assert(!canSee(w, p, z), 'levels: a dim (far) zombie should not be noticed when level 3 is needed');
+  CONFIG.vision.minLevelToSpot = 2;
+  assert(!canSee(w, p, z), 'levels: a zombie on a dim tile should not be noticed when level 2 is needed');
   CONFIG.vision.minLevelToSpot = saved;
   assert(canSee(w, p, z), 'levels: a dim zombie is noticed at the default threshold');
-  console.log('levels: 1-3 by distance, capped by light, darkness hides, spot threshold OK');
+  console.log('levels: from light, darkness hides, spot threshold OK');
+}
+
+{ // "Comes into view" only for zombies on screen.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 5, 10); place(w, z, 12, 10); // 7 tiles to the side: in sight, but off a 5-tile half-width screen
+  const offLog = createMessageLog(w, { onScreen: (x) => Math.abs(x - p.Position.x) <= 5 });
+  playerAct(w, { type: 'wait' });
+  assert(canSee(w, p, z), 'onscreen: zombie should be in sight');
+  assert(offLog.message?.text !== 'A zombie comes into view.', 'onscreen: off-screen zombie should not be announced');
+  console.log('onscreen: off-screen zombies not announced OK');
 }
 
 { // A zombie that can see you closes in, and the status line says so.
   const w = openWorld();
   const log = createMessageLog(w);
   const p = playerOf(w), z = zombieOf(w);
-  place(w, p, 5, 10); place(w, z, 5, 10 + range(CONFIG.zombie.sight) - 1);
+  place(w, p, 5, 10); place(w, z, 5, 10 + range(z) - 1);
   assert(canSee(w, z, p), 'chase: zombie should see the player');
   let spotted = false, warned = false;
   w.events.on('prey_spotted', () => { spotted = true; });

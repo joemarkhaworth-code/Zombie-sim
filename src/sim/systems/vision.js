@@ -1,18 +1,19 @@
-// Vision: anything with a Vision component sees tiles within its sight radius
-// that it has a clear straight line to (tile centre to tile centre).
-// Each seen tile gets a visibility level 1-3 (0 = unseen, not stored):
-//   level = min(clarity, light)   clarity falls off with distance; light is world.light (0-3).
-// e.Vision.visible is a Map of tile index -> level. Day/night, weather and stealth
-// will lower these levels later; creatures are only noticed at minLevelToSpot or above.
-//  - Opaque tiles (walls) block the line. Creatures don't.
-//  - A line that passes exactly between two diagonal walls is blocked (no peeking
-//    through diagonal gaps); grazing the corner of a single wall is allowed.
-//  - Floor-to-floor sight is symmetric: if you can see a zombie's tile, a zombie
-//    with enough range can see yours.
-//  - Walls whose centre line is blocked are still shown if they border a visible
-//    floor tile nearer the viewer, so wall faces don't look patchy.
-// A viewer's visible set only changes when it moves (or, later, when tiles change),
-// so it's recomputed on entity_moved.
+// Vision = line of sight + light. Two separate things:
+//  1. Line of sight: a straight line between tile centres that no opaque tile
+//     (wall, later hedges, trees...) blocks. No distance limit of its own.
+//     - A line squeezing exactly between two diagonal walls is blocked; grazing
+//       one wall's corner is allowed.
+//     - Symmetric: if A has line of sight to B, B has it to A.
+//     - Wall faces next to visible floor nearer the viewer are shown, so walls
+//       don't look patchy.
+//  2. Light: how far anyone can see in the open (CONFIG.light.range, scaled by the
+//     viewer's eyesight 0-3) and how lit each tile is (world.light, 0-3).
+// A seen tile's visibility level = its light level (1-3); 0 = unseen (not stored).
+// e.Vision.visible is a Map of tile index -> level. Creatures are only noticed at
+// CONFIG.vision.minLevelToSpot or above. Day/night, weather and stealth will lower
+// light range and light levels later.
+// A viewer's visible set only changes when it moves (or, later, when tiles or light
+// change), so it's recomputed on entity_moved.
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, query } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
@@ -47,24 +48,18 @@ export function lineClear(world, x0, y0, x1, y1) {
   return true;
 }
 
+// How far this viewer can see in the open: the light range scaled by eyesight.
 export function sightRadius(e) {
-  return CONFIG.vision.rangeByLevel[e.Vision.level];
+  return Math.floor(CONFIG.light.range * CONFIG.vision.eyesightFactor[e.Vision.eyesight]);
 }
 
 export function updateVision(world, e) {
   const r = sightRadius(e);
   const { x: ox, y: oy } = e.Position;
-  const [band3, band2] = CONFIG.vision.clarityBands;
   const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
-  const clarity = (x, y) => {
-    const f = Math.sqrt(d2(x, y)) / r;
-    return f <= band3 ? 3 : f <= band2 ? 2 : 1;
-  };
-  const level = (x, y) => Math.min(clarity(x, y), world.light[y * world.width + x]);
-
   const visible = new Map();
   const set = (x, y) => {
-    const lv = level(x, y);
+    const lv = world.light[y * world.width + x];
     if (lv > 0) visible.set(y * world.width + x, lv);
   };
   const walls = [];

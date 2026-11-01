@@ -8,9 +8,13 @@ const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 // Priority: higher replaces lower within the same turn. Danger always wins.
 export const PRIORITY = { info: 0, bump: 1, blocked: 2, notice: 3, danger: 4 };
 
-export function createMessageLog(world) {
+// onScreen(x, y): is this tile currently on the player's screen? The sim can see
+// further than the screen is wide, so "comes into view" only counts what's on screen.
+// Defaults to always true (headless).
+export function createMessageLog(world, { onScreen = () => true } = {}) {
   let current = null;            // { text, priority }
   let adjacentLastTurn = new Set();
+  let inViewLastTurn = new Set();
 
   const say = (text, priority) => {
     if (!current || priority >= current.priority) current = { text, priority };
@@ -37,16 +41,25 @@ export function createMessageLog(world) {
   });
   const playerCanSee = (id) => {
     const p = world.entities.get(world.playerId), e = world.entities.get(id);
-    return !!(p && e && canSee(world, p, e));
+    return !!(p && e && canSee(world, p, e) && onScreen(e.Position.x, e.Position.y));
   };
-  ev.on('entity_seen', (d) => {
-    if (isPlayer(d.viewerId)) say(`A ${name(d.id)} comes into view.`, PRIORITY.notice);
-  });
+  const actorsInView = () => {
+    const out = new Set();
+    for (const e of world.entities.values()) {
+      if (e.Actor && e.Position && !isPlayer(e.id) && playerCanSee(e.id)) out.add(e.id);
+    }
+    return out;
+  };
   // Only report a zombie noticing you if you can see it happen.
   ev.on('prey_spotted', (d) => {
     if (isPlayer(d.preyId) && playerCanSee(d.id)) say(`The ${name(d.id)} has seen you!`, PRIORITY.danger);
   });
   ev.on('turn_ended', () => {
+    const inView = actorsInView();
+    for (const id of inView) {
+      if (!inViewLastTurn.has(id)) { say(`A ${name(id)} comes into view.`, PRIORITY.notice); break; }
+    }
+    inViewLastTurn = inView;
     const now = adjacentActors();
     for (const id of now) {
       if (!adjacentLastTurn.has(id)) { say(`The ${name(id)} is next to you!`, PRIORITY.danger); break; }
