@@ -9,6 +9,7 @@ import { wound } from '../src/sim/systems/bleeding.js';
 import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/items.js';
 import { validTargets } from '../src/sim/systems/ranged.js';
 import { makeDoor, makeWindow, structureAt } from '../src/sim/systems/structures.js';
+import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -1035,6 +1036,62 @@ function roomWorld({ locked = false } = {}) {
   playerAct(w, { type: 'bash', x: 5, y: 7 });
   assert(clang === CONFIG.materials.corrugatedMetal.hitNoise, 'materials: hit noise comes from the material');
   console.log('materials: table complete, properties drive sight/health/noise OK');
+}
+
+// 12. Save / load.
+function randomAction(world, drv) {
+  const p = playerOf(world);
+  const inv = p.Inventory.items;
+  const r = drv.int(12);
+  const dir = { dx: drv.int(3) - 1, dy: drv.int(3) - 1 };
+  if (r === 0) return { type: 'wait' };
+  if (r === 1) return { type: 'shove', ...dir };
+  if (r === 2 && inv.length) return { type: 'use', itemId: inv[drv.int(inv.length)] };
+  if (r === 3) return { type: 'sneak', on: drv.chance(0.5) };
+  if (r === 4) return { type: 'bash', x: p.Position.x + dir.dx, y: p.Position.y + dir.dy };
+  if (r === 5) return { type: 'door', x: p.Position.x + dir.dx, y: p.Position.y + dir.dy };
+  if (r === 6 && inv.length) return { type: 'throw', itemId: inv[drv.int(inv.length)], x: p.Position.x + drv.int(7) - 3, y: p.Position.y + drv.int(7) - 3 };
+  return { type: 'move', ...dir };
+}
+
+for (const seed of [3, 42, 777]) {
+  const a = createWorld(seed);
+  playerOf(a).Health.hp = playerOf(a).Health.max = 1e9; // long run
+  const drv = createRng(seed + 1);
+  for (let i = 0; i < 300; i++) playerAct(a, randomAction(a, drv));
+  const saved = serialize(a);
+  const b = deserialize(saved, createWorld);
+  assert(serialize(b) === saved, `save: seed ${seed} round trip is exact`);
+  // Carry on playing both with the same inputs: they must stay identical.
+  const drvA = createRng(seed + 2), drvB = createRng(seed + 2);
+  for (let i = 0; i < 300; i++) { playerAct(a, randomAction(a, drvA)); playerAct(b, randomAction(b, drvB)); }
+  assert(serialize(a) === serialize(b), `save: seed ${seed} loaded game plays on identically`);
+  assert(b.inputs.length === a.inputs.length, `save: seed ${seed} recorded inputs carried over`);
+}
+console.log('save: exact round trip, loaded games play on identically OK');
+
+{ // Old or broken saves are refused (the game then starts fresh instead of crashing).
+  const w = createWorld(3);
+  const data = JSON.parse(serialize(w));
+  data.version = CONFIG.save.version - 1;
+  let threw = false;
+  try { deserialize(JSON.stringify(data), createWorld); } catch (e) { threw = e instanceof SaveError; }
+  assert(threw, 'save: an older version is refused');
+  threw = false;
+  try { deserialize('{not json', createWorld); } catch (e) { threw = e instanceof SaveError; }
+  assert(threw, 'save: corrupt data is refused');
+  // Memory, inventory and door state survive.
+  const p = playerOf(w);
+  const door = query(w, 'Door')[0];
+  door.Door.locked = false; door.Door.open = true;
+  const bat = query(w, 'Item').find((i) => i.Item.type === 'bat');
+  delete bat.Position; p.Inventory.items.push(bat.id); p.Inventory.wielded = bat.id;
+  const w2 = deserialize(serialize(w), createWorld);
+  const p2 = playerOf(w2);
+  assert(p2.Inventory.wielded === bat.id && query(w2, 'Door')[0].Door.open, 'save: inventory and door state survive');
+  assert(p2.Memory.tiles.filter(Boolean).length === p.Memory.tiles.filter(Boolean).length, 'save: memory snapshots survive');
+  assert(structureAt(w2, door.Position.x, door.Position.y)?.id === door.id, 'save: structure lookup rebuilt');
+  console.log('save: old/corrupt saves refused; inventory, doors, memory survive OK');
 }
 
 console.log('PASS');

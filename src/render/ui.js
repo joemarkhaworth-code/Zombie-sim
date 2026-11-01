@@ -90,7 +90,8 @@ export function drawDeath(ctx, layout, text) {
 // Inventory panel ("BAG"): an 8-bit list filling the map area. Header with slots used and
 // CLOSE; one big row per item with its use button (EAT / USE / WIELD / PUT AWAY) and DROP.
 // bagLayout() is pure layout so main.js can hit-test the same rects it draws.
-export function bagLayout(world, layout) {
+// ui.confirmNew: show the "start a new game?" confirm instead of the list.
+export function bagLayout(world, layout, ui = {}) {
   const p = world.entities.get(world.playerId);
   const top = layout.statusHeight, bottom = layout.height - layout.barHeight;
   const pad = 8, rowH = 96, w = layout.width;
@@ -112,15 +113,47 @@ export function bagLayout(world, layout) {
       });
     });
   }
-  return { panel, close, rows, used: p ? p.Inventory.items.reduce((n, id) => n + world.entities.get(id).Item.slots, 0) : 0, capacity: p ? p.Inventory.capacity : 0 };
+  // Small, out-of-the-way NEW GAME at the bottom of the panel, and its confirm buttons.
+  const newGame = { x: w - pad - 120, y: bottom - pad - 34, w: 120, h: 34 };
+  const half = Math.floor((w - pad * 3) / 2);
+  const yes = { x: pad, y: top + 140, w: half, h: 64 };
+  const no = { x: pad * 2 + half, y: top + 140, w: half, h: 64 };
+  return { panel, close, rows, newGame, yes, no, used: p ? p.Inventory.items.reduce((n, id) => n + world.entities.get(id).Item.slots, 0) : 0, capacity: p ? p.Inventory.capacity : 0 };
 }
 
-export function drawBag(ctx, world, layout) {
+export function drawBag(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
-  const bag = bagLayout(world, layout);
+  const bag = bagLayout(world, layout, ui);
   const pad = 8;
   ctx.fillStyle = C.bagBg;
   ctx.fillRect(bag.panel.x, bag.panel.y, bag.panel.w, bag.panel.h);
+  if (ui.confirmNew) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.bagTitle;
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText('Start a new game?', layout.width / 2, bag.panel.y + 60);
+    ctx.fillStyle = C.bagText;
+    ctx.font = '17px monospace';
+    ctx.fillText('This run will be lost.', layout.width / 2, bag.panel.y + 96);
+    for (const [b, label, bg] of [[bag.yes, 'YES', C.healthFull], [bag.no, 'NO', C.bagButton]]) {
+      ctx.fillStyle = bg;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = C.bagButtonText;
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 + 1);
+    }
+    return;
+  }
+  // NEW GAME: small and dim so it isn't hit by accident.
+  ctx.fillStyle = C.bagRow;
+  ctx.fillRect(bag.newGame.x, bag.newGame.y, bag.newGame.w, bag.newGame.h);
+  ctx.fillStyle = C.statusDim;
+  ctx.font = '14px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NEW GAME', bag.newGame.x + bag.newGame.w / 2, bag.newGame.y + bag.newGame.h / 2 + 1);
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillStyle = C.bagTitle;

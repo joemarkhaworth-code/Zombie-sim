@@ -12,6 +12,7 @@ export function createRng(seed) {
     int(n) { return Math.floor(rng.next() * n); },
     chance(p) { return rng.next() < p; },
     get state() { return a; },
+    set state(v) { a = v >>> 0; }, // restore from a save
   };
   return rng;
 }

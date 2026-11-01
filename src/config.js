@@ -139,6 +139,9 @@ export const CONFIG = {
     searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
+  // Save/load. Bump `version` whenever the saved state's shape changes in a way old
+  // saves can't be read with; an older save is then discarded for a fresh game.
+  save: { version: 1, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,                    // health blocks blink this fast while bleeding

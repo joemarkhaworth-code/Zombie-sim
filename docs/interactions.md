@@ -33,3 +33,4 @@ Every new system must read from or affect at least one existing system. One line
 | Broken glass (step 11) | anything moving onto it | noise (crunch) even when sneaking; memory |
 | Bashing (step 11) | melee damage, structure/barricade health, zombie goals | structure health, noise, zombies breaking in to reach you |
 | Barricades (step 11) | planks item, adjacent door/window | extra health, blocks movement and sight, hammering noise |
+| Save/load (step 12) | the whole world state (all systems' data) | resumes the run exactly; version mismatch -> fresh game |

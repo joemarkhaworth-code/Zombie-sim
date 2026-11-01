@@ -25,5 +25,10 @@ export function buildTestBuilding(world) {
   makeDoor(world, doorX, doorY, { locked: true });
   makeWindow(world, ...win1);
   makeWindow(world, ...win2);
-  world.testBuilding = { ...b, inside: (x, y) => x > b.x && y > b.y && x < b.x + b.w - 1 && y < b.y + b.h - 1 };
+  world.testBuilding = buildingInfo(b);
+}
+
+// Plain rect + an inside() helper (rebuilt after loading a save).
+export function buildingInfo(b) {
+  return { x: b.x, y: b.y, w: b.w, h: b.h, inside: (x, y) => x > b.x && y > b.y && x < b.x + b.w - 1 && y < b.y + b.h - 1 };
 }

@@ -6,16 +6,51 @@ import { drawWorld } from './render/greybox.js';
 import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
+import { serialize, deserialize } from './sim/save.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Saving: the sim turns the world into a string (src/sim/save.js); this file keeps it
+// in localStorage. Saved after every action; loaded on start. ?seed=N always starts
+// that seed fresh. A save that won't load (older version, corrupt) is discarded.
 const params = new URLSearchParams(location.search);
-const seed = params.has('seed')
-  ? Number(params.get('seed')) >>> 0
-  : Math.floor(Math.random() * 1e9);
-const world = createWorld(seed);
+let bootNote = null;
+
+function readSave() {
+  try { return localStorage.getItem(CONFIG.save.key); } catch (e) { return null; }
+}
+function clearSave() {
+  try { localStorage.removeItem(CONFIG.save.key); } catch (e) { /* storage blocked */ }
+}
+
+function boot() {
+  if (params.has('seed')) return createWorld(Number(params.get('seed')) >>> 0);
+  const saved = readSave();
+  if (saved) {
+    try { return deserialize(saved, createWorld); } catch (e) {
+      clearSave();
+      bootNote = 'Old save lost. New game.';
+    }
+  }
+  return createWorld(Math.floor(Math.random() * 1e9));
+}
+
+const world = boot();
 window.world = world; // handy for debugging from the console
+
+// Save after every action (dead runs aren't kept: reopening after death starts fresh).
+function persist() {
+  if (world.gameOver) { clearSave(); return; }
+  try { localStorage.setItem(CONFIG.save.key, serialize(world)); } catch (e) { /* storage full/blocked: play on */ }
+}
+
+// All player actions go through here so every one is saved.
+function act(action) {
+  const result = playerAct(world, action);
+  persist();
+  return result;
+}
 const messages = createMessageLog(world, {
   onScreen: (x, y) => {
     updateCamera(); // the player may have just moved
@@ -74,7 +109,7 @@ function render() {
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout, inspect, debug, aim ? aim.targets : null);
   drawStatus(ctx, world, layout, messages.message, blink);
-  if (bagOpen) drawBag(ctx, world, layout);
+  if (bagOpen) drawBag(ctx, world, layout, { confirmNew });
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
 }
@@ -87,6 +122,7 @@ let inspect = null; // { x, y } of the last inspected tile, until the next actio
 const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
 let armed = null; // one-shot action waiting for a target: 'shove' or null
 let bagOpen = false; // inventory panel showing (opening it takes no turn)
+let confirmNew = false; // the bag's NEW GAME button asked "are you sure?"
 let aim = null;      // aiming: { kind: 'throw', itemId, targets } or { kind: 'fire', targets } - targets = valid tile set
 
 function gunAmmo() {
@@ -147,6 +183,7 @@ function screenToTile(px, py) {
 
 // After death, any tap starts a new run with a fresh random seed.
 function restart() {
+  clearSave();
   location.href = location.pathname;
 }
 
@@ -176,13 +213,14 @@ function onButton(px, py) {
     return;
   }
   if (b.id === 'fire') {
-    if (gunAmmo() <= 0) { playerAct(world, { type: 'fire', x: -1, y: -1 }); render(); return; } // shows "Out of ammo."
+    if (gunAmmo() <= 0) { act({ type: 'fire', x: -1, y: -1 }); render(); return; } // shows "Out of ammo."
     startAim('fire');
     return;
   }
   if (b.id === 'bag') {
     inspect = null;
     armed = null;
+    confirmNew = false;
     bagOpen = !bagOpen;
     render();
     return;
@@ -199,7 +237,7 @@ function onButton(px, py) {
   if (b.id === 'sneak') {
     const p = world.entities.get(world.playerId);
     inspect = null;
-    playerAct(world, { type: 'sneak', on: !p.Stealth.sneaking });
+    act({ type: 'sneak', on: !p.Stealth.sneaking });
     if (navigator.vibrate) navigator.vibrate(10);
     render();
   }
@@ -208,14 +246,20 @@ function onButton(px, py) {
 // Inventory panel taps: CLOSE, or a row's use/drop button. Using or dropping takes a
 // turn and closes the bag so you can see what the world did meanwhile.
 function onBagTap(px, py) {
-  const bag = bagLayout(world, layout);
+  const bag = bagLayout(world, layout, { confirmNew });
   const hit = (b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
+  if (confirmNew) {
+    if (hit(bag.yes)) { restart(); return; }
+    if (hit(bag.no)) { confirmNew = false; render(); }
+    return;
+  }
+  if (hit(bag.newGame)) { confirmNew = true; render(); return; }
   if (hit(bag.close)) { bagOpen = false; render(); return; }
   for (const r of bag.rows) {
     if (hit(r.toss)) { startAim('throw', r.itemId); return; }
     const type = hit(r.use) ? 'use' : hit(r.drop) ? 'drop' : null;
     if (!type) continue;
-    playerAct(world, { type, itemId: r.itemId });
+    act({ type, itemId: r.itemId });
     bagOpen = false;
     if (navigator.vibrate) navigator.vibrate(10);
     render();
@@ -232,7 +276,7 @@ function onAimTap(px, py) {
   if (!aim.targets.has(t.y * world.width + t.x)) { messages.show("Can't aim there."); render(); return; }
   const a = aim;
   aim = null;
-  playerAct(world, a.kind === 'throw' ? { type: 'throw', itemId: a.itemId, x: t.x, y: t.y } : { type: 'fire', x: t.x, y: t.y });
+  act(a.kind === 'throw' ? { type: 'throw', itemId: a.itemId, x: t.x, y: t.y } : { type: 'fire', x: t.x, y: t.y });
   if (navigator.vibrate) navigator.vibrate(a.kind === 'fire' ? 30 : 10);
   render();
 }
@@ -265,7 +309,7 @@ function onTap(px, py) {
   if (armed === 'shove') {
     // One-shot: this tap picks the direction. Nothing there (or tapping yourself) cancels.
     armed = null;
-    if (onSelf || !playerAct(world, { type: 'shove', dx, dy })) messages.show(onSelf ? 'Shove cancelled.' : 'Nothing to shove there.');
+    if (onSelf || !act({ type: 'shove', dx, dy })) messages.show(onSelf ? 'Shove cancelled.' : 'Nothing to shove there.');
     render();
     return;
   }
@@ -278,16 +322,18 @@ function onTap(px, py) {
   if (st && Math.max(Math.abs(exact.x - p.x), Math.abs(exact.y - p.y)) === 1) {
     const toggles = st.Door && !st.Door.locked && !st.Barricade && !st.Door.broken;
     if (toggles || st.Blocks) {
-      playerAct(world, toggles ? { type: 'door', x: exact.x, y: exact.y } : { type: 'bash', x: exact.x, y: exact.y });
+      act(toggles ? { type: 'door', x: exact.x, y: exact.y } : { type: 'bash', x: exact.x, y: exact.y });
       render();
       return;
     }
   }
   const underfoot = onSelf && [...world.entities.values()].some((e) => e.Item && e.Position && e.Position.x === p.x && e.Position.y === p.y);
   action = underfoot ? { type: 'pickup' } : onSelf ? { type: 'wait' } : { type: 'move', dx, dy };
-  playerAct(world, action);
+  act(action);
   render(); // even a failed move (bump) shows a message
 }
 
 window.addEventListener('resize', resize);
 resize();
+if (bootNote) { messages.show(bootNote); render(); }
+persist(); // a brand-new game is saved straight away
