@@ -12,6 +12,15 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <script type="module" src="src/main.js"></script>
+  <script type="module">
+    // Cache-busting: the deploy writes version.json and stamps every import with ?v=<commit>,
+    // so a refresh always loads the latest code. Locally there's no version.json; load as-is.
+    let v = '';
+    try {
+      const r = await fetch('version.json', { cache: 'no-store' });
+      if (r.ok) v = (await r.json()).v;
+    } catch (e) { /* offline or local: fall through */ }
+    await import(v ? `./src/main.js?v=${v}` : './src/main.js');
+  </script>
 </body>
 </html>

@@ -27,6 +27,12 @@ jobs:
           node-version: 20
       - name: Headless test run
         run: node tests/headless.js
+      - name: Stamp version for cache-busting
+        run: |
+          V="${GITHUB_SHA::8}"
+          echo "{\"v\":\"$V\"}" > version.json
+          find src -name '*.js' -exec sed -i -E "s#(from '\.{1,2}/[^']+\.js)'#\1?v=$V'#g" {} +
+          grep -rn "from '" src | head -5
       - uses: actions/configure-pages@v5
         with:
           enablement: true
