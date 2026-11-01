@@ -192,7 +192,7 @@ export function describeTile(world, x, y) {
   return `${what.slice(0, -1)}, out of sight.`;
 }
 
-// Death page wording (Ceefax P302), from world.gameOver + world.stats.
+// Death screen wording, from world.gameOver + world.stats.
 const CAUSES = {
   bite: (k) => `Bitten by a ${k || 'zombie'}`,
   hit: (k) => `Beaten by a ${k || 'stranger'}`,
@@ -201,17 +201,10 @@ const CAUSES = {
   thrown: (k) => `Hit by something ${k ? `a ${k} threw` : 'thrown'}`,
   shove: () => 'Slammed into a wall',
 };
-const HEADLINES = {
-  bite: 'SURVIVOR BITTEN',
-  bleeding: 'SURVIVOR BLEEDS OUT',
-  shot: 'SURVIVOR SHOT DEAD',
-};
 export function deathText(world) {
   const g = world.gameOver;
   const cause = (CAUSES[g.cause] || (() => 'Died'))(g.killerName);
   return {
-    page: 'P302',
-    headline: HEADLINES[g.cause] || 'SURVIVOR FOUND DEAD',
     days: daysSurvived(g.turn),
     day: dayOf(g.turn),
     cause,

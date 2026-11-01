@@ -1117,7 +1117,7 @@ console.log('save: exact round trip, loaded games play on identically OK');
   p2.Health.hp = 1; z2.Melee.hitChance = 1; w2.turn = 2 * N + 5;
   for (let i = 0; i < 6 && !w2.gameOver; i++) playerAct(w2, { type: 'wait' });
   const t = deathText(w2);
-  assert(t.page === 'P302' && t.cause === 'Bitten by a zombie' && t.days === 2 && t.seed === w2.seed && t.kills === 0, `death page: ${JSON.stringify(t)}`);
+  assert(t.cause === 'Bitten by a zombie' && t.days === 2 && t.seed === w2.seed && t.kills === 0, `death page: ${JSON.stringify(t)}`);
   const w3 = openWorld();
   const p3 = playerOf(w3);
   place(w3, zombieOf(w3), 18, 26); place(w3, p3, 5, 5);

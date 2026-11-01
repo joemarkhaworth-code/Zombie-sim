@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawCeefax, drawBag, bagLayout } from './render/ui.js';
+import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
@@ -113,7 +113,7 @@ function render() {
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) {
     if (!diedAt) diedAt = performance.now();
-    drawCeefax(ctx, layout, deathText(world), blink);
+    drawDeath(ctx, layout, deathText(world), blink);
   }
 }
 

@@ -207,9 +207,6 @@ export const CONFIG = {
     bagButtonText: '#000000',
     aimTile: 'rgba(255,255,0,0.22)', // valid target tiles while aiming
     aimCreature: 'rgba(255,64,0,0.45)', // valid target with a creature on it        // one-shot action waiting for a target (SHOVE)
-    // Teletext's 8 colours (death page).
-    ttBlack: '#000000', ttRed: '#ff0000', ttGreen: '#00ff00', ttYellow: '#ffff00',
-    ttBlue: '#0000ff', ttMagenta: '#ff00ff', ttCyan: '#00ffff', ttWhite: '#ffffff',
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',
