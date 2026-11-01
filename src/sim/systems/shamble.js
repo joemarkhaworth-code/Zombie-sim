@@ -2,7 +2,7 @@
 // - Sometimes staggers in a random direction.
 // - If it can see any Prey: remember where, and lurch toward the nearest one.
 // - Else if it has a goal (where it last saw prey, or a noise it heard): go there,
-//   then give up when it arrives or gets stuck.
+//   search around it for a few moves (it may spot you again), then give up.
 // - Otherwise: shuffle about aimlessly.
 // Hearing a noise (noise_heard) sets the goal to the noise's source; the newest
 // noise wins. Seeing prey always takes priority.
@@ -44,15 +44,35 @@ export function shamble(world, e) {
 
   if (brain.goal) {
     const g = brain.goal;
-    const arrived = e.Position.x === g.x && e.Position.y === g.y;
-    if (arrived || !stepToward(world, e, g)) {
-      brain.goal = null;
-      world.events.emit(g.why === 'seen' ? 'prey_lost' : 'noise_investigated', { id: e.id, x: g.x, y: g.y });
+    if (g.search === undefined) {
+      // Head for the spot. On arrival (or if stuck), search around it for a while.
+      const arrived = e.Position.x === g.x && e.Position.y === g.y;
+      if (arrived || !stepToward(world, e, g)) g.search = CONFIG.zombie.searchActions;
+      return;
     }
+    if (g.search > 0) {
+      g.search--;
+      searchStep(world, e, g);
+      return;
+    }
+    brain.goal = null;
+    world.events.emit(g.why === 'seen' ? 'prey_lost' : 'noise_investigated', { id: e.id, x: g.x, y: g.y });
     return;
   }
 
   if (rng.chance(CONFIG.zombie.wanderChance)) randomStep(world, e);
+}
+
+// Shuffle about near the goal: a random step that stays within searchRadius of it.
+function searchStep(world, e, g) {
+  const r = CONFIG.zombie.searchRadius;
+  const options = DIRS.filter(([dx, dy]) => {
+    const nx = e.Position.x + dx, ny = e.Position.y + dy;
+    return Math.max(Math.abs(nx - g.x), Math.abs(ny - g.y)) <= r && isPassable(world, nx, ny);
+  });
+  if (!options.length) return;
+  const [dx, dy] = options[world.rng.int(options.length)];
+  tryMove(world, e, dx, dy);
 }
 
 function randomStep(world, e) {

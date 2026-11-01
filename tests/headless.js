@@ -294,7 +294,7 @@ const range = (e) => sightRadius(e);
   let lost = false;
   w.events.on('prey_lost', () => { lost = true; });
   let reached = false;
-  for (let i = 0; i < 40 && !lost; i++) {
+  for (let i = 0; i < 60 && !lost; i++) {
     playerAct(w, { type: 'wait' });
     if (cheb(z.Position, seenAt) <= 1) reached = true;
   }
@@ -336,9 +336,9 @@ const range = (e) => sightRadius(e);
   assert(heard && heard.x === 5 && heard.y === 11, 'hear: zombie should hear footsteps 3 tiles away');
   assert(z.Brain.goal && z.Brain.goal.why === 'heard', 'hear: zombie should head for the noise');
   assert(w.noise[11 * w.width + 5] === CONFIG.noise.radiusByLevel[CONFIG.player.footsteps], 'hear: heatmap records the noise');
-  for (let i = 0; i < 20 && !investigated; i++) playerAct(w, { type: 'wait' });
+  for (let i = 0; i < 40 && !investigated; i++) playerAct(w, { type: 'wait' });
   assert(investigated, 'hear: zombie should reach the noise and give up');
-  assert(cheb(z.Position, { x: 5, y: 11 }) <= 1, 'hear: zombie should end up at the noise');
+  assert(cheb(z.Position, { x: 5, y: 11 }) <= CONFIG.zombie.searchRadius, 'hear: zombie should end up searching around the noise');
   assert(w.noise.every((v) => v === 0), 'hear: waiting is silent and the heatmap clears');
   console.log('hear: zombie hears footsteps and investigates OK');
 }
@@ -424,7 +424,20 @@ const range = (e) => sightRadius(e);
   place(w2, z2, 10, 5); place(w2, p2, 10, 10);
   playerAct(w2, { type: 'sneak', on: true });
   assert(!canSee(w2, z2, p2) && canSee(w2, z2, p2, { tracking: true }), 'track: sneaking only stops the first notice');
-  console.log('track: once noticed, sneaking does not hide you OK');
+  // ...nor does ducking into a bush while it watches.
+  const w3 = openWorld();
+  w3.tiles[5 * w3.width + 14] = TILE.BUSH;
+  const p3 = playerOf(w3), z3 = zombieOf(w3);
+  place(w3, p3, 10, 5); place(w3, z3, 10, 9);
+  playerAct(w3, { type: 'wait' }); playerAct(w3, { type: 'wait' });
+  for (let i = 0; i < 4; i++) playerAct(w3, { type: 'move', dx: 1, dy: 0 });
+  let gaveUp = false;
+  for (let i = 0; i < 20 && cheb(z3.Position, p3.Position) > 1; i++) {
+    playerAct(w3, { type: 'wait' });
+    if (!z3.Brain.goal) gaveUp = true;
+  }
+  assert(!gaveUp && cheb(z3.Position, p3.Position) <= 1, 'track: a zombie that watched you enter a bush finds you');
+  console.log('track: once noticed, sneaking and bushes do not hide you OK');
 }
 
 { // Bushes: hidden unless adjacent - for you and for zombies.

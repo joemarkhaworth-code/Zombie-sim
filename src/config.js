@@ -24,7 +24,8 @@ export const CONFIG = {
     //   sight radius x noticeByLight[light level on its tile] x (stealth.sneakNoticeFactor if sneaking
     //   and the viewer wasn't already tracking it).
     // Adjacent creatures are always noticed if their tile has any light.
-    // In cover (bush) a creature is only noticed from an adjacent tile.
+    // In cover (bush) a creature is only noticed from an adjacent tile (unless the viewer
+    // was already tracking it).
     noticeByLight: [0, 0.34, 0.67, 1],
   },
   stealth: {
@@ -53,7 +54,9 @@ export const CONFIG = {
     hearing: 3,                      // good ears: hear your footsteps up to 3 tiles away in the open
     footsteps: 0,                    // shuffle quietly (raise to let zombies hear each other)
     wanderChance: 0.5,               // with nothing to chase, chance to shuffle a step
-    staggerChance: 0.2,              // chance a step lurches in a random direction
+    staggerChance: 0.2,
+    searchActions: 4,                // after reaching a last-seen spot or noise, shuffle about this many moves
+    searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
   ui: { barHeight: 72 },             // bottom button bar (SNEAK) in CSS px: thumb-sized

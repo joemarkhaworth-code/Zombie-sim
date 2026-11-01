@@ -99,16 +99,17 @@ export function visibilityAt(world, viewer, x, y) {
 //  - adjacent targets are always noticed;
 //  - a target in cover (bush) is only noticed from an adjacent tile;
 //  - otherwise it must be within sightRadius x noticeByLight[light] x (sneak factor).
-// tracking: the viewer already had the target in view last time. Sneaking only stops
-// you being noticed in the first place; it doesn't shake off someone already watching
-// you (cover still does - break line of sight to lose them).
+// tracking: the viewer already had the target in view last time. Sneaking and cover
+// only stop you being noticed in the first place; they don't shake off someone already
+// watching you (it saw you duck into the bush). To lose a pursuer, break line of sight
+// first (walls), then hide.
 export function canSee(world, viewer, target, { tracking = false } = {}) {
   const { x, y } = target.Position;
   const lv = visibilityAt(world, viewer, x, y);
   if (lv < CONFIG.vision.minLevelToSpot) return false;
   const dx = x - viewer.Position.x, dy = y - viewer.Position.y;
   if (Math.max(Math.abs(dx), Math.abs(dy)) <= 1) return true;
-  if (inCover(world, x, y)) return false;
+  if (inCover(world, x, y) && !tracking) return false;
   let range = sightRadius(viewer) * CONFIG.vision.noticeByLight[lv];
   if (isSneaking(target) && !tracking) range *= CONFIG.stealth.sneakNoticeFactor;
   return dx * dx + dy * dy <= range * range;
