@@ -3,8 +3,9 @@
 // so the remembered map can be out of date (a door you saw shut stays shut in your
 // memory until you see it again). Creatures (anything with Actor) are never remembered.
 //
-// Snapshot: { tile, things: [{ name, char, fg, bg }] }
+// Snapshot: { tile, blood, things: [{ name, char, fg, bg }] }
 //   tile   - terrain type as seen
+//   blood  - blood level 0-3 as seen
 //   things - non-creature entities on the tile (items, doors, fires... as they arrive)
 // When tiles gain more state (damage, door open/shut, barricade HP) add it in
 // snapshotTile() so memory records it too.
@@ -42,6 +43,7 @@ function rememberVisible(world, e) {
 function snapshotTile(world, idx, things) {
   return {
     tile: world.tiles[idx],
+    blood: world.blood ? world.blood[idx] : 0,
     things: things.map((t) => ({
       name: t.Name ? t.Name.name : 'something',
       char: t.Glyph.char, fg: t.Glyph.fg, bg: t.Glyph.bg,

@@ -1,6 +1,7 @@
 // Shamble: a slow, clumsy hunter. Works for anything with Brain { type: 'shamble' }.
 // - Sometimes staggers in a random direction.
-// - If it can see any Prey: remember where, and lurch toward the nearest one.
+// - If it can see any Prey: remember where, and lurch toward the nearest one;
+//   if it's adjacent, attack it.
 // - Else if it has a goal (where it last saw prey, or a noise it heard): go there,
 //   search around it for a few moves (it may spot you again), then give up.
 // - Otherwise: shuffle about aimlessly.
@@ -9,6 +10,7 @@
 import { CONFIG } from '../../config.js';
 import { query, isPassable, tryMove } from '../world.js';
 import { canSee } from './vision.js';
+import { attack } from './combat.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -38,7 +40,8 @@ export function shamble(world, e) {
   if (prey) {
     if (!sawPreyLastTime) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
     brain.goal = { x: prey.Position.x, y: prey.Position.y, why: 'seen' };
-    stepToward(world, e, brain.goal);
+    if (cheb(prey.Position, e.Position) <= 1 && e.Melee) attack(world, e, prey);
+    else stepToward(world, e, brain.goal);
     return;
   }
 

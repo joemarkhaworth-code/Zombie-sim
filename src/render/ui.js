@@ -3,7 +3,23 @@
 import { CONFIG } from '../config.js';
 import { PRIORITY } from './messages.js';
 
-export function drawStatus(ctx, world, layout, message) {
+// Health: one block per point, filled or empty. Blinks (blink=true hides filled
+// blocks) while you're bleeding.
+function drawHealth(ctx, world, x, h, blink) {
+  const C = CONFIG.colours;
+  const p = world.entities.get(world.playerId) || world.fallenPlayer;
+  if (!p || !p.Health) return x;
+  const size = Math.floor(h * 0.38), gap = 3;
+  const bleeding = p.Bleeding && p.Bleeding.level > 0;
+  for (let i = 0; i < p.Health.max; i++) {
+    const full = i < p.Health.hp;
+    ctx.fillStyle = full && !(bleeding && blink) ? C.healthFull : C.healthEmpty;
+    ctx.fillRect(x + i * (size + gap), Math.floor((h - size) / 2), size, size);
+  }
+  return x + p.Health.max * (size + gap);
+}
+
+export function drawStatus(ctx, world, layout, message, blink = false) {
   const C = CONFIG.colours;
   const { width, statusHeight: h } = layout;
   ctx.fillStyle = C.statusBg;
@@ -14,7 +30,8 @@ export function drawStatus(ctx, world, layout, message) {
   ctx.fillStyle = C.statusTurn;
   const turnText = `T${world.turn}`;
   ctx.fillText(turnText, 8, h / 2);
-  const msgX = 8 + ctx.measureText(turnText + '  ').width;
+  const healthX = 8 + ctx.measureText(turnText + ' ').width;
+  const msgX = drawHealth(ctx, world, healthX, h, blink) + 8;
   if (message) {
     ctx.fillStyle = message.priority >= PRIORITY.danger ? C.statusDanger : C.statusText;
     ctx.fillText(message.text, msgX, h / 2, width - msgX - 8);
@@ -42,4 +59,24 @@ export function drawButtons(ctx, world, layout) {
     ctx.textBaseline = 'middle';
     ctx.fillText(on ? 'SNEAKING' : 'SNEAK', b.x + b.w / 2, b.y + b.h / 2 + 1);
   }
+}
+
+// Death screen: dark overlay, big red title, how you died, the turn, and a prompt.
+export function drawDeath(ctx, layout, text) {
+  const C = CONFIG.colours;
+  const { width: w, height: h } = layout;
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.healthFull;
+  ctx.font = `bold ${Math.floor(w / 7)}px monospace`;
+  ctx.fillText(text.title, w / 2, h * 0.38);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.floor(w / 18)}px monospace`;
+  ctx.fillText(text.how, w / 2, h * 0.48, w - 16);
+  ctx.fillStyle = C.statusTurn;
+  ctx.fillText(text.turn, w / 2, h * 0.54);
+  ctx.fillStyle = C.buttonOnBg;
+  ctx.fillText('Tap to restart', w / 2, h * 0.66);
 }

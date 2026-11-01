@@ -24,6 +24,8 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   };
   const name = (id) => world.entities.get(id)?.Name?.name ?? 'something';
   const isPlayer = (id) => id === world.playerId;
+  const VERB_S = { bite: 'bites', hit: 'hits' };
+  const verbs = (id) => VERB_S[world.entities.get(id)?.Melee?.verb] || 'hits';
   const adjacentActors = () => {
     const p = world.entities.get(world.playerId);
     const out = new Set();
@@ -38,6 +40,19 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('action_attempted', (d) => { if (isPlayer(d.id)) current = null; }); // new action clears the line
   ev.on('stance_changed', (d) => {
     if (isPlayer(d.id)) current = { text: d.sneaking ? 'You start sneaking.' : 'You stop sneaking.', priority: PRIORITY.info };
+  });
+  ev.on('attack_hit', (d) => {
+    if (isPlayer(d.id)) say(`You hit the ${name(d.targetId)}.`, PRIORITY.blocked);
+    else if (isPlayer(d.targetId)) say(`The ${name(d.id)} ${verbs(d.id)} you!`, PRIORITY.danger);
+  });
+  ev.on('attack_missed', (d) => {
+    if (isPlayer(d.id)) say(`You miss the ${name(d.targetId)}.`, PRIORITY.blocked);
+    else if (isPlayer(d.targetId)) say(`The ${name(d.id)} misses you.`, PRIORITY.notice);
+  });
+  ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });
+  ev.on('bleeding_stopped', (d) => { if (isPlayer(d.id)) say('Your bleeding stops.', PRIORITY.info); });
+  ev.on('entity_died', (d) => {
+    if (isPlayer(d.killerId)) say(`You kill the ${d.name}.`, PRIORITY.notice);
   });
   ev.on('entity_waited', (d) => { if (isPlayer(d.id)) say('You wait.', PRIORITY.info); });
   ev.on('move_blocked', (d) => {
@@ -98,11 +113,19 @@ export function describeTile(world, x, y) {
     if (creature) return `A ${creature.Name.name}.`;
     const thing = here.filter((e) => !e.Actor).pop();
     if (thing) return `A ${thing.Name.name}.`;
+    if (world.blood && world.blood[y * world.width + x] && !TILE_INFO[tileAt(world, x, y)].opaque) return 'Blood on the ground.';
     return TILE_DESC[tileAt(world, x, y)];
   }
   const snap = rememberedAt(world, player, x, y);
   if (!snap) return 'Unexplored.';
   const thing = snap.things[snap.things.length - 1];
-  const what = thing ? `A ${thing.name}.` : TILE_DESC[snap.tile];
+  const what = thing ? `A ${thing.name}.` : snap.blood ? 'Blood on the ground.' : TILE_DESC[snap.tile];
   return `${what.slice(0, -1)}, out of sight.`;
+}
+
+// Death screen lines, from world.gameOver.
+export function deathText(gameOver) {
+  const how = gameOver.cause === 'bleeding' ? 'You bled to death.'
+    : gameOver.killerName ? `Killed by a ${gameOver.killerName}.` : 'You died.';
+  return { title: 'YOU DIED', how, turn: `Turn ${gameOver.turn}` };
 }

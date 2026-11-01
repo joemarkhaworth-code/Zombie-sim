@@ -3,8 +3,8 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons } from './render/ui.js';
-import { createMessageLog, describeTile } from './render/messages.js';
+import { drawStatus, drawButtons, drawDeath } from './render/ui.js';
+import { createMessageLog, describeTile, deathText } from './render/messages.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -51,7 +51,7 @@ function resize() {
 
 // Keep the player centred; stop at the map edges when the map is bigger than the view.
 function updateCamera() {
-  const p = world.entities.get(world.playerId).Position;
+  const p = (world.entities.get(world.playerId) || world.fallenPlayer).Position;
   const clamp = (v, size, view) => (size <= view ? Math.floor((size - view) / 2) : Math.max(0, Math.min(v, size - view)));
   layout.camX = clamp(p.x - (layout.cols >> 1), world.width, layout.cols);
   layout.camY = clamp(p.y - (layout.rows >> 1), world.height, layout.rows);
@@ -62,8 +62,9 @@ function render() {
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout, inspect, debug);
-  drawStatus(ctx, world, layout, messages.message);
+  drawStatus(ctx, world, layout, messages.message, blink);
   drawButtons(ctx, world, layout);
+  if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
 }
 
 // Touch: a quick tap acts. Holding still for longPressMs inspects the tile under
@@ -95,6 +96,7 @@ canvas.addEventListener('pointerup', (e) => {
   const d = down;
   down = null;
   clearTimeout(d.timer);
+  if (world.gameOver) { restart(); return; }
   if (d.longPressed || d.moved) return;
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
@@ -109,6 +111,19 @@ function screenToTile(px, py) {
     y: layout.camY + Math.floor((py - layout.offsetY) / layout.tileSize),
   };
 }
+
+// After death, any tap starts a new run with a fresh random seed.
+function restart() {
+  location.href = location.pathname;
+}
+
+// Health blocks blink while you're bleeding.
+let blink = false;
+setInterval(() => {
+  const p = world.entities.get(world.playerId);
+  if (p && p.Bleeding && p.Bleeding.level > 0) { blink = !blink; render(); }
+  else if (blink) { blink = false; render(); }
+}, CONFIG.ui.blinkMs);
 
 // Debug: tapping the top bar toggles the noise heatmap. Takes no turn.
 function toggleNoiseMap() {

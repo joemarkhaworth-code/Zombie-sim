@@ -15,6 +15,12 @@
 //   entity_seen      { viewerId, id }        an actor came into the player's view (end of turn)
 //   vision_updated   { id }                  a viewer's visible tiles were recomputed
 //   stance_changed   { id, sneaking }        started or stopped sneaking
+//   attack_hit       { id, targetId, damage }
+//   attack_missed    { id, targetId }
+//   entity_damaged   { id, amount, hp }
+//   bleeding_started { id, level }           a wound opened or got worse
+//   bleeding_stopped { id }
+//   entity_died      { id, name, killerId, cause, x, y }
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

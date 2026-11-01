@@ -15,6 +15,17 @@ const C = CONFIG.colours;
 const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush };
 const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall, [TILE.BUSH]: C.memoryBush };
 
+// Blood: red spots, more for higher levels (1-3).
+const BLOOD_SPOTS = [[0.2, 0.6], [0.65, 0.3], [0.45, 0.75], [0.3, 0.25], [0.75, 0.7], [0.5, 0.45]];
+function drawBlood(ctx, px, py, s, level, colour) {
+  if (!level) return;
+  ctx.fillStyle = colour;
+  const d = Math.max(3, Math.floor(s / 6));
+  for (const [fx, fy] of BLOOD_SPOTS.slice(0, level * 2)) {
+    ctx.fillRect(px + Math.floor(fx * s), py + Math.floor(fy * s), d, d);
+  }
+}
+
 // Small mark so a bush reads as a bush, not just a green square.
 function drawBushMark(ctx, px, py, s) {
   ctx.fillStyle = C.bushMark;
@@ -30,7 +41,7 @@ function drawBushMark(ctx, px, py, s) {
 // debug: { noise } toggles debug overlays.
 export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
   const { tileSize: s, offsetX: ox, offsetY: oy, camX, camY, cols, rows } = layout;
-  const player = world.entities.get(world.playerId);
+  const player = world.entities.get(world.playerId) || world.fallenPlayer; // after death: the last view
   const visible = player ? player.Vision.visible : new Map();
   const levelAt = (x, y) => visible.get(y * world.width + x) || 0;
   const onScreen = (x, y) => {
@@ -52,12 +63,14 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
         ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
         if (t === TILE.BUSH) drawBushMark(ctx, px, py, s);
+        if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         continue;
       }
       const snap = player ? rememberedAt(world, player, x, y) : null;
       if (!snap) continue;
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
+      drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
       if (thing) {
         ctx.fillStyle = C.memoryThing;

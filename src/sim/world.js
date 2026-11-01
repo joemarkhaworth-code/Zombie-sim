@@ -8,6 +8,7 @@ import { installVision, refreshAllVision } from './systems/vision.js';
 import { installMemory, createMemory } from './systems/memory.js';
 import { installNoise } from './systems/noise.js';
 import { installShamble } from './systems/shamble.js';
+import { installBleeding } from './systems/bleeding.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -23,7 +24,9 @@ export function createWorld(seed) {
     tick: 0,      // scheduler ticks elapsed
     inputs: [],   // every player input, in order, so runs replay from seed + inputs
     playerId: null,
+    gameOver: null, // set when the player dies: { cause, killerId, killerName, turn }
   };
+  installBleeding(world); // world.blood
 
   // Player starts on the floor tile nearest the centre.
   const start = nearestOpenTile(world, width >> 1, height >> 1);
@@ -34,6 +37,8 @@ export function createWorld(seed) {
     Prey: {},
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
     Hearing: { level: CONFIG.player.hearing },
+    Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
+    Melee: { ...CONFIG.player.melee },
     Noisy: { move: CONFIG.player.footsteps },
     Stealth: { sneaking: false, walkFootsteps: CONFIG.player.footsteps, sneakFootsteps: CONFIG.player.sneakFootsteps },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
@@ -48,6 +53,8 @@ export function createWorld(seed) {
     Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
     Vision: { eyesight: CONFIG.zombie.eyesight, visible: new Map() },
     Hearing: { level: CONFIG.zombie.hearing },
+    Health: { hp: CONFIG.zombie.health, max: CONFIG.zombie.health },
+    Melee: { ...CONFIG.zombie.melee },
     Noisy: { move: CONFIG.zombie.footsteps },
     Brain: { type: 'shamble', goal: null, seesPrey: false, trackingId: null }, // goal: { x, y, why: 'seen' | 'heard' }
     Blocks: {},

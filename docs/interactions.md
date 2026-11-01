@@ -19,3 +19,6 @@ Every new system must read from or affect at least one existing system. One line
 | Sneaking (step 7) | player toggle | footsteps (Noisy -> silent), move energy cost (scheduler), noticing distance (vision canSee) |
 | Cover / bushes (step 7) | tile cover flag | noticing (only from adjacent), for player and zombies alike |
 | Noticing (step 7) | line of sight, light level on target's tile, distance, sneaking, cover | whether zombies chase you / whether you see (and are shown) zombies |
+| Melee (step 8) | Health, Melee, adjacency, Vision (zombies attack prey they see) | health, wounds/bleeding, blood on tiles, noise level 2 (draws zombies), death + corpse |
+| Bleeding (step 8) | Bleeding level, scheduler ticks | health drain, blood on tiles (memory remembers it), death. Future: scent trail |
+| Death (step 8) | health reaching 0 | corpse entity (memory, inspect), game over screen. Future: crows, infection |

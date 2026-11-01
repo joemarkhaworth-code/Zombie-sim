@@ -41,8 +41,17 @@ export const CONFIG = {
     // Hearing level 0-3 -> weakest strength still heard (0 = deaf).
     minStrengthToHear: [Infinity, 3, 2, 1],
   },
+  melee: {
+    noise: 2,                        // fighting noise level (carries ~8 tiles)
+  },
+  bleeding: {
+    intervalByLevel: [Infinity, 12, 7, 4], // ticks between losing 1 health, by bleeding level
+    clotChance: 0.3,                 // each drip, chance the bleeding drops a level
+  },
   player: {
-    speed: 100,                      // energy per tick; 100 = one action per tick
+    speed: 100,
+    health: 6,
+    melee: { damage: 1, hitChance: 0.8, woundChance: 0.3, verb: 'hit' },                      // energy per tick; 100 = one action per tick
     eyesight: 3,
     hearing: 2,
     footsteps: 1,                    // noise level when walking
@@ -50,6 +59,8 @@ export const CONFIG = {
   },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
+    health: 4,
+    melee: { damage: 1, hitChance: 0.6, woundChance: 0.4, verb: 'bite' },
     eyesight: 2,                     // poor eyes: half the light range, so you usually see them first
     hearing: 3,                      // good ears: hear your footsteps up to 3 tiles away in the open
     footsteps: 0,                    // shuffle quietly (raise to let zombies hear each other)
@@ -59,7 +70,10 @@ export const CONFIG = {
     searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
-  ui: { barHeight: 72 },             // bottom button bar (SNEAK) in CSS px: thumb-sized
+  ui: {
+    barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
+    blinkMs: 400,                    // health blocks blink this fast while bleeding
+  },
   view: { tilesAcross: 11 },        // camera width in tiles (odd keeps the player centred)
   input: {
     longPressMs: 450,                // hold this long without moving = inspect (shorter = tap)
@@ -76,6 +90,12 @@ export const CONFIG = {
     bushMark: '#1b4d1e',             // small mark so bushes read as bushes
     memoryBush: '#2c332c',
     memoryThing: '#6a6a6a',          // remembered items/doors: grey letter on the greyed tile
+    corpse: '#4a2020',
+    corpseText: '#a08080',
+    blood: '#b00000',
+    memoryBlood: '#4a2a2a',
+    healthFull: '#ff2020',
+    healthEmpty: '#400000',
     inspect: '#ffffff',              // outline on the long-pressed tile
     debugNoise: '255,96,0',          // heatmap overlay colour (r,g,b)
     player: '#ffff00',

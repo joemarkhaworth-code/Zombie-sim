@@ -5,6 +5,7 @@ import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
 import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
+import { wound } from '../src/sim/systems/bleeding.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -69,6 +70,7 @@ for (const seed of SEEDS) {
   const log = createMessageLog(world);
   let sawDanger = false;
   const everSeen = new Set(playerOf(world).Vision.visible.keys());
+  const playerMemory = playerOf(world).Memory; // kept even if the player dies
   const driver = createRng(seed ^ 0xabcdef); // fake player input, separate from the sim RNG
   let acted = 0;
   for (let i = 0; i < TURNS; i++) {
@@ -76,40 +78,57 @@ for (const seed of SEEDS) {
     const action = r === 0 ? { type: 'wait' } : { type: 'move', dx: driver.int(3) - 1, dy: driver.int(3) - 1 };
     if (playerAct(world, action)) acted++;
     checkPositions(world, seed);
+    if (world.gameOver) break;
     const m = log.message;
     if (m) assert(typeof m.text === 'string' && m.text.length <= 32, `seed ${seed}: bad message ${JSON.stringify(m)}`);
     if (m && m.priority === PRIORITY.danger) sawDanger = true;
     for (const k of playerOf(world).Vision.visible.keys()) everSeen.add(k);
   }
   // Map memory = exactly the tiles ever seen; terrain matches (tiles don't change yet); no creatures.
-  const mem = playerOf(world).Memory.tiles;
+  const mem = playerMemory.tiles;
   for (let i = 0; i < mem.length; i++) {
     assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i}`);
     if (mem[i]) {
       assert(mem[i].tile === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
-      assert(mem[i].things.length === 0, `seed ${seed}: a creature got into memory at ${i}`);
+      assert(mem[i].things.every((t) => / corpse$/.test(t.name)), `seed ${seed}: a creature got into memory at ${i}`);
     }
   }
   assert(JSON.parse(JSON.stringify(mem)).length === mem.length, 'memory should be plain, saveable data');
   assert(counts.turn_ended === acted, `seed ${seed}: turn_ended ${counts.turn_ended} != ${acted}`);
-  assert(counts.action_attempted === TURNS, `seed ${seed}: action_attempted ${counts.action_attempted} != ${TURNS}`);
+  assert(world.gameOver || counts.action_attempted === TURNS, `seed ${seed}: action_attempted ${counts.action_attempted} != ${TURNS}`);
   assert(counts.move_blocked > 0 && counts.entity_moved > 0 && counts.entity_staggered > 0 && counts.prey_spotted > 0 && counts.entity_seen > 0 && counts.noise_heard > 0, `seed ${seed}: missing events ${JSON.stringify(counts)}`);
   assert(sawDanger, `seed ${seed}: never warned that the zombie was adjacent`);
   assert(counts.prey_spotted < acted / 10, `seed ${seed}: 'spotted' fired ${counts.prey_spotted} times - spamming`);
   assert(world.turn === acted, `seed ${seed}: turn ${world.turn} != actions ${acted}`);
   assert(world.inputs.length === acted, `seed ${seed}: inputs not recorded`);
   assert(!playerAct(world, { type: 'move', dx: 2, dy: 0 }), 'non-adjacent move accepted');
+  if (world.gameOver) assert(!playerAct(world, { type: 'wait' }), `seed ${seed}: dead player should not act`);
 
   // Scheduler: actions match speed ratio.
-  const z = zombieOf(world);
+  const z = zombieOf(world) || { Actor: { actions: NaN } };
   const expected = Math.floor((acted * CONFIG.zombie.speed) / CONFIG.player.speed);
-  assert(Math.abs(z.Actor.actions - expected) <= 1, `seed ${seed}: zombie acted ${z.Actor.actions}, expected ~${expected}`);
+  if (zombieOf(world)) assert(Math.abs(z.Actor.actions - expected) <= 1, `seed ${seed}: zombie acted ${z.Actor.actions}, expected ~${expected}`);
 
   const replayed = replay(createWorld, seed, world.inputs);
   assert(snapshot(replayed) === snapshot(world), `seed ${seed}: replay diverged`);
 
-  console.log(`seed ${seed}: ${world.turn} turns OK, events ${JSON.stringify(counts)}, zombie acted ${z.Actor.actions}x, replay matches`);
+  console.log(`seed ${seed}: ${world.turn} turns OK${world.gameOver ? ` (died: ${world.gameOver.cause})` : ''}, events ${JSON.stringify(counts)}, zombie acted ${z.Actor.actions}x, replay matches`);
 }
+// 2. Stress: long runs with an unkillable player, to catch crashes and runaway behaviour.
+for (const seed of SEEDS) {
+  const world = createWorld(seed);
+  const p = playerOf(world);
+  p.Health.hp = p.Health.max = 1e9;
+  const driver = createRng(seed ^ 0x51ced);
+  for (let i = 0; i < TURNS; i++) {
+    const r = driver.int(10);
+    playerAct(world, r === 0 ? { type: 'wait' } : { type: 'move', dx: driver.int(3) - 1, dy: driver.int(3) - 1 });
+    checkPositions(world, seed);
+  }
+  for (const v of world.blood) assert(v <= 3, 'stress: blood level out of range');
+  console.log(`stress seed ${seed}: ${world.turn} turns OK, zombie ${zombieOf(world) ? 'alive' : 'killed'}, blood tiles ${world.blood.filter(Boolean).length}`);
+}
+
 // 3. Field of view and zombie sight, on a hand-made open map.
 function openWorld(walls = []) {
   const w = createWorld(7);
@@ -462,6 +481,84 @@ const range = (e) => sightRadius(e);
   assert(bushes > 5, `gen: expected some bushes, got ${bushes}`);
   assert(!TILE_INFO[TILE.BUSH].blocks && !TILE_INFO[TILE.BUSH].opaque && TILE_INFO[TILE.BUSH].cover, 'gen: bush is walkable, see-through cover');
   console.log(`gen: ${bushes} bush tiles OK`);
+}
+
+// 6. Health, melee, bleeding, death.
+{ // Tapping into a creature attacks it; hits hurt, misses don't; fights are loud.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  let hits = 0, misses = 0, noise = 0;
+  w.events.on('attack_hit', (d) => { if (d.id === p.id) hits++; });
+  w.events.on('attack_missed', (d) => { if (d.id === p.id) misses++; });
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.melee.noise) noise++; });
+  const turn0 = w.turn;
+  assert(playerAct(w, { type: 'move', dx: 1, dy: 0 }), 'melee: attacking takes a turn');
+  assert(p.Position.x === 10 && w.turn === turn0 + 1, 'melee: attacking does not move you');
+  assert(hits + misses === 1 && noise >= 1, 'melee: one swing, and it made fighting noise');
+  assert(z.Health.hp === CONFIG.zombie.health - hits * CONFIG.player.melee.damage, 'melee: hit deals damage');
+  assert(w.inputs.at(-1).action.type === 'move' && !('attack' in w.inputs.at(-1).action), 'melee: recorded as a plain move for replay');
+  console.log('melee: bump attacks, takes a turn, loud OK');
+}
+
+{ // The zombie bites back when you're next to it.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  z.Melee.hitChance = 1;
+  let bites = 0;
+  w.events.on('attack_hit', (d) => { if (d.id === z.id) bites++; });
+  w.events.on('attack_missed', (d) => { if (d.id === z.id) bites++; });
+  for (let i = 0; i < 6; i++) playerAct(w, { type: 'wait' });
+  assert(bites >= 2, `melee: zombie should attack an adjacent player (swings ${bites})`);
+  assert(p.Health.hp < CONFIG.player.health || w.gameOver, 'melee: after several swings the player is hurt');
+  console.log('melee: zombie attacks adjacent prey OK');
+}
+
+{ // Bleeding drains health over time, drips blood, can clot; blood is remembered.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26); place(w, p, 5, 5);
+  wound(w, p); wound(w, p); // level 2
+  assert(p.Bleeding.level === 2, 'bleed: two wounds = level 2');
+  const hp0 = p.Health.hp;
+  for (let i = 0; i < 10; i++) playerAct(w, { type: 'wait' });
+  assert(p.Health.hp < hp0, 'bleed: bleeding drains health');
+  assert(w.blood[5 * w.width + 5] > 0, 'bleed: drips blood on your tile');
+  assert(rememberedAt(w, p, 5, 5).blood > 0, 'bleed: blood is part of the memory snapshot');
+  assert(describeTile(w, 6, 5) === 'Open ground.' && w.blood[5 * w.width + 6] === 0, 'bleed: no blood where you did not bleed');
+  p.Bleeding.level = 1; p.Health.hp = 100; p.Health.max = 100;
+  let stopped = false;
+  w.events.on('bleeding_stopped', () => { stopped = true; });
+  for (let i = 0; i < 200 && !stopped; i++) playerAct(w, { type: 'wait' });
+  assert(stopped && p.Bleeding.level === 0, 'bleed: bleeding eventually clots');
+  console.log('bleed: drains, drips, clots, remembered OK');
+}
+
+{ // Death: the creature is removed and leaves a corpse; player death ends the game.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  z.Health.hp = 1;
+  p.Melee.hitChance = 1;
+  let died = null;
+  w.events.on('entity_died', (d) => { died = d; });
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(died && died.id === z.id && !w.entities.has(z.id), 'death: zombie removed');
+  const corpse = query(w, 'Corpse')[0];
+  assert(corpse && corpse.Position.x === 11 && !corpse.Actor && !corpse.Blocks, 'death: corpse left behind, walkable');
+  assert(describeTile(w, 11, 10) === 'A zombie corpse.', `death: inspect corpse, got ${describeTile(w, 11, 10)}`);
+  assert(playerAct(w, { type: 'move', dx: 1, dy: 0 }) && p.Position.x === 11, 'death: you can step onto a corpse');
+
+  const w2 = openWorld();
+  const p2 = playerOf(w2), z2 = zombieOf(w2);
+  place(w2, p2, 10, 10); place(w2, z2, 11, 10);
+  p2.Health.hp = 1;
+  z2.Melee.hitChance = 1;
+  for (let i = 0; i < 4 && !w2.gameOver; i++) playerAct(w2, { type: 'wait' });
+  assert(w2.gameOver && w2.gameOver.cause === 'bite' && w2.gameOver.killerName === 'zombie', `death: player killed by a bite, got ${JSON.stringify(w2.gameOver)}`);
+  assert(!w2.entities.has(p2.id) && !playerAct(w2, { type: 'wait' }), 'death: dead player cannot act');
+  console.log('death: corpse left, player death ends the game OK');
 }
 
 console.log('PASS');
