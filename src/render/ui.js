@@ -2,7 +2,7 @@
 // after it. With no message, the seed shows on the right.
 import { CONFIG } from '../config.js';
 import { PRIORITY } from './messages.js';
-import { dayOf } from '../sim/time.js';
+import { dayOf, clockOf } from '../sim/time.js';
 
 // Health: one block per point, filled or empty. Blinks (blink=true hides filled
 // blocks) while you're bleeding.
@@ -29,7 +29,7 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillStyle = C.statusTurn;
-  const turnText = `D${dayOf(world.turn)}`; // the day you're on
+  const turnText = `D${dayOf(world.tick)} ${clockOf(world.tick)}`; // day and clock time
   ctx.fillText(turnText, 8, h / 2);
   const healthX = 8 + ctx.measureText(turnText + ' ').width;
   const msgX = drawHealth(ctx, world, healthX, h, blink) + 8;
@@ -85,6 +85,7 @@ export function drawDeath(ctx, layout, t, flash) {
   ctx.font = `bold ${Math.floor(w / 17)}px monospace`;
   ctx.fillText(t.cause, w / 2, h * 0.34, w - 24);
   const lines = [
+    ['Died', `day ${t.day}, ${t.clock}`],
     ['Days survived', t.days],
     ['Zombies killed', t.kills],
     ['Turns', t.turns],

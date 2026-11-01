@@ -66,7 +66,7 @@ export function kill(world, e, { killerId = null, cause = 'unknown' } = {}) {
     Corpse: { of: name },
   });
   if (e.id === world.playerId) {
-    world.gameOver = { cause, killerId, turn: world.turn, killerName: nameOf(world, killerId) };
+    world.gameOver = { cause, killerId, turn: world.turn, tick: world.tick, killerName: nameOf(world, killerId) };
     world.fallenPlayer = e; // removed from the world, but kept so the last view can still be drawn
   }
   world.events.emit('entity_died', { id: e.id, name, killerId, cause, x, y });

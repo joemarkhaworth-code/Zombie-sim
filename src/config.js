@@ -139,8 +139,9 @@ export const CONFIG = {
     searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
-  // Time: how many player turns make a day (day/night, step 15, will build on this).
-  time: { turnsPerDay: 300 },
+  // Time: the clock runs on scheduler ticks (a normal step or wait = 1 tick, a sneaking
+  // step = 2). 2 minutes per tick = 720 ticks a day; a run starts at 08:00 on day 1.
+  time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
   save: { version: 1, key: 'zombie-sim-save' },

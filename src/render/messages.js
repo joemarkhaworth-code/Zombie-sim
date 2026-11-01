@@ -3,7 +3,7 @@
 
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
-import { dayOf, daysSurvived } from '../sim/time.js';
+import { dayOf, daysSurvived, clockOf } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
@@ -205,8 +205,9 @@ export function deathText(world) {
   const g = world.gameOver;
   const cause = (CAUSES[g.cause] || (() => 'Died'))(g.killerName);
   return {
-    days: daysSurvived(g.turn),
-    day: dayOf(g.turn),
+    days: daysSurvived(g.tick),
+    day: dayOf(g.tick),
+    clock: clockOf(g.tick),
     cause,
     kills: world.stats ? world.stats.kills : 0,
     turns: g.turn,
