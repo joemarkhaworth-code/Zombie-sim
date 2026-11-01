@@ -144,3 +144,7 @@ Interaction check: every new system must read from or affect at least one existi
 
 ## MVP scope
 Phases 1–2: one village, survive as many days as you can. When that's fun in greybox, carry on.
+
+## Decisions
+- Larger tiles for thumb-friendly tapping.
+- The camera follows the player and scrolls the map.
