@@ -1,5 +1,16 @@
-// Turn loop: the player acts, then the world takes its turn.
+// Turn loop: the player acts, then the scheduler runs the world until the
+// player has enough energy to act again.
 import { isPassable } from './world.js';
+import { advance, spend } from './scheduler.js';
+import { shamble } from './systems/shamble.js';
+
+// Brain type -> system that decides what an actor does with its action.
+const BRAINS = { shamble };
+
+function act(world, e) {
+  const brain = e.Brain && BRAINS[e.Brain.type];
+  if (brain) brain(world, e);
+}
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1) or { type: 'wait' }
 // Returns true if the action used up a turn.
@@ -12,7 +23,7 @@ export function playerAct(world, action) {
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return false;
     const nx = player.Position.x + dx;
     const ny = player.Position.y + dy;
-    if (!isPassable(world, nx, ny)) return false; // bumping a wall costs nothing
+    if (!isPassable(world, nx, ny)) return false; // bumping a wall or zombie costs nothing (melee is step 8)
     player.Position.x = nx;
     player.Position.y = ny;
   } else if (action.type !== 'wait') {
@@ -20,13 +31,10 @@ export function playerAct(world, action) {
   }
 
   world.inputs.push({ turn: world.turn, action: { ...action } });
-  worldTurn(world);
-  return true;
-}
-
-// Everything else acts here. Empty until the scheduler arrives (roadmap step 2).
-function worldTurn(world) {
+  spend(player);
   world.turn++;
+  advance(world, act);
+  return true;
 }
 
 // Rebuild a run exactly from its seed and recorded inputs.

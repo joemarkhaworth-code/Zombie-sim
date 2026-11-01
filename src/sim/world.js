@@ -12,7 +12,8 @@ export function createWorld(seed) {
     tiles: generateTestGrid(rng, width, height),
     entities: new Map(),
     nextId: 1,
-    turn: 0,
+    turn: 0,      // player turns taken
+    tick: 0,      // scheduler ticks elapsed
     inputs: [],   // every player input, in order, so runs replay from seed + inputs
     playerId: null,
   };
@@ -23,8 +24,20 @@ export function createWorld(seed) {
     Position: { x: start.x, y: start.y },
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
     Player: {},
+    Prey: {},
+    Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },
+  });
+
+  const zpos = spawnTile(world, start, CONFIG.zombie.spawnMinDistance);
+  addEntity(world, {
+    Position: zpos,
+    Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
+    Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
+    Brain: { type: 'shamble' },
+    Blocks: {},
+    Name: { name: 'zombie' },
   });
   return world;
 }
@@ -58,6 +71,20 @@ export function isPassable(world, x, y) {
     if (e.Position.x === x && e.Position.y === y) return false;
   }
   return true;
+}
+
+// A random open tile at least minDist (Chebyshev) from `from`; farthest open tile if none.
+function spawnTile(world, from, minDist) {
+  const open = [];
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      if (isPassable(world, x, y)) open.push({ x, y, d: Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) });
+    }
+  }
+  const far = open.filter((t) => t.d >= minDist);
+  if (far.length) { const t = far[world.rng.int(far.length)]; return { x: t.x, y: t.y }; }
+  const t = open.reduce((a, b) => (b.d > a.d ? b : a));
+  return { x: t.x, y: t.y };
 }
 
 function nearestOpenTile(world, cx, cy) {

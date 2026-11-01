@@ -148,3 +148,6 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 ## Decisions
 - Larger tiles for thumb-friendly tapping.
 - The camera follows the player and scrolls the map.
+- Scheduler is our own small energy scheduler (src/sim/scheduler.js), not rot.js's: rot.js uses its own global RNG, which would break seed + inputs replay. Each tick every Actor gains `speed` energy; acting costs 100. Player speed 100 (one action per turn), zombie speed 50 (acts every other turn). Actors act in entity-id order so runs are deterministic.
+- Zombie movement is a greedy step toward the nearest entity with a Prey component (not just "the player"), with a small random stagger chance. Proper pathfinding waits until it's needed.
+- Bumping a zombie does nothing and costs no turn until melee arrives (step 8).
