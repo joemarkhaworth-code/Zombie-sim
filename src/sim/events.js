@@ -8,7 +8,10 @@
 //   entity_waited    { id }
 //   entity_staggered { id }                  a shambler lurched randomly
 //   prey_spotted     { id, preyId }          a hunter saw prey it wasn't already tracking
-//   prey_lost        { id }                  a hunter reached the last-seen spot and gave up
+//   prey_lost        { id, x, y }            a hunter reached the last-seen spot and gave up
+//   noise_made       { x, y, level, sourceId }
+//   noise_heard      { id, x, y, strength, sourceId }  a listener heard a noise from (x, y)
+//   noise_investigated { id, x, y }          a hunter reached (or got stuck going to) a noise
 //   entity_seen      { viewerId, id }        an actor came into the player's view (end of turn)
 //   vision_updated   { id }                  a viewer's visible tiles were recomputed
 //   turn_ended       { turn }                the world finished its turn

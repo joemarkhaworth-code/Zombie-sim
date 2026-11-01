@@ -1,14 +1,25 @@
 // Shamble: a slow, clumsy hunter. Works for anything with Brain { type: 'shamble' }.
 // - Sometimes staggers in a random direction.
 // - If it can see any Prey: remember where, and lurch toward the nearest one.
-// - If it can't, but saw prey recently: head to the last place it saw them.
+// - Else if it has a goal (where it last saw prey, or a noise it heard): go there,
+//   then give up when it arrives or gets stuck.
 // - Otherwise: shuffle about aimlessly.
+// Hearing a noise (noise_heard) sets the goal to the noise's source; the newest
+// noise wins. Seeing prey always takes priority.
 import { CONFIG } from '../../config.js';
 import { query, isPassable, tryMove } from '../world.js';
 import { canSee } from './vision.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+export function installShamble(world) {
+  world.events.on('noise_heard', (d) => {
+    const e = world.entities.get(d.id);
+    if (!e || !e.Brain || e.Brain.type !== 'shamble') return;
+    e.Brain.goal = { x: d.x, y: d.y, why: 'heard' };
+  });
+}
 
 export function shamble(world, e) {
   const { rng } = world;
@@ -21,18 +32,21 @@ export function shamble(world, e) {
   }
 
   const prey = nearestVisiblePrey(world, e);
+  const sawPreyLastTime = brain.seesPrey;
+  brain.seesPrey = !!prey;
   if (prey) {
-    if (!brain.lastSeen) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
-    brain.lastSeen = { x: prey.Position.x, y: prey.Position.y };
-    stepToward(world, e, brain.lastSeen);
+    if (!sawPreyLastTime) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
+    brain.goal = { x: prey.Position.x, y: prey.Position.y, why: 'seen' };
+    stepToward(world, e, brain.goal);
     return;
   }
 
-  if (brain.lastSeen) {
-    const arrived = e.Position.x === brain.lastSeen.x && e.Position.y === brain.lastSeen.y;
-    if (arrived || !stepToward(world, e, brain.lastSeen)) {
-      brain.lastSeen = null;
-      world.events.emit('prey_lost', { id: e.id });
+  if (brain.goal) {
+    const g = brain.goal;
+    const arrived = e.Position.x === g.x && e.Position.y === g.y;
+    if (arrived || !stepToward(world, e, g)) {
+      brain.goal = null;
+      world.events.emit(g.why === 'seen' ? 'prey_lost' : 'noise_investigated', { id: e.id, x: g.x, y: g.y });
     }
     return;
   }

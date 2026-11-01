@@ -17,7 +17,8 @@ const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall }
 // layout: { tileSize, offsetX, offsetY, camX, camY, cols, rows }
 // camX/camY = world tile shown at the top-left of the view.
 // inspect: optional { x, y } tile to outline (long-press).
-export function drawWorld(ctx, world, layout, inspect = null) {
+// debug: { noise } toggles debug overlays.
+export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
   const { tileSize: s, offsetX: ox, offsetY: oy, camX, camY, cols, rows } = layout;
   const player = world.entities.get(world.playerId);
   const visible = player ? player.Vision.visible : new Map();
@@ -77,7 +78,28 @@ export function drawWorld(ctx, world, layout, inspect = null) {
     }
   }
 
-  // 4. Inspect outline
+  // 4. Debug: noise heatmap (the truth, including tiles you can't see).
+  if (debug.noise && world.noise) {
+    const maxR = Math.max(...CONFIG.noise.radiusByLevel);
+    ctx.font = `bold ${Math.floor(s * 0.35)}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    for (let vy = 0; vy < rows; vy++) {
+      for (let vx = 0; vx < cols; vx++) {
+        const x = camX + vx, y = camY + vy;
+        if (!onScreen(x, y)) continue;
+        const n = world.noise[y * world.width + x];
+        if (!n) continue;
+        const px = ox + vx * s, py = oy + vy * s;
+        ctx.fillStyle = `rgba(${C.debugNoise},${(0.2 + 0.6 * n / maxR).toFixed(2)})`;
+        ctx.fillRect(px, py, s - 1, s - 1);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(String(n), px + 2, py + 2);
+      }
+    }
+  }
+
+  // 5. Inspect outline
   if (inspect && onScreen(inspect.x, inspect.y)) {
     ctx.strokeStyle = C.inspect;
     ctx.lineWidth = 2;

@@ -57,7 +57,7 @@ function render() {
   updateCamera();
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
-  drawWorld(ctx, world, layout, inspect);
+  drawWorld(ctx, world, layout, inspect, debug);
   drawStatus(ctx, world, layout, messages.message);
 }
 
@@ -66,6 +66,7 @@ function render() {
 // and isn't recorded as input.
 let down = null;
 let inspect = null; // { x, y } of the last inspected tile, until the next action
+const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
 
 canvas.addEventListener('pointerdown', (e) => {
   const at = { x: e.clientX, y: e.clientY };
@@ -90,6 +91,7 @@ canvas.addEventListener('pointerup', (e) => {
   down = null;
   clearTimeout(d.timer);
   if (d.longPressed || d.moved) return;
+  if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   onTap(e.clientX, e.clientY);
 });
 canvas.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
@@ -102,7 +104,15 @@ function screenToTile(px, py) {
   };
 }
 
+// Debug: tapping the top bar toggles the noise heatmap. Takes no turn.
+function toggleNoiseMap() {
+  debug.noise = !debug.noise;
+  messages.show(debug.noise ? 'Noise map on.' : 'Noise map off.');
+  render();
+}
+
 function onLongPress(px, py) {
+  if (py < layout.statusHeight) return; // the top bar isn't a tile
   inspect = screenToTile(px, py);
   messages.show(describeTile(world, inspect.x, inspect.y));
   if (navigator.vibrate) navigator.vibrate(15); // small buzz so you know it registered

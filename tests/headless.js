@@ -4,6 +4,7 @@ import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
 import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
+import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -55,7 +56,7 @@ for (const seed of SEEDS) {
   const world = createWorld(seed);
   const counts = {};
   const moves = new Map(); // id -> moves seen via events
-  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen']) {
+  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen', 'noise_made', 'noise_heard', 'noise_investigated']) {
     world.events.on(t, (d) => {
       counts[t] = (counts[t] || 0) + 1;
       if (t === 'entity_moved') {
@@ -92,8 +93,9 @@ for (const seed of SEEDS) {
   assert(JSON.parse(JSON.stringify(mem)).length === mem.length, 'memory should be plain, saveable data');
   assert(counts.turn_ended === acted, `seed ${seed}: turn_ended ${counts.turn_ended} != ${acted}`);
   assert(counts.action_attempted === TURNS, `seed ${seed}: action_attempted ${counts.action_attempted} != ${TURNS}`);
-  assert(counts.move_blocked > 0 && counts.entity_moved > 0 && counts.entity_staggered > 0 && counts.prey_spotted > 0 && counts.entity_seen > 0, `seed ${seed}: missing events ${JSON.stringify(counts)}`);
+  assert(counts.move_blocked > 0 && counts.entity_moved > 0 && counts.entity_staggered > 0 && counts.prey_spotted > 0 && counts.entity_seen > 0 && counts.noise_heard > 0, `seed ${seed}: missing events ${JSON.stringify(counts)}`);
   assert(sawDanger, `seed ${seed}: never warned that the zombie was adjacent`);
+  assert(counts.prey_spotted < acted / 10, `seed ${seed}: 'spotted' fired ${counts.prey_spotted} times - spamming`);
   assert(world.turn === acted, `seed ${seed}: turn ${world.turn} != actions ${acted}`);
   assert(world.inputs.length === acted, `seed ${seed}: inputs not recorded`);
   assert(!playerAct(world, { type: 'move', dx: 2, dy: 0 }), 'non-adjacent move accepted');
@@ -277,7 +279,7 @@ const range = (e) => sightRadius(e);
   let spotted = false;
   w.events.on('prey_spotted', () => { spotted = true; });
   for (let i = 0; i < 20; i++) playerAct(w, { type: 'wait' });
-  assert(!spotted && z.Brain.lastSeen === null, 'blind: zombie out of sight should not track the player');
+  assert(!spotted && z.Brain.goal === null, 'blind: zombie out of sight should not track the player');
   console.log('blind: zombie out of sight just wanders OK');
 }
 
@@ -286,8 +288,8 @@ const range = (e) => sightRadius(e);
   const p = playerOf(w), z = zombieOf(w);
   place(w, p, 5, 10); place(w, z, 5, 13);
   playerAct(w, { type: 'wait' }); playerAct(w, { type: 'wait' });
-  assert(z.Brain.lastSeen, 'lastSeen: zombie should have spotted the player');
-  const seenAt = { ...z.Brain.lastSeen };
+  assert(z.Brain.goal && z.Brain.goal.why === "seen", 'lastSeen: zombie should have spotted the player');
+  const seenAt = { x: z.Brain.goal.x, y: z.Brain.goal.y };
   place(w, p, 17, 2); // vanish out of range
   let lost = false;
   w.events.on('prey_lost', () => { lost = true; });
@@ -298,6 +300,62 @@ const range = (e) => sightRadius(e);
   }
   assert(reached && lost, `lastSeen: zombie should search the last-seen spot then give up (reached ${reached}, lost ${lost})`);
   console.log('lastSeen: zombie searches last-seen spot, then gives up OK');
+}
+
+// 4. Noise.
+{ // Spreads outward, fading with distance; walls muffle it.
+  const w = openWorld();
+  const R = CONFIG.noise.radiusByLevel;
+  const f = spreadNoise(w, 10, 10, 2);
+  const at = (field, x, y) => field.get(y * w.width + x) || 0;
+  assert(at(f, 10, 10) === R[2], 'noise: full strength at the source');
+  assert(at(f, 13, 10) === R[2] - 3 && at(f, 13, 13) === R[2] - 3, 'noise: loses 1 per tile (diagonals too)');
+  assert(at(f, 10 + R[2], 10) === 0, 'noise: fades out at its radius');
+  assert(spreadNoise(w, 10, 10, 0).size === 0, 'noise: level 0 is silent');
+
+  // A wall right across the map, between source and listener.
+  const wallCol = []; for (let y = 1; y < w.height - 1; y++) wallCol.push([12, y]);
+  const w2 = openWorld(wallCol);
+  const f2 = spreadNoise(w2, 10, 10, 2);
+  const open = at(f, 14, 10), muffled = at(f2, 14, 10);
+  assert(muffled > 0 && muffled === open - (CONFIG.noise.wallCost - 1), `noise: wall should muffle by wallCost (open ${open}, behind wall ${muffled})`);
+  assert(at(spreadNoise(w2, 10, 10, 1), 13, 10) === 0, 'noise: quiet noise should not get through a wall');
+  console.log('noise: spreads, fades, walls muffle OK');
+}
+
+{ // A zombie that can't see you hears your footsteps and goes to look.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  w.light.fill(0); // pitch dark: no seeing, only hearing
+  place(w, p, 5, 10); place(w, z, 8, 12);
+  assert(!canSee(w, z, p), 'hear: zombie should not see the player in the dark');
+  let heard = null, investigated = false;
+  w.events.on('noise_heard', (d) => { if (d.id === z.id) heard = d; });
+  w.events.on('noise_investigated', (d) => { if (d.id === z.id) investigated = true; });
+  playerAct(w, { type: 'move', dx: 0, dy: 1 }); // footsteps at (5,11)
+  assert(heard && heard.x === 5 && heard.y === 11, 'hear: zombie should hear footsteps 3 tiles away');
+  assert(z.Brain.goal && z.Brain.goal.why === 'heard', 'hear: zombie should head for the noise');
+  assert(w.noise[11 * w.width + 5] === CONFIG.noise.radiusByLevel[CONFIG.player.footsteps], 'hear: heatmap records the noise');
+  for (let i = 0; i < 20 && !investigated; i++) playerAct(w, { type: 'wait' });
+  assert(investigated, 'hear: zombie should reach the noise and give up');
+  assert(cheb(z.Position, { x: 5, y: 11 }) <= 1, 'hear: zombie should end up at the noise');
+  assert(w.noise.every((v) => v === 0), 'hear: waiting is silent and the heatmap clears');
+  console.log('hear: zombie hears footsteps and investigates OK');
+}
+
+{ // Too far, or behind a wall: footsteps go unheard. Loud noises carry.
+  const wallCol = []; for (let y = 1; y < 27; y++) wallCol.push([7, y]);
+  const w = openWorld(wallCol);
+  const p = playerOf(w), z = zombieOf(w);
+  w.light.fill(0);
+  place(w, p, 5, 10); place(w, z, 9, 10); // 4 tiles, wall in between
+  let heard = false;
+  w.events.on('noise_heard', (d) => { if (d.id === z.id) heard = true; });
+  playerAct(w, { type: 'move', dx: 0, dy: 1 });
+  assert(!heard && z.Brain.goal === null, 'hear: footsteps behind a wall should go unheard');
+  makeNoise(w, 5, 11, 3, p.id); // something loud
+  assert(heard && z.Brain.goal?.why === 'heard', 'hear: a loud noise should carry through the wall');
+  console.log('hear: walls and distance stop quiet noises, loud ones carry OK');
 }
 
 console.log('PASS');

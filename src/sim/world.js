@@ -6,6 +6,8 @@ import { generateTestGrid, TILE_INFO } from './gen/testgrid.js';
 import { createEventBus } from './events.js';
 import { installVision, refreshAllVision } from './systems/vision.js';
 import { installMemory, createMemory } from './systems/memory.js';
+import { installNoise } from './systems/noise.js';
+import { installShamble } from './systems/shamble.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -31,6 +33,8 @@ export function createWorld(seed) {
     Player: {},
     Prey: {},
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
+    Hearing: { level: CONFIG.player.hearing },
+    Noisy: { move: CONFIG.player.footsteps },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },
@@ -42,7 +46,9 @@ export function createWorld(seed) {
     Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
     Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
     Vision: { eyesight: CONFIG.zombie.eyesight, visible: new Map() },
-    Brain: { type: 'shamble', lastSeen: null },
+    Hearing: { level: CONFIG.zombie.hearing },
+    Noisy: { move: CONFIG.zombie.footsteps },
+    Brain: { type: 'shamble', goal: null, seesPrey: false }, // goal: { x, y, why: 'seen' | 'heard' }
     Blocks: {},
     Name: { name: 'zombie' },
   });
@@ -50,6 +56,8 @@ export function createWorld(seed) {
   world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
   installVision(world);
   installMemory(world);
+  installNoise(world);
+  installShamble(world);
   refreshAllVision(world);
   return world;
 }

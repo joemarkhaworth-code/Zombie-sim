@@ -4,6 +4,7 @@ import { tryMove } from './world.js';
 import { advance, spend } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
 import { updateSightings } from './systems/vision.js';
+import { clearNoise } from './systems/noise.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -18,6 +19,7 @@ function act(world, e) {
 export function playerAct(world, action) {
   const player = world.entities.get(world.playerId);
   if (!player) return false;
+  clearNoise(world); // the heatmap shows noise made since the player's last action
   world.events.emit('action_attempted', { id: player.id, action: { ...action } });
 
   if (action.type === 'move') {

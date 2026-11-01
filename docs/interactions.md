@@ -14,3 +14,5 @@ Every new system must read from or affect at least one existing system. One line
 | Visibility levels (step 4b) | line of sight, light range (config), world.light (0-3), eyesight | how bright tiles are drawn; whether creatures are noticed (minLevelToSpot). Future: day/night, weather, stealth lower it |
 | Map memory (step 5) | Vision (visible tiles), terrain + non-creature things as seen, turn_ended | greyed-out remembered tiles; inspect text. Future: save/load, tiles changing out of sight |
 | Inspect (step 5) | player Vision, Memory, entities on tile | status bar text + outline (no turn, not recorded) |
+| Noise (step 6) | movement (Noisy), walls (opaque tiles muffle) | noise_heard for anything with Hearing; debug heatmap |
+| Shamble + hearing (step 6) | noise_heard | zombie walks to the noise source to investigate (seeing prey takes priority) |
