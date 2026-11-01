@@ -8,6 +8,7 @@ import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { wound } from '../src/sim/systems/bleeding.js';
 import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/items.js';
 import { validTargets } from '../src/sim/systems/ranged.js';
+import { makeDoor, makeWindow, structureAt } from '../src/sim/systems/structures.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -148,6 +149,8 @@ function openWorld(walls = []) {
   }
   for (const [x, y] of walls) w.tiles[y * w.width + x] = TILE.WALL;
   for (const e of query(w, 'Item')) w.entities.delete(e.id); // no scattered test items
+  for (const e of query(w, 'Structure')) w.entities.delete(e.id); // no test building
+  w.structures.clear(); w.glass.fill(0);
   playerOf(w).Memory.tiles.fill(null); // forget the generated map
   return w;
 }
@@ -790,7 +793,7 @@ function firstStrike(setup, playerMoves) {
 { // The test map has the configured items, on open tiles, and you remember seeing them.
   const w = createWorld(3);
   const items = query(w, 'Item');
-  const want = Object.values(CONFIG.testGrid.items).reduce((a, b) => a + b, 0);
+  const want = Object.values(CONFIG.testGrid.items).reduce((a, b) => a + b, 0) + 2; // + loot inside the test building
   assert(items.length === want, `gen: expected ${want} items, got ${items.length}`);
   for (const i of items) assert(!TILE_INFO[tileAt(w, i.Position.x, i.Position.y)].blocks, 'gen: item inside a wall');
   console.log(`gen: ${items.length} test items OK`);
@@ -886,6 +889,125 @@ function firstStrike(setup, playerMoves) {
   assert(pfft && pfft.level === CONFIG.items.airRifle.ranged.noise && pfft.level < CONFIG.items.shotgun.ranged.noise, 'fire: air rifle is quiet');
   CONFIG.items.airRifle.ranged.hitChance = 0.75;
   console.log('fire: shotgun loud/strong/short/ammo, air rifle quiet/weak OK');
+}
+
+// 11. Materials: walls, doors, windows, barricades.
+// A small room: walls x 8..12, y 8..12, door at (10,12), window at (12,10).
+function roomWorld({ locked = false } = {}) {
+  const walls = [];
+  for (let x = 8; x <= 12; x++) for (const y of [8, 12]) walls.push([x, y]);
+  for (let y = 9; y <= 11; y++) for (const x of [8, 12]) walls.push([x, y]);
+  const w = openWorld(walls.filter(([x, y]) => !(x === 10 && y === 12) && !(x === 12 && y === 10)));
+  const door = w.entities.get(makeDoor(w, 10, 12, { locked }));
+  const win = w.entities.get(makeWindow(w, 12, 10));
+  refreshAllVision(w);
+  return { w, door, win };
+}
+
+{ // The generated test building: locked wooden door, glass windows, stone walls.
+  const w = createWorld(3);
+  const doors = query(w, 'Door'), windows = query(w, 'Window');
+  assert(doors.length === 1 && doors[0].Door.locked && doors[0].Structure.hp === CONFIG.materials.wood.hp, 'build: one locked wooden door');
+  assert(windows.length === 2 && windows[0].Structure.hp === CONFIG.materials.glass.hp, 'build: two glass windows');
+  const b = CONFIG.testGrid.building;
+  assert(w.tileHp[b.y * w.width + b.x] === CONFIG.materials.stone.hp, 'build: stone walls have stone health');
+  assert(query(w, 'Item').some((i) => i.Item.type === 'key') && query(w, 'Item').some((i) => i.Item.type === 'planks'), 'build: key and planks on the map');
+  for (let y = b.y - 1; y <= b.y + b.h; y++) for (let x = b.x - 1; x <= b.x + b.w; x++) {
+    const ring = x === b.x - 1 || y === b.y - 1 || x === b.x + b.w || y === b.y + b.h;
+    if (ring && x > 0 && y > 0 && x < w.width - 1 && y < w.height - 1) assert(w.tiles[y * w.width + x] === TILE.FLOOR, `build: yard should be clear at ${x},${y}`);
+  }
+  console.log('build: test building generated OK');
+}
+
+{ // Doors: walk into a closed door to open it; tap it to close; closed blocks sight.
+  const { w, door } = roomWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26); place(w, p, 10, 13); // outside, below the door
+  assert(!isPassable(w, 10, 12) && visibilityAt(w, p, 10, 10) === 0, 'door: closed door blocks movement and sight');
+  const t0 = w.turn;
+  assert(playerAct(w, { type: 'move', dx: 0, dy: -1 }) && w.turn === t0 + 1, 'door: opening takes a turn');
+  assert(door.Door.open && p.Position.y === 13, 'door: you open it rather than step in');
+  assert(isPassable(w, 10, 12) && visibilityAt(w, p, 10, 10) > 0, 'door: open door lets you through and see in');
+  playerAct(w, { type: 'move', dx: 0, dy: -1 });
+  assert(p.Position.y === 12, 'door: walk into the doorway');
+  assert(!playerAct(w, { type: 'door', x: 10, y: 12 }), 'door: cannot close a door you are standing in (not adjacent)');
+  playerAct(w, { type: 'move', dx: 0, dy: -1 }); // inside
+  assert(playerAct(w, { type: 'door', x: 10, y: 12 }) && !door.Door.open, 'door: tap to close it behind you');
+  assert(!playerAct(w, { type: 'door', x: 10, y: 14 }), 'door: no door there');
+  console.log('door: open by walking into it, close by tapping, blocks sight OK');
+}
+
+{ // Locked: walking into it bashes it (noisy) until it breaks. The key locks/unlocks.
+  const { w, door } = roomWorld({ locked: true });
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26); place(w, p, 10, 13);
+  let lockedMsg = false, bash = 0;
+  w.events.on('door_locked', () => { lockedMsg = true; });
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.bashNoise && d.sourceId === p.id) bash++; });
+  playerAct(w, { type: 'move', dx: 0, dy: -1 });
+  assert(lockedMsg && !door.Door.open && door.Structure.hp === CONFIG.materials.wood.hp - 1 && bash === 1, 'locked: bumping bashes it, noisily');
+  for (let i = 0; i < 10 && !door.Door.broken; i++) playerAct(w, { type: 'move', dx: 0, dy: -1 });
+  assert(door.Door.broken && isPassable(w, 10, 12), 'locked: enough blows break the door down');
+  // Key
+  const r2 = roomWorld({ locked: true });
+  const p2 = playerOf(r2.w);
+  place(r2.w, zombieOf(r2.w), 18, 26); place(r2.w, p2, 10, 13);
+  const key = makeItem(r2.w, 'key', 10, 13); playerAct(r2.w, { type: 'pickup' });
+  assert(playerAct(r2.w, { type: 'use', itemId: key }) && !r2.door.Door.locked, 'key: unlocks the adjacent door');
+  assert(playerAct(r2.w, { type: 'use', itemId: key }) && r2.door.Door.locked, 'key: locks it again');
+  console.log('locked: bash it down or use the key OK');
+}
+
+{ // Windows: see-through, not walk-through; smashing is loud and leaves glass that crunches.
+  const { w, win } = roomWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26); place(w, p, 13, 10); // outside the window
+  assert(!isPassable(w, 12, 10) && visibilityAt(w, p, 11, 10) > 0, 'window: blocks movement, not sight');
+  assert(!validTargets(w, p, CONFIG.throw.range).has(10 * w.width + 11), 'window: you cannot throw through glass');
+  let smash = null;
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.glass.breakNoise) smash = d; });
+  playerAct(w, { type: 'move', dx: -1, dy: 0 });
+  assert(win.Window.broken && smash && w.glass[10 * w.width + 12] > 0, 'window: one blow smashes it, loudly, leaving glass');
+  assert(isPassable(w, 12, 10), 'window: climb through a broken window');
+  playerAct(w, { type: 'sneak', on: true });
+  let crunch = null;
+  w.events.on('noise_made', (d) => { if (d.sourceId === p.id && d.level === CONFIG.materials.glass.crunchNoise) crunch = d; });
+  playerAct(w, { type: 'move', dx: -1, dy: 0 });
+  assert(crunch && crunch.x === 12, 'glass: crunches underfoot even when sneaking');
+  assert(rememberedAt(w, p, 12, 10).glass > 0, 'glass: remembered in map memory');
+  console.log('window: see-through, smashable, glass crunches OK');
+}
+
+{ // Planks: barricade an adjacent window; blows hit the barricade first.
+  const { w, win } = roomWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26); place(w, p, 11, 10); // inside, next to the window
+  const planks = makeItem(w, 'planks', 11, 10); playerAct(w, { type: 'pickup' });
+  let hammer = false;
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.hammerNoise && d.sourceId === p.id) hammer = true; });
+  assert(playerAct(w, { type: 'use', itemId: planks }) && win.Barricade && hammer, 'planks: barricade the window (noisy)');
+  assert(!p.Inventory.items.includes(planks), 'planks: used up');
+  assert(visibilityAt(w, p, 13, 10) === 0, 'planks: a boarded window blocks sight');
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(win.Barricade.hp === CONFIG.materials.planks.hp - 1 && !win.Window.broken, 'planks: blows hit the barricade first');
+  const n = p.Inventory.items.length;
+  const planks2 = makeItem(w, 'planks', 11, 10); playerAct(w, { type: 'pickup' });
+  assert(!playerAct(w, { type: 'use', itemId: planks2 }) && p.Inventory.items.includes(planks2), 'planks: nothing left to barricade = kept, no turn');
+  console.log('planks: barricade, soaks blows, blocks sight OK');
+}
+
+{ // A zombie that knows you're inside bashes the door to get at you (and it's noisy).
+  const { w, door } = roomWorld({ locked: true });
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 10, 15);
+  z.Brain.goal = { x: 10, y: 10, why: 'heard' }; // it heard you in there
+  let blows = 0;
+  w.events.on('structure_damaged', (d) => { if (d.by === z.id && d.id === door.id) blows++; });
+  for (let i = 0; i < 20 && !blows; i++) playerAct(w, { type: 'wait' });
+  assert(blows >= 1, 'zombie: bashes the door to reach a player it knows is inside');
+  for (let i = 0; i < 40 && !door.Door.broken; i++) playerAct(w, { type: 'wait' });
+  assert(door.Door.broken, 'zombie: eventually breaks the door down');
+  console.log('zombie: bashes doors to reach you OK');
 }
 
 console.log('PASS');

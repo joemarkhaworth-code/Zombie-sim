@@ -13,6 +13,8 @@ import { CONFIG } from '../../config.js';
 import { query, isPassable, tryMove } from '../world.js';
 import { canSee } from './vision.js';
 import { attack } from './combat.js';
+import { structureAt, isObstacle, damageStructure } from './structures.js';
+import { meleeStats } from './items.js';
 import { makeNoise } from './noise.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
@@ -97,7 +99,8 @@ function randomStep(world, e) {
 }
 
 // Greedy step to the open neighbour closest to `goal`; ties broken by the seeded RNG.
-// Returns false if no step gets closer (stuck, or already next to it).
+// Zombies can't use handles: if the best way is through a closed door, window or
+// barricade, they bash it instead (noisy). Returns false if no step gets closer.
 function stepToward(world, e, goal) {
   const pos = e.Position;
   const dist2 = (x, y) => (x - goal.x) ** 2 + (y - goal.y) ** 2;
@@ -105,13 +108,15 @@ function stepToward(world, e, goal) {
   let bestD = dist2(pos.x, pos.y);
   for (const [dx, dy] of DIRS) {
     const nx = pos.x + dx, ny = pos.y + dy;
-    if (!isPassable(world, nx, ny)) continue;
+    if (!isPassable(world, nx, ny) && !isObstacle(structureAt(world, nx, ny))) continue;
     const d = dist2(nx, ny);
     if (d < bestD) { bestD = d; best = [[dx, dy]]; }
     else if (d === bestD && best.length) best.push([dx, dy]);
   }
   if (!best.length) return false;
   const [dx, dy] = best[world.rng.int(best.length)];
+  const obstacle = structureAt(world, pos.x + dx, pos.y + dy);
+  if (isObstacle(obstacle)) return damageStructure(world, obstacle, meleeStats(world, e).damage, e.id);
   return tryMove(world, e, dx, dy);
 }
 

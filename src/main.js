@@ -269,6 +269,15 @@ function onTap(px, py) {
     render();
     return;
   }
+  // Tapping exactly on an adjacent door toggles it (open/close); tapping further in
+  // that direction walks (through an open doorway, or into a closed door to open it).
+  const exact = screenToTile(px, py);
+  const doorHere = [...world.entities.values()].find((e) => e.Door && e.Position.x === exact.x && e.Position.y === exact.y);
+  if (doorHere && Math.max(Math.abs(exact.x - p.x), Math.abs(exact.y - p.y)) === 1) {
+    playerAct(world, { type: 'door', x: exact.x, y: exact.y });
+    render();
+    return;
+  }
   const underfoot = onSelf && [...world.entities.values()].some((e) => e.Item && e.Position && e.Position.x === p.x && e.Position.y === p.y);
   action = underfoot ? { type: 'pickup' } : onSelf ? { type: 'wait' } : { type: 'move', dx, dy };
   playerAct(world, action);

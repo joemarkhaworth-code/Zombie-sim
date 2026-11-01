@@ -5,12 +5,15 @@
 //  - What using an item does comes from its type in CONFIG.items (data, not special cases):
 //      heal: n     - eat/drink it: restore n health, used up
 //      stanch: true - bandage: stops bleeding, used up
+//      barricade: true - planks: nail over an adjacent door/window (used up)
+//      key: true   - lock/unlock an adjacent closed door
 //      weapon: {...} - wield it (or put it away); wielded weapon replaces your bare-hands
 //                      melee damage/hit chance. Wielded = Inventory.wielded holds its id.
 // Picking up: walking onto an item picks it up for free if it fits; tapping yourself
 // while standing on one picks it up (takes a turn). Use, drop, wield take a turn.
 import { CONFIG } from '../../config.js';
 import { addEntity, isPassable, query } from '../world.js';
+import { adjacentStructures, addBarricade, toggleLock } from './structures.js';
 
 export function makeItem(world, type, x, y) {
   const def = CONFIG.items[type];
@@ -77,6 +80,25 @@ export function useItem(world, carrier, itemId) {
     consume(world, carrier, item, 'eaten');
     return true;
   }
+  if (def.barricade) {
+    // Nail them over the first adjacent door/window that can take a barricade.
+    const target = adjacentStructures(world, carrier, (st) => !st.Barricade && !(st.Door && st.Door.open && !st.Door.broken))[0];
+    if (!target || !addBarricade(world, carrier, target)) {
+      world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'nothing_to_barricade' });
+      return false;
+    }
+    inv.items.splice(inv.items.indexOf(itemId), 1);
+    world.entities.delete(itemId);
+    return true;
+  }
+  if (def.key) {
+    const door = adjacentStructures(world, carrier, (st) => st.Door && !st.Door.open && !st.Door.broken)[0];
+    if (!door || !toggleLock(world, carrier, door)) {
+      world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'no_door' });
+      return false;
+    }
+    return true;
+  }
   if (def.stanch) {
     if (!carrier.Bleeding || carrier.Bleeding.level <= 0) { // don't waste it
       world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'not_bleeding' });
@@ -110,8 +132,12 @@ export function scatterTestItems(world) {
     for (let n = 0; n < count; n++) {
       for (let tries = 0; tries < 200; tries++) {
         const x = 1 + world.rng.int(world.width - 2), y = 1 + world.rng.int(world.height - 2);
-        if (isPassable(world, x, y) && !itemsAt(world, x, y).length) { makeItem(world, type, x, y); break; }
+        const indoors = world.testBuilding && world.testBuilding.inside(x, y);
+        if (!indoors && isPassable(world, x, y) && !itemsAt(world, x, y).length) { makeItem(world, type, x, y); break; }
       }
     }
   }
+  // Loot inside the locked test building: worth breaking in for.
+  const b = world.testBuilding;
+  if (b) { makeItem(world, 'beans', b.x + 1, b.y + 1); makeItem(world, 'bandage', b.x + b.w - 2, b.y + 1); }
 }

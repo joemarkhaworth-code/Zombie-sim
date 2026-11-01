@@ -6,6 +6,8 @@
 // Snapshot: { tile, blood, things: [{ name, char, fg, bg }] }
 //   tile   - terrain type as seen
 //   blood  - blood level 0-3 as seen
+//   glass  - broken glass level 0-3 as seen
+//   doors, windows and barricades are things (their glyph/name record open/shut/broken)
 //   things - non-creature entities on the tile (items, doors, fires... as they arrive)
 // When tiles gain more state (damage, door open/shut, barricade HP) add it in
 // snapshotTile() so memory records it too.
@@ -44,6 +46,7 @@ function snapshotTile(world, idx, things) {
   return {
     tile: world.tiles[idx],
     blood: world.blood ? world.blood[idx] : 0,
+    glass: world.glass ? world.glass[idx] : 0,
     things: things.map((t) => ({
       name: t.Name ? t.Name.name : 'something',
       char: t.Glyph.char, fg: t.Glyph.fg, bg: t.Glyph.bg,

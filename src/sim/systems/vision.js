@@ -27,13 +27,21 @@ export function installVision(world) {
     const e = world.entities.get(d.id);
     if (e && e.Vision) updateVision(world, e);
   });
+  // A door opening/closing or a window being boarded changes what everyone can see.
+  world.events.on('structure_changed', () => refreshAllVision(world));
 }
 
-const opaqueAt = (world, x, y) => !inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].opaque;
+// Opaque: walls (tile) or a closed door / barricade (structure entity with Opaque).
+export const opaqueAt = (world, x, y) => {
+  if (!inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].opaque) return true;
+  const sid = world.structures && world.structures.get(y * world.width + x);
+  return sid !== undefined && !!world.entities.get(sid)?.Opaque;
+};
 
 // Walk the grid from (x0,y0) to (x1,y1) through every tile the centre line touches.
 // True if nothing opaque lies strictly between them.
-export function lineClear(world, x0, y0, x1, y1) {
+// blocked(world, x, y) decides what stops the line (default: anything opaque).
+export function lineClear(world, x0, y0, x1, y1, blocked = opaqueAt) {
   const dx = x1 - x0, dy = y1 - y0;
   const nx = Math.abs(dx), ny = Math.abs(dy);
   const sx = Math.sign(dx), sy = Math.sign(dy);
@@ -42,11 +50,11 @@ export function lineClear(world, x0, y0, x1, y1) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
       // exactly through a corner: blocked only if both side tiles are opaque
-      if (opaqueAt(world, x + sx, y) && opaqueAt(world, x, y + sy)) return false;
+      if (blocked(world, x + sx, y) && blocked(world, x, y + sy)) return false;
       x += sx; y += sy; ix++; iy++;
     } else if (decision < 0) { x += sx; ix++; }
     else { y += sy; iy++; }
-    if ((x !== x1 || y !== y1) && opaqueAt(world, x, y)) return false;
+    if ((x !== x1 || y !== y1) && blocked(world, x, y)) return false;
   }
   return true;
 }

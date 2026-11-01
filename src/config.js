@@ -5,13 +5,16 @@ export const CONFIG = {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
     bushClumpSize: 4,
-    items: { beans: 3, bandage: 2, bat: 1, airRifle: 1, shotgun: 1 }, // test items scattered on the map
+    items: { beans: 3, bandage: 2, bat: 1, airRifle: 1, shotgun: 1, planks: 2, key: 1 }, // test items scattered on the map
+    building: { x: 2, y: 2, w: 8, h: 6 },  // test building (walls, locked door, windows)
   },
   // Item types. slots = how much bag space it takes. Effects are data: heal, stanch, weapon.
   items: {
     beans: { name: 'tin of beans', char: '%', fg: '#000000', bg: '#ff9030', slots: 1, heal: 1 }, // until hunger (step 16)
     bandage: { name: 'bandage', char: '+', fg: '#c00000', bg: '#f0f0f0', slots: 1, stanch: true },
     bat: { name: 'cricket bat', char: '/', fg: '#000000', bg: '#d8b878', slots: 2, weapon: { damage: 2, hitChance: 0.8, verb: 'hit' } },
+    planks: { name: 'planks', char: '=', fg: '#000000', bg: '#b07840', slots: 2, barricade: true }, // use next to a door/window
+    key: { name: 'door key', char: '-', fg: '#000000', bg: '#ffd700', slots: 1, key: true },        // use next to a door: lock/unlock
     // Guns: wield, then FIRE. ranged.noise is at the shooter. ammo = rounds it starts with.
     airRifle: {
       name: 'air rifle', char: '}', fg: '#000000', bg: '#a0a0ff', slots: 2, ammo: 10,
@@ -23,6 +26,15 @@ export const CONFIG = {
       weapon: { damage: 1, hitChance: 0.7, verb: 'hit' },
       ranged: { range: 4, damage: 4, hitChance: 0.9, woundChance: 0.8, noise: 3 }, // very loud, strong, short range
     },
+  },
+  // Materials: health of walls, doors, windows, barricades.
+  materials: {
+    stone: { hp: 20 },               // walls (tiles)
+    wood: { hp: 6 },                 // doors
+    glass: { hp: 1, breakNoise: 3, crunchNoise: 1 }, // windows: one blow; smashing is loud; shards crunch
+    planks: { hp: 6 },               // a barricade adds this much on top
+    bashNoise: 2,                    // each blow against a door or barricade
+    hammerNoise: 2,                  // nailing up a barricade
   },
   throw: {
     range: 6,                        // tiles (round), needs a clear line you can see
@@ -134,6 +146,16 @@ export const CONFIG = {
     bushMark: '#1b4d1e',             // small mark so bushes read as bushes
     memoryBush: '#2c332c',
     memoryThing: '#6a6a6a',          // remembered items/doors: grey letter on the greyed tile
+    door: '#7a4a1a',
+    doorOpen: '#3a2a10',
+    doorText: '#f0d0a0',
+    window: '#80c0ff',
+    windowBroken: '#304860',
+    windowText: '#003060',
+    barricade: '#a06830',
+    barricadeText: '#2a1a00',
+    glass: '#c0e8ff',
+    memoryGlass: '#505860',
     corpse: '#4a2020',
     corpseText: '#a08080',
     blood: '#b00000',

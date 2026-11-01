@@ -26,6 +26,15 @@ function drawBlood(ctx, px, py, s, level, colour) {
   }
 }
 
+// Broken glass: small light-blue shards.
+const GLASS_SPOTS = [[0.15, 0.2], [0.7, 0.15], [0.4, 0.5], [0.8, 0.6], [0.2, 0.8], [0.6, 0.85]];
+function drawGlass(ctx, px, py, s, level, colour) {
+  if (!level) return;
+  ctx.fillStyle = colour;
+  const d = Math.max(2, Math.floor(s / 10));
+  for (const [fx, fy] of GLASS_SPOTS.slice(0, level * 2)) ctx.fillRect(px + Math.floor(fx * s), py + Math.floor(fy * s), d * 2, d);
+}
+
 // Small mark so a bush reads as a bush, not just a green square.
 function drawBushMark(ctx, px, py, s) {
   ctx.fillStyle = C.bushMark;
@@ -65,6 +74,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         ctx.fillRect(px, py, s - 1, s - 1);
         if (t === TILE.BUSH) drawBushMark(ctx, px, py, s);
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
+        if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
       }
       const snap = player ? rememberedAt(world, player, x, y) : null;
@@ -72,6 +82,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
       drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
+      drawGlass(ctx, px, py, s, snap.glass || 0, C.memoryGlass);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
       if (thing) {
         ctx.fillStyle = C.memoryThing;

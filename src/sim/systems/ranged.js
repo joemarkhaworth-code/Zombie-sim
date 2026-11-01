@@ -11,7 +11,7 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, query } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
-import { lineClear, visibilityAt } from './vision.js';
+import { lineClear, visibilityAt, opaqueAt } from './vision.js';
 import { makeNoise } from './noise.js';
 import { damage } from './combat.js';
 import { addBlood, wound } from './bleeding.js';
@@ -26,13 +26,20 @@ export function validTargets(world, e, range) {
     for (let x = ox - range; x <= ox + range; x++) {
       if ((x === ox && y === oy) || !inBounds(world, x, y)) continue;
       if ((x - ox) ** 2 + (y - oy) ** 2 > range * range + range) continue;
-      if (TILE_INFO[tileAt(world, x, y)].blocks) continue;
-      if (visibilityAt(world, e, x, y) <= 0 || !lineClear(world, ox, oy, x, y)) continue;
+      if (TILE_INFO[tileAt(world, x, y)].blocks || solidStructure(world, x, y)) continue;
+      // Things fly in a straight line: walls, closed doors and intact windows stop them.
+      if (visibilityAt(world, e, x, y) <= 0 || !lineClear(world, ox, oy, x, y, flightBlocked)) continue;
       out.add(y * world.width + x);
     }
   }
   return out;
 }
+
+function solidStructure(world, x, y) {
+  const sid = world.structures && world.structures.get(y * world.width + x);
+  return sid !== undefined && !!world.entities.get(sid)?.Blocks;
+}
+const flightBlocked = (world, x, y) => opaqueAt(world, x, y) || solidStructure(world, x, y);
 
 const creatureAt = (world, x, y) => query(world, 'Actor', 'Health', 'Position').find((c) => c.Position.x === x && c.Position.y === y);
 

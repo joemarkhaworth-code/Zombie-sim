@@ -76,6 +76,38 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('shot_hit', (d) => { if (isPlayer(d.id)) say(`You shoot the ${name(d.targetId)}!`, PRIORITY.notice); });
   ev.on('shot_missed', (d) => { if (isPlayer(d.id)) say('You miss.', PRIORITY.notice); });
   ev.on('fire_failed', (d) => { if (isPlayer(d.id) && d.reason === 'empty') say('Click. Out of ammo.', PRIORITY.blocked); });
+  // Doors, windows, barricades.
+  const heardFrom = new Set(); // sources the player heard this turn (for "something bangs")
+  ev.on('action_attempted', (d) => { if (isPlayer(d.id)) heardFrom.clear(); });
+  ev.on('noise_heard', (d) => { if (isPlayer(d.id) && d.sourceId !== null) heardFrom.add(d.sourceId); });
+  const thingName = (id) => world.entities.get(id)?.Name?.name ?? 'something';
+  ev.on('door_opened', (d) => { if (isPlayer(d.id)) say('You open the door.', PRIORITY.blocked); });
+  ev.on('door_closed', (d) => { if (isPlayer(d.id)) say('You close the door.', PRIORITY.blocked); });
+  ev.on('door_locked', (d) => { if (isPlayer(d.id)) say('The door is locked.', PRIORITY.blocked); });
+  ev.on('door_blocked', (d) => { if (isPlayer(d.id)) say('Something is in the way.', PRIORITY.blocked); });
+  ev.on('door_lock', (d) => { if (isPlayer(d.id)) say('You lock the door.', PRIORITY.blocked); });
+  ev.on('door_unlock', (d) => { if (isPlayer(d.id)) say('You unlock the door.', PRIORITY.blocked); });
+  ev.on('barricade_built', (d) => { if (isPlayer(d.id)) say(`You board up the ${thingName(d.structureId).replace('barricaded ', '')}.`, PRIORITY.blocked); });
+  ev.on('structure_damaged', (d) => {
+    const what = d.part === 'barricade' ? 'barricade' : d.part;
+    if (isPlayer(d.by)) {
+      const locked = d.part === 'door' && world.entities.get(d.id)?.Door?.locked;
+      if (d.part !== 'window') say(locked ? 'Locked! You bash the door.' : `You bash the ${what}.`, PRIORITY.blocked);
+      return;
+    }
+    const by = world.entities.get(d.by);
+    if (by && playerCanSee(d.by)) say(`The ${name(d.by)} bashes the ${what}!`, PRIORITY.danger);
+    else if (heardFrom.has(d.by)) say(`Something bangs on a ${what}!`, PRIORITY.danger);
+  });
+  ev.on('window_smashed', (d) => { if (isPlayer(d.by)) say('You smash the window!', PRIORITY.notice); else if (heardFrom.has(d.by) || playerCanSee(d.by)) say('Glass shatters!', PRIORITY.danger); });
+  ev.on('door_broken', (d) => { if (isPlayer(d.by)) say('The door gives way!', PRIORITY.notice); else say('A door gives way!', PRIORITY.danger); });
+  ev.on('barricade_broken', (d) => { if (!isPlayer(d.by)) say('A barricade gives way!', PRIORITY.danger); });
+  ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
+  ev.on('use_failed', (d) => {
+    if (!isPlayer(d.id)) return;
+    if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
+    if (d.reason === 'no_door') say('No closed door by you.', PRIORITY.blocked);
+  });
   ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });
@@ -145,12 +177,13 @@ export function describeTile(world, x, y) {
     const thing = here.filter((e) => !e.Actor).pop();
     if (thing) return `A ${thing.Name.name}.`;
     if (world.blood && world.blood[y * world.width + x] && !TILE_INFO[tileAt(world, x, y)].opaque) return 'Blood on the ground.';
+    if (world.glass && world.glass[y * world.width + x]) return 'Broken glass.';
     return TILE_DESC[tileAt(world, x, y)];
   }
   const snap = rememberedAt(world, player, x, y);
   if (!snap) return 'Unexplored.';
   const thing = snap.things[snap.things.length - 1];
-  const what = thing ? `A ${thing.name}.` : snap.blood ? 'Blood on the ground.' : TILE_DESC[snap.tile];
+  const what = thing ? `A ${thing.name}.` : snap.blood ? 'Blood on the ground.' : snap.glass ? 'Broken glass.' : TILE_DESC[snap.tile];
   return `${what.slice(0, -1)}, out of sight.`;
 }
 

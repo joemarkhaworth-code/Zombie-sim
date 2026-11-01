@@ -40,6 +40,15 @@
 //   shot_hit         { id, targetId, damage }
 //   shot_missed      { id, targetId }
 //   fire_failed      { id, itemId, reason }  'empty'
+//   door_opened / door_closed { id, doorId }  id = who
+//   door_locked      { id, doorId }          tried a locked door
+//   door_blocked     { id, doorId }          can't close: someone in the doorway
+//   door_lock / door_unlock { id, doorId }
+//   structure_damaged { id, by, part, hp }   part: 'barricade' | 'door' | 'window'
+//   structure_changed { id }                 state changed (open/shut/broken/barricaded)
+//   window_smashed / door_broken { id, by }
+//   barricade_built  { id, structureId }     barricade_broken { id, by }
+//   glass_crunched   { id, x, y }            something stepped on broken glass
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

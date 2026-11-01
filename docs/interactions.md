@@ -28,3 +28,8 @@ Every new system must read from or affect at least one existing system. One line
 | Items (step 9) | tiles (on the map), Inventory (carried), memory (items are remembered things) | health (eat), bleeding (bandage), melee damage (wielded weapon) |
 | Throwing (step 10) | items, line of sight, range | item position (lands), noise at landing (lures zombies), stagger on any hit, damage if heavy |
 | Guns (step 10) | wielded gun, ammo, line of sight, range | damage/wounds/blood, very loud noise at the shooter (shotgun draws everything) |
+| Doors (step 11) | Door state, lock, barricade | movement, vision (closed = opaque), noise muffling, flight of thrown items/shots, memory |
+| Windows (step 11) | Window state, barricade | movement (blocks), vision (see-through unless boarded), smash noise, broken glass |
+| Broken glass (step 11) | anything moving onto it | noise (crunch) even when sneaking; memory |
+| Bashing (step 11) | melee damage, structure/barricade health, zombie goals | structure health, noise, zombies breaking in to reach you |
+| Barricades (step 11) | planks item, adjacent door/window | extra health, blocks movement and sight, hammering noise |

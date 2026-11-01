@@ -10,6 +10,8 @@ import { installNoise } from './systems/noise.js';
 import { installShamble } from './systems/shamble.js';
 import { installBleeding } from './systems/bleeding.js';
 import { scatterTestItems } from './systems/items.js';
+import { installStructures, initTileHp } from './systems/structures.js';
+import { buildTestBuilding } from './gen/building.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -28,6 +30,9 @@ export function createWorld(seed) {
     gameOver: null, // set when the player dies: { cause, killerId, killerName, turn }
   };
   installBleeding(world); // world.blood
+  installStructures(world); // world.structures, world.glass, world.tileHp
+  buildTestBuilding(world);
+  initTileHp(world, (t) => TILE_INFO[t].opaque);
 
   // Player starts on the floor tile nearest the centre.
   const start = nearestOpenTile(world, width >> 1, height >> 1);

@@ -10,6 +10,8 @@ import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
 import { throwItem, fire } from './systems/ranged.js';
+import { structureAt, toggleDoor, damageStructure, isObstacle } from './systems/structures.js';
+import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 
 // Brain type -> system that decides what an actor does with its action.
@@ -36,6 +38,7 @@ function onTick(world) {
 //         { type: 'shove', dx, dy } (push the adjacent creature in that direction; takes a turn),
 //         { type: 'pickup' } (item underfoot), { type: 'use', itemId }, { type: 'drop', itemId },
 //         { type: 'throw', itemId, x, y }, { type: 'fire', x, y } (wielded gun),
+//         { type: 'door', x, y } (open/close the adjacent door at x, y),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -52,9 +55,16 @@ export function playerAct(world, action) {
     const { dx, dy } = action;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return false;
     const target = blockerAt(world, player.Position.x + dx, player.Position.y + dy);
-    if (target && target.entity && target.entity.Health) {
+    const thing = target && target.entity;
+    if (thing && thing.Health) {
       action = { ...action, attack: true };
-      attack(world, player, target.entity); // moving into a creature attacks it
+      attack(world, player, thing); // moving into a creature attacks it
+    } else if (thing && thing.Door && !thing.Door.locked && !thing.Barricade && toggleDoor(world, player, thing)) {
+      action = { ...action, attack: true }; // moving into a closed door opens it (a normal-cost action)
+    } else if (isObstacle(thing)) {
+      if (thing.Door && thing.Door.locked && !thing.Barricade) world.events.emit('door_locked', { id: player.id, doorId: thing.id });
+      action = { ...action, attack: true };
+      damageStructure(world, thing, meleeStats(world, player).damage, player.id); // bash: locked door, window, barricade
     } else if (!tryMove(world, player, dx, dy)) {
       return false; // bumping a wall costs nothing
     } else if (itemsAt(world, player.Position.x, player.Position.y).length) {
@@ -62,6 +72,11 @@ export function playerAct(world, action) {
     }
   } else if (action.type === 'shove') {
     if (!shove(world, player, action.dx, action.dy)) return false; // nothing to shove: no turn
+  } else if (action.type === 'door') {
+    // Open or close the door on an adjacent tile (tap exactly on it).
+    const door = structureAt(world, action.x, action.y);
+    const adj = Math.max(Math.abs(action.x - player.Position.x), Math.abs(action.y - player.Position.y)) === 1;
+    if (!adj || !door || !door.Door || !toggleDoor(world, player, door)) return false;
   } else if (action.type === 'pickup') {
     if (!pickUp(world, player)) return false;
   } else if (action.type === 'use') {

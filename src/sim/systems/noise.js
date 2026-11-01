@@ -48,7 +48,9 @@ export function spreadNoise(world, x, y, level) {
       for (const [dx, dy] of DIRS) {
         const nx = cx + dx, ny = cy + dy;
         if (!inBounds(world, nx, ny)) continue;
-        const step = TILE_INFO[tileAt(world, nx, ny)].opaque ? CONFIG.noise.wallCost : 1;
+        const sid = world.structures && world.structures.get(ny * world.width + nx);
+        const solid = TILE_INFO[tileAt(world, nx, ny)].opaque || (sid !== undefined && !!world.entities.get(sid)?.Blocks);
+        const step = solid ? CONFIG.noise.wallCost : 1; // walls, closed doors and windows muffle
         const nc = c + step;
         const nidx = ny * world.width + nx;
         if (nc >= radius || (cost.has(nidx) && cost.get(nidx) <= nc)) continue;
