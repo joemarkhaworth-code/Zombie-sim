@@ -6,9 +6,14 @@ export const CONFIG = {
     actionCost: 100,                 // energy spent per action
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
   },
-  player: { speed: 100 },            // energy gained per tick; 100 = one action per tick
+  vision: {
+    rangeByLevel: [1, 3, 5, 7],      // sight level 0-3 -> radius in tiles
+  },
+  player: { speed: 100, sight: 3 },  // speed = energy per tick; 100 = one action per tick
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
+    sight: 2,                        // zombies see less far than you
+    wanderChance: 0.5,               // with nothing to chase, chance to shuffle a step
     staggerChance: 0.2,              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },

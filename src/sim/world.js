@@ -4,6 +4,7 @@ import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { generateTestGrid, TILE_INFO } from './gen/testgrid.js';
 import { createEventBus } from './events.js';
+import { installVision, refreshAllVision } from './systems/vision.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -27,6 +28,7 @@ export function createWorld(seed) {
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
     Player: {},
     Prey: {},
+    Vision: { level: CONFIG.player.sight, visible: new Set() },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },
@@ -37,10 +39,14 @@ export function createWorld(seed) {
     Position: zpos,
     Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
     Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
-    Brain: { type: 'shamble' },
+    Vision: { level: CONFIG.zombie.sight, visible: new Set() },
+    Brain: { type: 'shamble', lastSeen: null },
     Blocks: {},
     Name: { name: 'zombie' },
   });
+
+  installVision(world);
+  refreshAllVision(world);
   return world;
 }
 
@@ -70,6 +76,7 @@ export function tileAt(world, x, y) {
 // or { entity } for a blocking entity.
 export function blockerAt(world, x, y) {
   if (!inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].blocks) return { tile: true };
+  // (entities never stand on blocking tiles, so checking the tile first is safe)
   for (const e of query(world, 'Position', 'Blocks')) {
     if (e.Position.x === x && e.Position.y === y) return { entity: e };
   }

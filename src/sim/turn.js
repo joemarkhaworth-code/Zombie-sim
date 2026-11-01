@@ -3,6 +3,7 @@
 import { tryMove } from './world.js';
 import { advance, spend } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
+import { updateSightings } from './systems/vision.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -33,6 +34,7 @@ export function playerAct(world, action) {
   spend(player);
   world.turn++;
   advance(world, act);
+  updateSightings(world);
   world.events.emit('turn_ended', { turn: world.turn });
   return true;
 }

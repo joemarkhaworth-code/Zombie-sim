@@ -3,8 +3,8 @@ import { CONFIG } from '../../config.js';
 
 export const TILE = { FLOOR: 0, WALL: 1 };
 export const TILE_INFO = {
-  [TILE.FLOOR]: { name: 'floor', blocks: false },
-  [TILE.WALL]: { name: 'wall', blocks: true },
+  [TILE.FLOOR]: { name: 'floor', blocks: false, opaque: false },
+  [TILE.WALL]: { name: 'wall', blocks: true, opaque: true },
 };
 
 export function generateTestGrid(rng, width, height) {

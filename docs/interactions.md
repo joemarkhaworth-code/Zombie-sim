@@ -9,3 +9,5 @@ Every new system must read from or affect at least one existing system. One line
 | Shamble (step 2) | Prey positions, tile + entity blocking, seeded RNG | zombie position; zombies block the player (and each other) |
 | Event bus (step 3) | emitted by turn loop, movement, shamble | message log (status bar); future systems subscribe here |
 | Status bar (step 3) | action_attempted, entity_waited, move_blocked, turn_ended + positions | one-line message shown to the player |
+| Vision (step 4) | opaque tiles, entity positions, sight level | what the player sees (rendering), what zombies can chase, entity_seen events |
+| Shamble (step 4 update) | Vision (can it see Prey?), last-seen memory | zombie chases, searches last-seen spot, or wanders |

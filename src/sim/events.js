@@ -7,6 +7,9 @@
 //   move_blocked     { id, x, y, blockerId } a move failed; blockerId null = tile/edge
 //   entity_waited    { id }
 //   entity_staggered { id }                  a shambler lurched randomly
+//   prey_spotted     { id, preyId }          a hunter saw prey it wasn't already tracking
+//   prey_lost        { id }                  a hunter reached the last-seen spot and gave up
+//   entity_seen      { viewerId, id }        an actor came into the player's view (end of turn)
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();
