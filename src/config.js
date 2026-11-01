@@ -7,7 +7,9 @@ export const CONFIG = {
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
   },
   vision: {
-    rangeByLevel: [1, 3, 5, 7],      // sight level 0-3 -> radius in tiles
+    // sight level 0-3 -> radius in tiles. Keep the top level <= half of view.tilesAcross,
+    // so anything you can see is on screen.
+    rangeByLevel: [1, 2, 4, 5],
   },
   player: { speed: 100, sight: 3 },  // speed = energy per tick; 100 = one action per tick
   zombie: {

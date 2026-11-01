@@ -2,7 +2,7 @@
 // Usage: node tests/headless.js [turns] [seed]
 import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear } from '../src/sim/systems/vision.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
@@ -118,6 +118,26 @@ const range = (lvl) => CONFIG.vision.rangeByLevel[lvl];
   assert(seesTile(w, p, 5, 5 + range(CONFIG.player.sight) - 1), 'fov: tile within range should be visible');
   assert(!seesTile(w, p, 5, 5 + range(CONFIG.player.sight) + 1), 'fov: tile beyond range should be hidden');
   console.log('fov: walls block sight, range limited OK');
+}
+
+{ // No peeking through diagonal gaps; sight is symmetric; sight fits on screen.
+  const w = openWorld([[11, 10], [10, 11]]);
+  const p = playerOf(w);
+  place(w, p, 10, 10);
+  assert(!seesTile(w, p, 11, 11) && !seesTile(w, p, 12, 12), 'fov: should not see through a diagonal gap');
+  const w2 = createWorld(3);
+  for (const a of w2.tiles.keys()) {
+    const ax = a % w2.width, ay = Math.floor(a / w2.width);
+    if (TILE_INFO[w2.tiles[a]].opaque) continue;
+    for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
+      const bx = ax + dx, by = ay + dy;
+      if (!inBounds(w2, bx, by) || TILE_INFO[tileAt(w2, bx, by)].opaque) continue;
+      assert(lineClear(w2, ax, ay, bx, by) === lineClear(w2, bx, by, ax, ay), `fov: asymmetric between ${ax},${ay} and ${bx},${by}`);
+    }
+  }
+  const maxSight = Math.max(...CONFIG.vision.rangeByLevel);
+  assert(maxSight <= Math.floor(CONFIG.view.tilesAcross / 2), 'config: sight range is wider than the screen');
+  console.log('fov: diagonal gaps blocked, symmetric, fits on screen OK');
 }
 
 { // A zombie that can see you closes in, and the status line says so.

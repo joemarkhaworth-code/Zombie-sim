@@ -43,7 +43,7 @@ Look: simple 8-bit, inspired by old RPGs and UK Teletext. Until the art pass, ev
 - src/render/greybox.js (later: teletext/8-bit)
 - src/render/ui.js (status bar, HUD)
 - src/render/messages.js (turns events into status-bar text)
-- src/lib/ (vendored third-party code, e.g. rot.js FOV files)
+- src/lib/ (vendored third-party code, when needed)
 - tests/headless.js
 - docs/interactions.md
 
@@ -156,8 +156,8 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Event bus (src/sim/events.js) is synchronous and lives on the world. Event types and payloads are listed at the top of that file. Events carry data only; all player-facing wording lives in src/render/messages.js, which subscribes to the bus.
 - Status bar: one line at the top. Turn number (T12) on the left, then the latest message. A new player action clears the line; if several things happen in one turn, the most important message wins (danger > blocked > bump > info). Danger messages are yellow. With no message, the seed shows dimmed on the right.
 - Messages for now: "You wait.", "A wall blocks the way.", "The zombie is in the way.", "The zombie is next to you!" (when any actor newly ends a turn adjacent to the player). Keep messages under ~30 characters so they fit a phone screen.
-- Field of view uses rot.js recursive shadowcasting, vendored unmodified into src/lib/rot/ (only the files needed, with its BSD licence). No npm or build step.
-- Sight is for every creature, not just the player: anything with a Vision component has a sight level 0–3 (radius 1/3/5/7 tiles, in config). Player sight 3, zombie sight 2, so you usually spot a zombie before it spots you. Opaque tiles (walls) block sight; creatures don't.
+- Field of view is our own strict line-of-sight check (src/sim/systems/vision.js), not rot.js: rot.js's shadowcasting let you see through diagonal gaps between walls and round corners. A tile is visible if the straight line between tile centres hits no wall; a line squeezing between two diagonal walls is blocked. Sight is symmetric: if you can see a zombie's tile, it could see yours given the range. Wall faces next to visible floor are shown so walls don't look patchy. rot.js stays available for later (pathfinding, map gen) but nothing is vendored until it's used.
+- Sight is for every creature, not just the player: anything with a Vision component has a sight level 0–3 (radius 1/2/4/5 tiles, in config). The top radius must fit within half the screen width (5 tiles), so anything you can see is on screen. Player sight 3, zombie sight 2, so you usually spot a zombie before it spots you. Opaque tiles (walls) block sight; creatures don't.
 - Zombies only chase what they can see. Out of sight, a zombie walks to where it last saw you, then gives up and shuffles about at random.
 - Until map memory (step 5), anything outside your view is drawn black.
 - New messages: "A zombie comes into view." and "The zombie has seen you!" (the second only if you can see the zombie when it happens).

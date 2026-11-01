@@ -1,17 +1,19 @@
-// Vision: anything with a Vision component sees tiles within its sight range,
-// blocked by opaque tiles (rot.js recursive shadowcasting). Entities don't block sight.
-// A viewer's visible set only changes when the viewer moves (or, later, when tiles change),
+// Vision: anything with a Vision component sees tiles within its sight radius
+// that it has a clear straight line to (tile centre to tile centre).
+//  - Opaque tiles (walls) block the line. Creatures don't.
+//  - A line that passes exactly between two diagonal walls is blocked (no peeking
+//    through diagonal gaps); grazing the corner of a single wall is allowed.
+//  - Floor-to-floor sight is symmetric: if you can see a zombie's tile, a zombie
+//    with enough range can see yours.
+//  - Walls whose centre line is blocked are still shown if they border a visible
+//    floor tile nearer the viewer, so wall faces don't look patchy.
+// A viewer's visible set only changes when it moves (or, later, when tiles change),
 // so it's recomputed on entity_moved.
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, query } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
-import RecursiveShadowcasting from '../../lib/rot/fov/recursive-shadowcasting.js';
 
 export function installVision(world) {
-  const fov = new RecursiveShadowcasting(
-    (x, y) => inBounds(world, x, y) && !TILE_INFO[tileAt(world, x, y)].opaque,
-  );
-  world.fov = fov;
   world.sightings = new Set(); // actor ids the player could see at the end of last turn
   world.events.on('entity_moved', (d) => {
     const e = world.entities.get(d.id);
@@ -19,12 +21,53 @@ export function installVision(world) {
   });
 }
 
+const opaqueAt = (world, x, y) => !inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].opaque;
+
+// Walk the grid from (x0,y0) to (x1,y1) through every tile the centre line touches.
+// True if nothing opaque lies strictly between them.
+export function lineClear(world, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const nx = Math.abs(dx), ny = Math.abs(dy);
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  let x = x0, y = y0, ix = 0, iy = 0;
+  while (ix < nx || iy < ny) {
+    const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
+    if (decision === 0) {
+      // exactly through a corner: blocked only if both side tiles are opaque
+      if (opaqueAt(world, x + sx, y) && opaqueAt(world, x, y + sy)) return false;
+      x += sx; y += sy; ix++; iy++;
+    } else if (decision < 0) { x += sx; ix++; }
+    else { y += sy; iy++; }
+    if ((x !== x1 || y !== y1) && opaqueAt(world, x, y)) return false;
+  }
+  return true;
+}
+
+export function sightRadius(e) {
+  return CONFIG.vision.rangeByLevel[e.Vision.level];
+}
+
 export function updateVision(world, e) {
-  const range = CONFIG.vision.rangeByLevel[e.Vision.level];
+  const r = sightRadius(e);
+  const { x: ox, y: oy } = e.Position;
+  const inRange = (x, y) => (x - ox) ** 2 + (y - oy) ** 2 <= r * r + r; // round-ish circle
   const visible = new Set();
-  world.fov.compute(e.Position.x, e.Position.y, range, (x, y) => {
-    if (inBounds(world, x, y)) visible.add(y * world.width + x);
-  });
+  const walls = [];
+  for (let y = oy - r; y <= oy + r; y++) {
+    for (let x = ox - r; x <= ox + r; x++) {
+      if (!inBounds(world, x, y) || !inRange(x, y)) continue;
+      if (lineClear(world, ox, oy, x, y)) visible.add(y * world.width + x);
+      else if (opaqueAt(world, x, y)) walls.push([x, y]);
+    }
+  }
+  // Reveal wall faces next to visible floor that's closer to the viewer.
+  const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
+  for (const [x, y] of walls) {
+    for (const [ax, ay] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (!inBounds(world, ax, ay) || opaqueAt(world, ax, ay)) continue;
+      if (visible.has(ay * world.width + ax) && d2(ax, ay) < d2(x, y)) { visible.add(y * world.width + x); break; }
+    }
+  }
   e.Vision.visible = visible;
 }
 
