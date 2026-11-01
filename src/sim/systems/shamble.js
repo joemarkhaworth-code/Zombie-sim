@@ -34,6 +34,7 @@ export function shamble(world, e) {
   const prey = nearestVisiblePrey(world, e);
   const sawPreyLastTime = brain.seesPrey;
   brain.seesPrey = !!prey;
+  brain.trackingId = prey ? prey.id : null;
   if (prey) {
     if (!sawPreyLastTime) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
     brain.goal = { x: prey.Position.x, y: prey.Position.y, why: 'seen' };
@@ -81,7 +82,7 @@ function stepToward(world, e, goal) {
 function nearestVisiblePrey(world, e) {
   let best = null, bestD = Infinity;
   for (const p of query(world, 'Prey', 'Position')) {
-    if (p.id === e.id || !canSee(world, e, p)) continue;
+    if (p.id === e.id || !canSee(world, e, p, { tracking: e.Brain.trackingId === p.id })) continue;
     const d = cheb(p.Position, e.Position);
     if (d < bestD) { bestD = d; best = p; }
   }

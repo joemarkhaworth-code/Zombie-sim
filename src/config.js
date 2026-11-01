@@ -21,14 +21,15 @@ export const CONFIG = {
     eyesightFactor: [0, 0.25, 0.5, 1],
     minLevelToSpot: 1,               // lowest visibility (light) level at which a creature is noticed
     // Noticing a creature: it must be in line of sight, and within
-    //   sight radius x noticeByLight[light level on its tile] x (0.5 if it's sneaking).
+    //   sight radius x noticeByLight[light level on its tile] x (stealth.sneakNoticeFactor if sneaking
+    //   and the viewer wasn't already tracking it).
     // Adjacent creatures are always noticed if their tile has any light.
     // In cover (bush) a creature is only noticed from an adjacent tile.
     noticeByLight: [0, 0.34, 0.67, 1],
   },
   stealth: {
     sneakMoveCost: 2,                // a sneaking step takes twice as long
-    sneakNoticeFactor: 0.5,          // sneaking halves the distance you can be noticed from
+    sneakNoticeFactor: 0.67,         // sneaking cuts the distance you can be noticed from (not once tracked)
   },
   render: {
     dimAlpha: [1, 0.45, 0.25, 0],    // black overlay per visibility level 0-3 (0 is not drawn at all)

@@ -49,7 +49,7 @@ export function createWorld(seed) {
     Vision: { eyesight: CONFIG.zombie.eyesight, visible: new Map() },
     Hearing: { level: CONFIG.zombie.hearing },
     Noisy: { move: CONFIG.zombie.footsteps },
-    Brain: { type: 'shamble', goal: null, seesPrey: false }, // goal: { x, y, why: 'seen' | 'heard' }
+    Brain: { type: 'shamble', goal: null, seesPrey: false, trackingId: null }, // goal: { x, y, why: 'seen' | 'heard' }
     Blocks: {},
     Name: { name: 'zombie' },
   });

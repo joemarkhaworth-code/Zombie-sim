@@ -404,6 +404,29 @@ const range = (e) => sightRadius(e);
   console.log('notice: distance x light x sneaking, adjacent always OK');
 }
 
+{ // Sneaking doesn't shake off a zombie that's already chasing you in plain sight.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 5); place(w, z, 10, 9);
+  playerAct(w, { type: 'wait' }); playerAct(w, { type: 'wait' });
+  assert(z.Brain.seesPrey, 'track: zombie should be chasing');
+  playerAct(w, { type: 'sneak', on: true });
+  let lost = false;
+  for (let i = 0; i < 6; i++) {
+    playerAct(w, { type: 'move', dx: 1, dy: 0 });
+    const d = Math.hypot(p.Position.x - z.Position.x, p.Position.y - z.Position.y);
+    if (d <= sightRadius(z) && !z.Brain.seesPrey) lost = true;
+  }
+  assert(!lost, 'track: sneaking in plain sight should not lose a chasing zombie');
+  // An unalerted zombie at the same kind of distance doesn't notice a sneaking player.
+  const w2 = openWorld();
+  const p2 = playerOf(w2), z2 = zombieOf(w2);
+  place(w2, z2, 10, 5); place(w2, p2, 10, 10);
+  playerAct(w2, { type: 'sneak', on: true });
+  assert(!canSee(w2, z2, p2) && canSee(w2, z2, p2, { tracking: true }), 'track: sneaking only stops the first notice');
+  console.log('track: once noticed, sneaking does not hide you OK');
+}
+
 { // Bushes: hidden unless adjacent - for you and for zombies.
   const w = openWorld();
   w.tiles[10 * w.width + 10] = TILE.BUSH;
