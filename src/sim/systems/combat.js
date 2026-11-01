@@ -15,6 +15,7 @@ import { addEntity } from '../world.js';
 import { makeNoise } from './noise.js';
 import { addBlood, wound } from './bleeding.js';
 import { canSee } from './vision.js';
+import { meleeStats } from './items.js';
 
 // Had the target noticed the attacker before this attack?
 //  - creatures with a Brain: only if they were tracking it on their last look;
@@ -25,7 +26,7 @@ export function isAwareOf(world, target, attacker) {
 }
 
 export function attack(world, attacker, target) {
-  const m = attacker.Melee;
+  const m = attacker.Melee && meleeStats(world, attacker); // a wielded weapon changes the numbers
   if (!m || !target.Health) return false;
   const { x, y } = target.Position;
   const sneak = !isAwareOf(world, target, attacker);

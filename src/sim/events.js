@@ -28,6 +28,12 @@
 //   entity_slammed   { id, x, y, blockerId } pushed into something solid at (x, y)
 //   entity_staggered_hit { id, actions }     will lose its next n actions
 //   entity_lost_action { id }                a staggered creature's action was wasted
+//   item_picked_up   { id, itemId }
+//   pickup_failed    { id, itemId, reason }  'full'
+//   item_dropped     { id, itemId }
+//   item_used        { id, itemId, name, how }   how: 'eaten' | 'bandaged' (item is gone)
+//   item_wielded / item_unwielded { id, itemId }
+//   use_failed       { id, itemId, reason }  e.g. 'not_bleeding' (bandage kept, no turn)
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

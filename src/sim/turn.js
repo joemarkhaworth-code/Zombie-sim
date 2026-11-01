@@ -8,6 +8,7 @@ import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
 import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
+import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 
 // Brain type -> system that decides what an actor does with its action.
@@ -32,6 +33,7 @@ function onTick(world) {
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),
 //         { type: 'wait' },
 //         { type: 'shove', dx, dy } (push the adjacent creature in that direction; takes a turn),
+//         { type: 'pickup' } (item underfoot), { type: 'use', itemId }, { type: 'drop', itemId },
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -53,9 +55,17 @@ export function playerAct(world, action) {
       attack(world, player, target.entity); // moving into a creature attacks it
     } else if (!tryMove(world, player, dx, dy)) {
       return false; // bumping a wall costs nothing
+    } else if (itemsAt(world, player.Position.x, player.Position.y).length) {
+      pickUp(world, player); // walking onto an item picks it up for free (if it fits)
     }
   } else if (action.type === 'shove') {
     if (!shove(world, player, action.dx, action.dy)) return false; // nothing to shove: no turn
+  } else if (action.type === 'pickup') {
+    if (!pickUp(world, player)) return false;
+  } else if (action.type === 'use') {
+    if (!useItem(world, player, action.itemId)) return false;
+  } else if (action.type === 'drop') {
+    if (!drop(world, player, action.itemId)) return false;
   } else if (action.type === 'wait') {
     world.events.emit('entity_waited', { id: player.id });
   } else {

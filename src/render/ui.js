@@ -47,14 +47,14 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
 //   SHOVE  - one-shot: orange when armed, waiting for you to tap a creature
 // layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
 // ui: { armed } - which one-shot action (if any) is waiting for a target.
-const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'] };
+const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'] };
 export function drawButtons(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
   const player = world.entities.get(world.playerId);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, layout.height - layout.barHeight, layout.width, layout.barHeight);
   for (const b of layout.buttons) {
-    const on = (b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking) || ui.armed === b.id;
+    const on = (b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking) || ui.armed === b.id || (b.id === 'bag' && ui.bagOpen);
     ctx.fillStyle = !on ? C.buttonBg : b.id === 'shove' ? C.buttonArmedBg : C.buttonOnBg;
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? C.buttonOnText : C.buttonText;
@@ -83,4 +83,79 @@ export function drawDeath(ctx, layout, text) {
   ctx.fillText(text.turn, w / 2, h * 0.54);
   ctx.fillStyle = C.buttonOnBg;
   ctx.fillText('Tap to restart', w / 2, h * 0.66);
+}
+
+// Inventory panel ("BAG"): an 8-bit list filling the map area. Header with slots used and
+// CLOSE; one big row per item with its use button (EAT / USE / WIELD / PUT AWAY) and DROP.
+// bagLayout() is pure layout so main.js can hit-test the same rects it draws.
+export function bagLayout(world, layout) {
+  const p = world.entities.get(world.playerId);
+  const top = layout.statusHeight, bottom = layout.height - layout.barHeight;
+  const pad = 8, rowH = 56, w = layout.width;
+  const panel = { x: 0, y: top, w, h: bottom - top };
+  const close = { x: w - pad - 110, y: top + pad, w: 110, h: 44 };
+  const rows = [];
+  if (p) {
+    p.Inventory.items.forEach((id, i) => {
+      const item = world.entities.get(id);
+      const def = CONFIG.items[item.Item.type];
+      const y = top + pad * 2 + 44 + i * (rowH + pad);
+      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.heal ? 'EAT' : 'USE';
+      rows.push({
+        itemId: id, item, y, h: rowH, wielded: p.Inventory.wielded === id,
+        use: { x: w - pad * 2 - 2 * 92, y: y + 6, w: 92, h: rowH - 12, label: useLabel },
+        drop: { x: w - pad - 92, y: y + 6, w: 92, h: rowH - 12, label: 'DROP' },
+      });
+    });
+  }
+  return { panel, close, rows, used: p ? p.Inventory.items.reduce((n, id) => n + world.entities.get(id).Item.slots, 0) : 0, capacity: p ? p.Inventory.capacity : 0 };
+}
+
+export function drawBag(ctx, world, layout) {
+  const C = CONFIG.colours;
+  const bag = bagLayout(world, layout);
+  const pad = 8;
+  ctx.fillStyle = C.bagBg;
+  ctx.fillRect(bag.panel.x, bag.panel.y, bag.panel.w, bag.panel.h);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = C.bagTitle;
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText(`BAG ${bag.used}/${bag.capacity}`, pad * 2, bag.close.y + bag.close.h / 2);
+  const button = (b, text) => {
+    ctx.fillStyle = C.bagButton;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = C.bagButtonText;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.textAlign = 'left';
+  };
+  button(bag.close, 'CLOSE');
+  if (!bag.rows.length) {
+    ctx.fillStyle = C.bagText;
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText('Empty.', pad * 2, bag.close.y + 44 + 40);
+  }
+  for (const r of bag.rows) {
+    ctx.fillStyle = C.bagRow;
+    ctx.fillRect(pad, r.y, layout.width - pad * 2, r.h);
+    const g = r.item.Glyph;
+    ctx.fillStyle = g.bg;
+    ctx.fillRect(pad * 2, r.y + 10, r.h - 20, r.h - 20);
+    ctx.fillStyle = g.fg;
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(g.char, pad * 2 + (r.h - 20) / 2, r.y + r.h / 2 + 1);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.bagText;
+    ctx.font = 'bold 17px monospace';
+    const label = (r.wielded ? '> ' : '') + r.item.Name.name;
+    ctx.fillText(label, pad * 3 + r.h - 20, r.y + r.h / 2 - 8, r.use.x - (pad * 4 + r.h - 20));
+    ctx.fillStyle = C.bagTitle;
+    ctx.font = '14px monospace';
+    ctx.fillText(`${r.item.Item.slots} slot${r.item.Item.slots > 1 ? 's' : ''}${r.wielded ? ', in hand' : ''}`, pad * 3 + r.h - 20, r.y + r.h / 2 + 12);
+    button(r.use, r.use.label);
+    button(r.drop, r.drop.label);
+  }
 }

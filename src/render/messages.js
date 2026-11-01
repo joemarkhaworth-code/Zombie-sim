@@ -57,6 +57,17 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.id)) say(`You slam into ${into}!`, PRIORITY.danger);
     else if (playerCanSee(d.id)) say(`The ${name(d.id)} slams into ${into}!`, PRIORITY.notice);
   });
+  const itemName = (id) => world.entities.get(id)?.Name?.name ?? 'something';
+  ev.on('item_picked_up', (d) => { if (isPlayer(d.id)) say(`You pick up the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
+  ev.on('pickup_failed', (d) => { if (isPlayer(d.id)) say('Your bag is full.', PRIORITY.blocked); });
+  ev.on('item_dropped', (d) => { if (isPlayer(d.id)) say(`You drop the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
+  ev.on('item_used', (d) => {
+    if (!isPlayer(d.id)) return;
+    say(d.how === 'bandaged' ? 'You bandage your wounds.' : `You eat the ${d.name}.`, PRIORITY.blocked);
+  });
+  ev.on('use_failed', (d) => { if (isPlayer(d.id) && d.reason === 'not_bleeding') say("You're not bleeding.", PRIORITY.blocked); });
+  ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
+  ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });
   ev.on('bleeding_stopped', (d) => { if (isPlayer(d.id)) say('Your bleeding stops.', PRIORITY.info); });
   ev.on('entity_died', (d) => {
@@ -114,6 +125,8 @@ export function describeTile(world, x, y) {
   if (!player || !inBounds(world, x, y)) return 'Nothing there.';
   if (visibilityAt(world, player, x, y) > 0) {
     if (x === player.Position.x && y === player.Position.y) {
+      const under = query(world, 'Item', 'Position').filter((e) => e.Position.x === x && e.Position.y === y).pop();
+      if (under) return `You're on a ${under.Name.name}.`;
       return TILE_INFO[tileAt(world, x, y)].cover ? `You, hidden in a ${TILE_INFO[tileAt(world, x, y)].name}.` : "That's you.";
     }
     const here = query(world, 'Position', 'Name').filter((e) => e.Position.x === x && e.Position.y === y);

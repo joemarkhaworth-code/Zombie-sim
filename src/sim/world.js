@@ -9,6 +9,7 @@ import { installMemory, createMemory } from './systems/memory.js';
 import { installNoise } from './systems/noise.js';
 import { installShamble } from './systems/shamble.js';
 import { installBleeding } from './systems/bleeding.js';
+import { scatterTestItems } from './systems/items.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -39,6 +40,7 @@ export function createWorld(seed) {
     Hearing: { level: CONFIG.player.hearing },
     Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
     Melee: { ...CONFIG.player.melee },
+    Inventory: { items: [], capacity: CONFIG.inventory.capacity, wielded: null },
     Noisy: { move: CONFIG.player.footsteps },
     Stealth: { sneaking: false, walkFootsteps: CONFIG.player.footsteps, sneakFootsteps: CONFIG.player.sneakFootsteps },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
@@ -62,6 +64,7 @@ export function createWorld(seed) {
   });
 
   world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
+  scatterTestItems(world);
   installVision(world);
   installMemory(world);
   installNoise(world);

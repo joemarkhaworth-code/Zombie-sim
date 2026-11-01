@@ -25,3 +25,4 @@ Every new system must read from or affect at least one existing system. One line
 | Sneak attack (step 8b) | target's awareness (zombie tracking / player sight), stealth | heavy bonus damage, guaranteed hit |
 | Zombie reaction (step 8b) | first noticing prey or being hit | lost action (you get first strike), groan noise (other zombies hear) |
 | Shove (shove) | adjacent creature, tile behind (blocked?) | position (entity_pushed: hook for water/fire/ledges), stagger (lost action), slam damage, noise level 1, target notices you |
+| Items (step 9) | tiles (on the map), Inventory (carried), memory (items are remembered things) | health (eat), bleeding (bandage), melee damage (wielded weapon) |

@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawDeath } from './render/ui.js';
+import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 
 const canvas = document.getElementById('game');
@@ -44,7 +44,7 @@ function resize() {
     width: w, height: h, statusHeight, barHeight, tileSize, cols, rows,
     offsetX: Math.floor((w - tileSize * cols) / 2),
     offsetY: statusHeight + Math.floor((mapHeight - tileSize * rows) / 2),
-    buttons: ['sneak', 'shove'].map((id, i, all) => {
+    buttons: ['sneak', 'shove', 'bag'].map((id, i, all) => {
       const bw = Math.floor((w - pad * (all.length + 1)) / all.length);
       return { id, x: pad + i * (bw + pad), y: h - barHeight + pad, w: bw, h: barHeight - pad * 2 };
     }),
@@ -66,7 +66,8 @@ function render() {
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout, inspect, debug);
   drawStatus(ctx, world, layout, messages.message, blink);
-  drawButtons(ctx, world, layout, { armed });
+  if (bagOpen) drawBag(ctx, world, layout);
+  drawButtons(ctx, world, layout, { armed, bagOpen });
   if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
 }
 
@@ -77,6 +78,7 @@ let down = null;
 let inspect = null; // { x, y } of the last inspected tile, until the next action
 const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
 let armed = null; // one-shot action waiting for a target: 'shove' or null
+let bagOpen = false; // inventory panel showing (opening it takes no turn)
 
 canvas.addEventListener('pointerdown', (e) => {
   const at = { x: e.clientX, y: e.clientY };
@@ -104,6 +106,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (d.longPressed || d.moved) return;
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
+  if (bagOpen) { onBagTap(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
 });
 canvas.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
@@ -140,7 +143,15 @@ function toggleNoiseMap() {
 function onButton(px, py) {
   const b = layout.buttons.find((b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h);
   if (!b) return;
+  if (b.id === 'bag') {
+    inspect = null;
+    armed = null;
+    bagOpen = !bagOpen;
+    render();
+    return;
+  }
   if (b.id === 'shove') {
+    bagOpen = false;
     inspect = null;
     armed = armed === 'shove' ? null : 'shove';
     messages.show(armed ? 'Shove: tap a creature by you.' : 'Shove cancelled.');
@@ -157,7 +168,25 @@ function onButton(px, py) {
   }
 }
 
+// Inventory panel taps: CLOSE, or a row's use/drop button. Using or dropping takes a
+// turn and closes the bag so you can see what the world did meanwhile.
+function onBagTap(px, py) {
+  const bag = bagLayout(world, layout);
+  const hit = (b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
+  if (hit(bag.close)) { bagOpen = false; render(); return; }
+  for (const r of bag.rows) {
+    const type = hit(r.use) ? 'use' : hit(r.drop) ? 'drop' : null;
+    if (!type) continue;
+    playerAct(world, { type, itemId: r.itemId });
+    bagOpen = false;
+    if (navigator.vibrate) navigator.vibrate(10);
+    render();
+    return;
+  }
+}
+
 function onLongPress(px, py) {
+  if (bagOpen) return;
   if (py < layout.statusHeight || py >= layout.height - layout.barHeight) return; // bars aren't tiles
   inspect = screenToTile(px, py);
   messages.show(describeTile(world, inspect.x, inspect.y));
@@ -188,7 +217,8 @@ function onTap(px, py) {
     render();
     return;
   }
-  action = onSelf ? { type: 'wait' } : { type: 'move', dx, dy };
+  const underfoot = onSelf && [...world.entities.values()].some((e) => e.Item && e.Position && e.Position.x === p.x && e.Position.y === p.y);
+  action = underfoot ? { type: 'pickup' } : onSelf ? { type: 'wait' } : { type: 'move', dx, dy };
   playerAct(world, action);
   render(); // even a failed move (bump) shows a message
 }

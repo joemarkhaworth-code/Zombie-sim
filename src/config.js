@@ -5,7 +5,15 @@ export const CONFIG = {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
     bushClumpSize: 4,
+    items: { beans: 3, bandage: 2, bat: 1 }, // test items scattered on the map
   },
+  // Item types. slots = how much bag space it takes. Effects are data: heal, stanch, weapon.
+  items: {
+    beans: { name: 'tin of beans', char: '%', fg: '#000000', bg: '#ff9030', slots: 1, heal: 1 }, // until hunger (step 16)
+    bandage: { name: 'bandage', char: '+', fg: '#c00000', bg: '#f0f0f0', slots: 1, stanch: true },
+    bat: { name: 'cricket bat', char: '/', fg: '#000000', bg: '#d8b878', slots: 2, weapon: { damage: 2, hitChance: 0.8, verb: 'hit' } },
+  },
+  inventory: { capacity: 6 },        // bag size in slots
   scheduler: {
     actionCost: 100,                 // energy spent per action
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
@@ -118,7 +126,13 @@ export const CONFIG = {
     buttonText: '#c0c0c0',
     buttonOnBg: '#ffff00',
     buttonOnText: '#000000',
-    buttonArmedBg: '#ff8000',        // one-shot action waiting for a target (SHOVE)
+    buttonArmedBg: '#ff8000',
+    bagBg: '#000080',                // inventory panel: Teletext blue
+    bagRow: '#000000',
+    bagText: '#ffffff',
+    bagTitle: '#00ffff',
+    bagButton: '#ffff00',
+    bagButtonText: '#000000',        // one-shot action waiting for a target (SHOVE)
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',

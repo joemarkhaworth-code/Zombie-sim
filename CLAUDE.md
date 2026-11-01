@@ -58,8 +58,8 @@ Phase 1 — Core loop (plain test grid)
 6. Noise: actions make noise, zombies investigate
 7. Stealth: sneak mode (slower, quieter) and hiding spots
 8. Health, wounds, bleeding, simple melee (any creature can attack any other)
-9. Ranged and thrown weapons; gunshots are very loud
-10. Items and inventory
+9. Items and inventory
+10. Ranged and thrown weapons; gunshots are very loud
 11. Materials: walls, doors, windows, barricades with HP
 12. Save/load: autosave to localStorage every turn; resume on reopen
 13. Game over: Teletext-style death screen (Ceefax page) showing days survived, cause of death, kills and seed
@@ -192,4 +192,10 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Shove (src/sim/systems/shove.js): tap SHOVE (turns orange, "armed"), then tap toward an adjacent creature; the direction works like movement (8-way, forgiving). Tapping yourself, tapping SHOVE again, or a direction with nothing shoveable cancels it, with no turn spent. The input is { type: 'shove', dx, dy } and takes a normal turn. The creature is pushed one tile directly away; if that tile is blocked (wall, creature, map edge) it slams into it instead and takes shove.slamDamage = 1 (the thing behind is unhurt). Either way it's staggered and loses its next action (shove.staggerActions = 1). Shoving makes noise level 1 and the target notices who shoved it. No damage bonus for shoving an unaware creature (that's what sneak attacks are for).
 - Staggered { actions } is a general component: the scheduler still charges the creature's time, but its action is wasted (entity_lost_action). Any future system can stagger things.
 - Forced movement hook: anything moved by force goes through pushEntity(), which emits entity_pushed { id, by, from, to, dx, dy }. Water, fire, ledges and the like subscribe to it and react to the destination tile, without knowing who pushed or why. Slamming emits entity_slammed { id, x, y, blockerId }.
-- Other attack types (weapons, ranged, thrown) wait until weapons exist (steps 9-10).
+- Other attack types (ranged, thrown) wait until weapons exist (step 10).
+- Items (src/sim/systems/items.js): an item is an entity with Item { type, slots } + Glyph + Name. On the map it has a Position; carried, it has none and its id is in Inventory.items. Item types live in CONFIG.items as data; effects are properties, not special cases: heal (eat: +health, used up), stanch (bandage: stops bleeding, used up, refused if you're not bleeding), weapon (wield/stow; replaces bare-hands melee numbers). Test items: tin of beans (%, heals 1 until hunger exists in step 16), bandage (+), cricket bat (/, damage 2), scattered on open tiles (CONFIG.testGrid.items).
+- Inventory { items, capacity, wielded }: capacity is in slots (player 6; beans/bandage 1, bat 2). A full bag leaves the item on the tile ("Your bag is full.").
+- Picking up: walking onto an item picks it up as part of the step, free. Tapping yourself while standing on an item picks it up (takes a turn) instead of waiting - for things you dropped or couldn't fit. Inspecting your own tile says "You're on a <item>."
+- BAG is the third action-bar button. It opens an 8-bit list over the map (Teletext blue): header "BAG used/capacity" + CLOSE, one 56 px row per item with a coloured glyph, name, slots, and two big buttons: use (EAT / USE / WIELD / STOW) and DROP. Opening takes no turn. Use and drop take a turn and close the bag so you see what happened. Wielded item is marked "> name, in hand".
+- Inputs: { type: 'pickup' }, { type: 'use', itemId }, { type: 'drop', itemId } are recorded; item ids are deterministic from the seed, so replays match. Random-play tests include them.
+- Melee stats come from meleeStats(): a wielded weapon's numbers override the Melee component's.

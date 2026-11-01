@@ -6,6 +6,7 @@ import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '
 import { rememberedAt } from '../src/sim/systems/memory.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { wound } from '../src/sim/systems/bleeding.js';
+import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/items.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -57,7 +58,7 @@ for (const seed of SEEDS) {
   const world = createWorld(seed);
   const counts = {};
   const moves = new Map(); // id -> moves seen via events
-  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen', 'noise_made', 'noise_heard', 'noise_investigated', 'entity_shoved']) {
+  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen', 'noise_made', 'noise_heard', 'noise_investigated', 'entity_shoved', 'item_picked_up', 'item_used', 'item_dropped']) {
     world.events.on(t, (d) => {
       counts[t] = (counts[t] || 0) + 1;
       if (t === 'entity_moved') {
@@ -76,7 +77,11 @@ for (const seed of SEEDS) {
   for (let i = 0; i < TURNS; i++) {
     const r = driver.int(10);
     const dir = { dx: driver.int(3) - 1, dy: driver.int(3) - 1 };
-    const action = r === 0 ? { type: 'wait' } : r === 1 ? { type: 'shove', ...dir } : { type: 'move', ...dir };
+    const inv = playerOf(world)?.Inventory.items || [];
+    const pick = inv.length ? inv[driver.int(inv.length)] : null;
+    const action = r === 0 ? { type: 'wait' } : r === 1 ? { type: 'shove', ...dir }
+      : r === 2 && pick ? { type: driver.chance(0.5) ? 'use' : 'drop', itemId: pick }
+      : r === 3 ? { type: 'pickup' } : { type: 'move', ...dir };
     if (playerAct(world, action)) acted++;
     checkPositions(world, seed);
     if (world.gameOver) break;
@@ -91,7 +96,7 @@ for (const seed of SEEDS) {
     assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i}`);
     if (mem[i]) {
       assert(mem[i].tile === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
-      assert(mem[i].things.every((t) => / corpse$/.test(t.name)), `seed ${seed}: a creature got into memory at ${i}`);
+      assert(mem[i].things.every((t) => t.name !== 'zombie' && t.name !== 'you'), `seed ${seed}: a creature got into memory at ${i}`);
     }
   }
   assert(JSON.parse(JSON.stringify(mem)).length === mem.length, 'memory should be plain, saveable data');
@@ -138,6 +143,7 @@ function openWorld(walls = []) {
     w.tiles[y * w.width + x] = edge ? TILE.WALL : TILE.FLOOR;
   }
   for (const [x, y] of walls) w.tiles[y * w.width + x] = TILE.WALL;
+  for (const e of query(w, 'Item')) w.entities.delete(e.id); // no scattered test items
   playerOf(w).Memory.tiles.fill(null); // forget the generated map
   return w;
 }
@@ -685,6 +691,72 @@ function firstStrike(setup, playerMoves) {
   assert(!playerAct(w, { type: 'shove', dx: 1, dy: 0 }) && w.turn === t && w.inputs.length === n, 'shove: empty tile costs nothing');
   assert(!playerAct(w, { type: 'shove', dx: 2, dy: 0 }), 'shove: must be adjacent');
   console.log('shove: nothing to shove = no turn OK');
+}
+
+// 9. Items and inventory.
+{ // Walk onto an item: picked up. Bag has a slot limit.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 5, 5); place(w, z, 18, 26);
+  const beans = makeItem(w, 'beans', 6, 5);
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(p.Inventory.items.includes(beans) && !w.entities.get(beans).Position, 'items: walking onto an item picks it up');
+  assert(itemsAt(w, 6, 5).length === 0, 'items: gone from the tile');
+  // Fill the bag: bat (2) + 3 more beans = 6 slots, then one more won't fit.
+  const more = [makeItem(w, 'bat', 7, 5), makeItem(w, 'beans', 8, 5), makeItem(w, 'beans', 9, 5), makeItem(w, 'beans', 10, 5), makeItem(w, 'bandage', 11, 5)];
+  let full = false;
+  w.events.on('pickup_failed', (d) => { if (d.reason === 'full') full = true; });
+  for (let i = 0; i < 5; i++) playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(usedSlots(w, p) === CONFIG.inventory.capacity, `items: bag filled to capacity, got ${usedSlots(w, p)}`);
+  assert(full && itemsAt(w, 11, 5).length === 1 && p.Position.x === 11, 'items: a full bag leaves the item on the tile (you still step there)');
+  // Drop: back on your tile, and tapping yourself picks the bandage... after making room.
+  const t = w.turn;
+  assert(playerAct(w, { type: 'drop', itemId: more[1] }) && w.turn === t + 1, 'items: drop takes a turn');
+  assert(itemsAt(w, 11, 5).length === 2 && w.entities.get(more[1]).Position.x === 11, 'items: dropped where you stand');
+  assert(playerAct(w, { type: 'pickup' }), 'items: tap-yourself pickup');
+  assert(p.Inventory.items.includes(more[1]) || p.Inventory.items.includes(more[4]), 'items: picked up the top item underfoot');
+  assert(!playerAct(w, { type: 'drop', itemId: 99999 }), 'items: cannot drop what you do not have');
+  console.log('items: pickup on step, slot limit, drop, tap pickup OK');
+}
+
+{ // Use: beans heal, bandage stops bleeding, bat changes melee damage.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 5, 5); place(w, z, 18, 26);
+  const beans = makeItem(w, 'beans', 5, 5); playerAct(w, { type: 'pickup' });
+  p.Health.hp = 3;
+  assert(playerAct(w, { type: 'use', itemId: beans }) && p.Health.hp === 3 + CONFIG.items.beans.heal, 'use: beans heal');
+  assert(!w.entities.has(beans) && !p.Inventory.items.includes(beans), 'use: beans are used up');
+  const band = makeItem(w, 'bandage', 5, 5); playerAct(w, { type: 'pickup' });
+  const t0 = w.turn;
+  assert(!playerAct(w, { type: 'use', itemId: band }) && w.entities.has(band) && w.turn === t0, 'use: bandage not wasted when not bleeding');
+  wound(w, p); wound(w, p);
+  playerAct(w, { type: 'use', itemId: band });
+  assert(p.Bleeding.level === 0 && !w.entities.has(band), 'use: bandage stops bleeding and is used up');
+  const bat = makeItem(w, 'bat', 5, 5); playerAct(w, { type: 'pickup' });
+  assert(meleeStats(w, p).damage === CONFIG.player.melee.damage, 'bat: carrying is not wielding');
+  playerAct(w, { type: 'use', itemId: bat });
+  assert(p.Inventory.wielded === bat && meleeStats(w, p).damage === CONFIG.items.bat.weapon.damage, 'bat: wielding changes damage');
+  place(w, z, 6, 5);
+  z.Brain.seesPrey = true; z.Brain.trackingId = p.id; // aware: no sneak bonus
+  p.Melee.hitChance = 1; CONFIG.items.bat.weapon.hitChance = 1;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(z.Health.hp === CONFIG.zombie.health - CONFIG.items.bat.weapon.damage, `bat: hits for ${CONFIG.items.bat.weapon.damage}, zombie at ${z.Health.hp}`);
+  CONFIG.items.bat.weapon.hitChance = 0.8;
+  playerAct(w, { type: 'use', itemId: bat });
+  assert(p.Inventory.wielded === null, 'bat: using again puts it away');
+  playerAct(w, { type: 'use', itemId: bat }); playerAct(w, { type: 'drop', itemId: bat });
+  assert(p.Inventory.wielded === null, 'bat: dropping a wielded weapon empties your hands');
+  console.log('use: beans heal, bandage stanches, bat hits harder OK');
+}
+
+{ // The test map has the configured items, on open tiles, and you remember seeing them.
+  const w = createWorld(3);
+  const items = query(w, 'Item');
+  const want = Object.values(CONFIG.testGrid.items).reduce((a, b) => a + b, 0);
+  assert(items.length === want, `gen: expected ${want} items, got ${items.length}`);
+  for (const i of items) assert(!TILE_INFO[tileAt(w, i.Position.x, i.Position.y)].blocks, 'gen: item inside a wall');
+  console.log(`gen: ${items.length} test items OK`);
 }
 
 console.log('PASS');
