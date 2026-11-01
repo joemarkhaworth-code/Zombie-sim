@@ -3,10 +3,12 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
+import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
+import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from './sim/tuning.js';
+import { refreshAllVision } from './sim/systems/vision.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -16,6 +18,14 @@ const ctx = canvas.getContext('2d');
 // that seed fresh. A save that won't load (older version, corrupt) is discarded.
 const params = new URLSearchParams(location.search);
 let bootNote = null;
+
+// Tuning overrides (debug overlay -> TUNE) live in their own localStorage key and are
+// applied to CONFIG before the world is built or loaded.
+const TUNING_KEY = 'zombie-sim-tuning';
+try { applyOverrides(JSON.parse(localStorage.getItem(TUNING_KEY) || '{}')); } catch (e) { /* ignore bad tuning */ }
+function saveTuning() {
+  try { localStorage.setItem(TUNING_KEY, JSON.stringify(currentOverrides())); } catch (e) { /* storage blocked */ }
+}
 
 function readSave() {
   try { return localStorage.getItem(CONFIG.save.key); } catch (e) { return null; }
@@ -37,6 +47,7 @@ function boot() {
 }
 
 const world = boot();
+syncWorld(world); // a loaded save picks up the current tuning
 window.world = world; // handy for debugging from the console
 
 // Save after every action (dead runs aren't kept: reopening after death starts fresh).
@@ -110,6 +121,8 @@ function render() {
   drawWorld(ctx, world, layout, inspect, debug, aim ? aim.targets : null);
   drawStatus(ctx, world, layout, messages.message, blink);
   if (bagOpen) drawBag(ctx, world, layout, { confirmNew });
+  if (debug.noise && !tuneOpen) drawTuneButton(ctx, layout);
+  if (tuneOpen) drawTuning(ctx, layout, tuneRows());
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) {
     if (!diedAt) diedAt = performance.now();
@@ -124,6 +137,7 @@ let down = null;
 let inspect = null; // { x, y } of the last inspected tile, until the next action
 const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
 let armed = null; // one-shot action waiting for a target: 'shove' or null
+let tuneOpen = false; // tuning panel (opened from the debug overlay's TUNE button)
 let bagOpen = false; // inventory panel showing (opening it takes no turn)
 let confirmNew = false; // the bag's NEW GAME button asked "are you sure?"
 let aim = null;      // aiming: { kind: 'throw', itemId, targets } or { kind: 'fire', targets } - targets = valid tile set
@@ -173,6 +187,8 @@ canvas.addEventListener('pointerup', (e) => {
   if (d.longPressed || d.moved) return;
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
+  if (tuneOpen) { onTuneTap(e.clientX, e.clientY); return; }
+  if (debug.noise && inRect(tuneButtonRect(layout), e.clientX, e.clientY)) { tuneOpen = true; render(); return; }
   if (bagOpen) { onBagTap(e.clientX, e.clientY); return; }
   if (aim) { onAimTap(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
@@ -185,6 +201,34 @@ function screenToTile(px, py) {
     x: layout.camX + Math.floor((px - layout.offsetX) / layout.tileSize),
     y: layout.camY + Math.floor((py - layout.offsetY) / layout.tileSize),
   };
+}
+
+const inRect = (b, px, py) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
+
+// Tuning panel rows: label, current value (as text), and whether it differs from default.
+function tuneRows() {
+  return TUNABLES.map((t) => {
+    const v = getPath(t.path);
+    return { label: t.label, value: t.pct ? `${Math.round(v * 100)}%` : String(v), changed: v !== defaultOf(t.path) };
+  });
+}
+
+// Tuning panel taps: -/+ per row, RESET, CLOSE. Changes apply at once (zombies on the map
+// are updated, sight recomputed) and are saved locally.
+function onTuneTap(px, py) {
+  const L = tuningLayout(layout, TUNABLES.length);
+  if (inRect(L.close, px, py)) { tuneOpen = false; render(); return; }
+  if (inRect(L.reset, px, py)) resetAll();
+  else {
+    const i = L.rows.findIndex((r) => inRect(r.minus, px, py) || inRect(r.plus, px, py));
+    if (i < 0) return;
+    nudge(TUNABLES[i], inRect(L.rows[i].plus, px, py) ? 1 : -1);
+  }
+  syncWorld(world);
+  refreshAllVision(world);
+  saveTuning();
+  persist();
+  render();
 }
 
 // After death, any tap starts a new run with a fresh random seed.

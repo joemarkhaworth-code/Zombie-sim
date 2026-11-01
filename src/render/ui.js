@@ -230,3 +230,80 @@ export function drawBag(ctx, world, layout, ui = {}) {
     button(r.drop, r.drop.label);
   }
 }
+
+// Debug: small TUNE button (top right of the map) shown while the debug overlay is on.
+export function tuneButtonRect(layout) {
+  return { x: layout.width - 84, y: layout.statusHeight + 6, w: 78, h: 34 };
+}
+export function drawTuneButton(ctx, layout) {
+  const b = tuneButtonRect(layout);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = CONFIG.colours.buttonArmedBg;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+  ctx.fillStyle = CONFIG.colours.buttonArmedBg;
+  ctx.font = 'bold 15px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('TUNE', b.x + b.w / 2, b.y + b.h / 2 + 1);
+}
+
+// Tuning panel: one row per tunable with big - / + buttons, the value in the middle
+// (yellow when changed from the default), and RESET / CLOSE at the top.
+export function tuningLayout(layout, n) {
+  const pad = 8, top = layout.statusHeight, w = layout.width;
+  const bottom = layout.height - layout.barHeight;
+  const head = 52;
+  const rowH = Math.min(52, Math.floor((bottom - top - head - pad) / n));
+  const close = { x: w - pad - 100, y: top + pad, w: 100, h: 38 };
+  const reset = { x: w - pad * 2 - 200, y: top + pad, w: 100, h: 38 };
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const y = top + head + i * rowH;
+    rows.push({
+      y, h: rowH,
+      minus: { x: w - pad - 2 * 56 - 70, y: y + 4, w: 56, h: rowH - 8 },
+      plus: { x: w - pad - 56, y: y + 4, w: 56, h: rowH - 8 },
+    });
+  }
+  return { panel: { x: 0, y: top, w, h: bottom - top }, close, reset, rows };
+}
+
+export function drawTuning(ctx, layout, rows) {
+  const C = CONFIG.colours;
+  const L = tuningLayout(layout, rows.length);
+  ctx.fillStyle = '#101010';
+  ctx.fillRect(L.panel.x, L.panel.y, L.panel.w, L.panel.h);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = C.buttonArmedBg;
+  ctx.font = 'bold 20px monospace';
+  ctx.fillText('TUNING', 12, L.close.y + L.close.h / 2);
+  const button = (b, text, bg) => {
+    ctx.fillStyle = bg;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.textAlign = 'left';
+  };
+  button(L.reset, 'RESET', C.healthFull);
+  button(L.close, 'CLOSE', C.bagButton);
+  rows.forEach((r, i) => {
+    const R = L.rows[i];
+    ctx.fillStyle = i % 2 ? '#181818' : '#202020';
+    ctx.fillRect(0, R.y, layout.width, R.h);
+    ctx.fillStyle = '#d0d0d0';
+    ctx.font = '16px monospace';
+    ctx.fillText(r.label, 12, R.y + R.h / 2, R.minus.x - 20);
+    button(R.minus, '-', '#a0a0a0');
+    button(R.plus, '+', '#a0a0a0');
+    ctx.fillStyle = r.changed ? C.statusDanger : '#ffffff';
+    ctx.font = 'bold 17px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(r.value, (R.minus.x + R.minus.w + R.plus.x) / 2, R.y + R.h / 2 + 1); // between - and +
+    ctx.textAlign = 'left';
+  });
+}

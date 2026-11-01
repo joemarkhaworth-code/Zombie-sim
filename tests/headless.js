@@ -12,6 +12,7 @@ import { makeDoor, makeWindow, structureAt } from '../src/sim/systems/structures
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
+import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from '../src/sim/tuning.js';
 import { addEntity } from '../src/sim/world.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
@@ -1174,6 +1175,27 @@ console.log('save: exact round trip, loaded games play on identically OK');
   makeNoise(w, 18, 20, 2, p.id); // something new
   assert(z.Brain.goal.x === 18 && z.Brain.goal.y === 20 && z.Brain.goal.search === undefined, 'persist: a new noise renews its interest and sends it there');
   console.log(`balance: hit ${Z.hitChance}, ${bitesToKill} bites to kill, wound ${Z.woundChance}; long search, noise renews OK`);
+}
+
+// 15. Tuning panel (sim side).
+{
+  const speed = TUNABLES.find((t) => t.path === 'zombie.speed');
+  const hit = TUNABLES.find((t) => t.path === 'zombie.melee.hitChance');
+  const def = getPath('zombie.speed');
+  nudge(speed, 1);
+  assert(getPath('zombie.speed') === def + speed.step && currentOverrides()['zombie.speed'] === def + speed.step, 'tune: nudge changes CONFIG and shows as an override');
+  for (let i = 0; i < 50; i++) nudge(hit, 1);
+  assert(getPath('zombie.melee.hitChance') === hit.max, 'tune: values clamp to their range');
+  const w = createWorld(3);
+  syncWorld(w);
+  const z = query(w, 'Brain')[0];
+  assert(z.Actor.speed === def + speed.step && z.Melee.hitChance === hit.max, 'tune: syncWorld updates zombies already on the map');
+  resetAll();
+  assert(getPath('zombie.speed') === defaultOf('zombie.speed') && Object.keys(currentOverrides()).length === 0, 'tune: reset restores defaults');
+  applyOverrides({ 'light.range': 7, 'nonsense.path': 5, 'zombie.speed': 'fast' });
+  assert(getPath('light.range') === 7 && getPath('zombie.speed') === def, 'tune: saved overrides apply; bad ones are ignored');
+  resetAll();
+  console.log('tune: nudge, clamp, sync to live zombies, reset, load overrides OK');
 }
 
 console.log('PASS');
