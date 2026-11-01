@@ -173,3 +173,4 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Zombies that hear a noise set their goal to its source and walk there, then give up (noise_investigated). The newest noise wins; seeing prey always wins over hearing. Brain.goal = { x, y, why: 'seen' | 'heard' } replaces lastSeen.
 - No status message for hearing: you see the zombie turn toward you (show, don't tell).
 - Debug: tap the top bar to toggle the noise heatmap (orange overlay with strength numbers, showing noise since your last action, including tiles out of sight). Takes no turn. world.noise holds the heatmap.
+- Intentional: in daylight in the open, zombies see you (7 tiles) well before they hear your footsteps (3 tiles). Hearing matters when they can't see you: round corners, behind walls, in the dark. Night (step 15) will shrink sight and make hearing their main sense. Don't "fix" this by tuning.
