@@ -47,21 +47,23 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
 //   SHOVE  - one-shot: orange when armed, waiting for you to tap a creature
 // layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
 // ui: { armed } - which one-shot action (if any) is waiting for a target.
-const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'] };
+const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'], fire: ['FIRE', 'FIRE'], cancel: ['CANCEL', 'CANCEL'] };
 export function drawButtons(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
   const player = world.entities.get(world.playerId);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, layout.height - layout.barHeight, layout.width, layout.barHeight);
   for (const b of layout.buttons) {
-    const on = (b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking) || ui.armed === b.id || (b.id === 'bag' && ui.bagOpen);
-    ctx.fillStyle = !on ? C.buttonBg : b.id === 'shove' ? C.buttonArmedBg : C.buttonOnBg;
+    const on = b.id === 'cancel' || (b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking) || ui.armed === b.id || (b.id === 'bag' && ui.bagOpen);
+    ctx.fillStyle = b.id === 'cancel' ? C.buttonArmedBg : !on ? C.buttonBg : b.id === 'shove' ? C.buttonArmedBg : C.buttonOnBg;
+    if (b.id === 'cancel') ctx.fillStyle = C.buttonArmedBg;
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? C.buttonOnText : C.buttonText;
     ctx.font = `bold ${Math.floor(Math.min(b.h * 0.4, b.w / 6))}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(LABELS[b.id][on ? 1 : 0], b.x + b.w / 2, b.y + b.h / 2 + 1);
+    const label = b.id === 'fire' && ui.ammo !== null ? `FIRE ${ui.ammo}` : LABELS[b.id][on ? 1 : 0];
+    ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 + 1);
   }
 }
 
@@ -91,7 +93,7 @@ export function drawDeath(ctx, layout, text) {
 export function bagLayout(world, layout) {
   const p = world.entities.get(world.playerId);
   const top = layout.statusHeight, bottom = layout.height - layout.barHeight;
-  const pad = 8, rowH = 56, w = layout.width;
+  const pad = 8, rowH = 96, w = layout.width;
   const panel = { x: 0, y: top, w, h: bottom - top };
   const close = { x: w - pad - 110, y: top + pad, w: 110, h: 44 };
   const rows = [];
@@ -101,10 +103,12 @@ export function bagLayout(world, layout) {
       const def = CONFIG.items[item.Item.type];
       const y = top + pad * 2 + 44 + i * (rowH + pad);
       const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.heal ? 'EAT' : 'USE';
+      const bw = Math.floor((w - pad * 5) / 3), by = y + 44, bh = rowH - 52;
       rows.push({
         itemId: id, item, y, h: rowH, wielded: p.Inventory.wielded === id,
-        use: { x: w - pad * 2 - 2 * 92, y: y + 6, w: 92, h: rowH - 12, label: useLabel },
-        drop: { x: w - pad - 92, y: y + 6, w: 92, h: rowH - 12, label: 'DROP' },
+        use: { x: pad * 2, y: by, w: bw, h: bh, label: useLabel },
+        toss: { x: pad * 3 + bw, y: by, w: bw, h: bh, label: 'THROW' },
+        drop: { x: pad * 4 + bw * 2, y: by, w: bw, h: bh, label: 'DROP' },
       });
     });
   }
@@ -140,22 +144,26 @@ export function drawBag(ctx, world, layout) {
   for (const r of bag.rows) {
     ctx.fillStyle = C.bagRow;
     ctx.fillRect(pad, r.y, layout.width - pad * 2, r.h);
-    const g = r.item.Glyph;
+    const g = r.item.Glyph, icon = 32;
     ctx.fillStyle = g.bg;
-    ctx.fillRect(pad * 2, r.y + 10, r.h - 20, r.h - 20);
+    ctx.fillRect(pad * 2, r.y + 6, icon, icon);
     ctx.fillStyle = g.fg;
-    ctx.font = 'bold 22px monospace';
+    ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(g.char, pad * 2 + (r.h - 20) / 2, r.y + r.h / 2 + 1);
+    ctx.fillText(g.char, pad * 2 + icon / 2, r.y + 6 + icon / 2 + 1);
     ctx.textAlign = 'left';
     ctx.fillStyle = C.bagText;
     ctx.font = 'bold 17px monospace';
     const label = (r.wielded ? '> ' : '') + r.item.Name.name;
-    ctx.fillText(label, pad * 3 + r.h - 20, r.y + r.h / 2 - 8, r.use.x - (pad * 4 + r.h - 20));
+    ctx.fillText(label, pad * 3 + icon, r.y + 15, layout.width - (pad * 5 + icon));
     ctx.fillStyle = C.bagTitle;
-    ctx.font = '14px monospace';
-    ctx.fillText(`${r.item.Item.slots} slot${r.item.Item.slots > 1 ? 's' : ''}${r.wielded ? ', in hand' : ''}`, pad * 3 + r.h - 20, r.y + r.h / 2 + 12);
+    ctx.font = '13px monospace';
+    const info = [`${r.item.Item.slots} slot${r.item.Item.slots > 1 ? 's' : ''}`];
+    if (r.item.Item.ammo !== undefined) info.push(`ammo ${r.item.Item.ammo}`);
+    if (r.wielded) info.push('in hand');
+    ctx.fillText(info.join(', '), pad * 3 + icon, r.y + 33);
     button(r.use, r.use.label);
+    button(r.toss, r.toss.label);
     button(r.drop, r.drop.label);
   }
 }

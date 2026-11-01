@@ -34,6 +34,12 @@
 //   item_used        { id, itemId, name, how }   how: 'eaten' | 'bandaged' (item is gone)
 //   item_wielded / item_unwielded { id, itemId }
 //   use_failed       { id, itemId, reason }  e.g. 'not_bleeding' (bandage kept, no turn)
+//   item_thrown      { id, itemId, x, y }    lands at (x, y) and clatters (noise there)
+//   thrown_hit       { id, itemId, targetId, heavy }
+//   shot_fired       { id, itemId, x, y, ammo }
+//   shot_hit         { id, targetId, damage }
+//   shot_missed      { id, targetId }
+//   fire_failed      { id, itemId, reason }  'empty'
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

@@ -16,7 +16,7 @@ export function makeItem(world, type, x, y) {
   const def = CONFIG.items[type];
   return addEntity(world, {
     Position: { x, y },
-    Item: { type, slots: def.slots },
+    Item: def.ammo !== undefined ? { type, slots: def.slots, ammo: def.ammo } : { type, slots: def.slots },
     Glyph: { char: def.char, fg: def.fg, bg: def.bg },
     Name: { name: def.name },
   });

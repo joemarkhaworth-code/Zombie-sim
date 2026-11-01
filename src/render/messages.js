@@ -2,6 +2,7 @@
 // Lives on the render side: the sim never produces text. Pure JS (no DOM), so it's headless-testable.
 
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
+import { CONFIG } from '../config.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
@@ -57,6 +58,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.id)) say(`You slam into ${into}!`, PRIORITY.danger);
     else if (playerCanSee(d.id)) say(`The ${name(d.id)} slams into ${into}!`, PRIORITY.notice);
   });
+  const CONFIG_NOISY = (itemId) => { const t = world.entities.get(itemId)?.Item?.type; return t && CONFIG.items[t].ranged.noise >= 3; };
   const itemName = (id) => world.entities.get(id)?.Name?.name ?? 'something';
   ev.on('item_picked_up', (d) => { if (isPlayer(d.id)) say(`You pick up the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('pickup_failed', (d) => { if (isPlayer(d.id)) say('Your bag is full.', PRIORITY.blocked); });
@@ -66,6 +68,14 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     say(d.how === 'bandaged' ? 'You bandage your wounds.' : `You eat the ${d.name}.`, PRIORITY.blocked);
   });
   ev.on('use_failed', (d) => { if (isPlayer(d.id) && d.reason === 'not_bleeding') say("You're not bleeding.", PRIORITY.blocked); });
+  ev.on('item_thrown', (d) => { if (isPlayer(d.id)) say(`You throw the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
+  ev.on('thrown_hit', (d) => {
+    if (isPlayer(d.id)) say(d.heavy ? `It hits the ${name(d.targetId)}!` : `It bounces off the ${name(d.targetId)}.`, PRIORITY.notice);
+  });
+  ev.on('shot_fired', (d) => { if (isPlayer(d.id)) say(CONFIG_NOISY(d.itemId) ? 'BANG!' : 'Pfft.', PRIORITY.blocked); });
+  ev.on('shot_hit', (d) => { if (isPlayer(d.id)) say(`You shoot the ${name(d.targetId)}!`, PRIORITY.notice); });
+  ev.on('shot_missed', (d) => { if (isPlayer(d.id)) say('You miss.', PRIORITY.notice); });
+  ev.on('fire_failed', (d) => { if (isPlayer(d.id) && d.reason === 'empty') say('Click. Out of ammo.', PRIORITY.blocked); });
   ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });

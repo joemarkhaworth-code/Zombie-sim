@@ -5,6 +5,7 @@ import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
 import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
+import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -44,10 +45,6 @@ function resize() {
     width: w, height: h, statusHeight, barHeight, tileSize, cols, rows,
     offsetX: Math.floor((w - tileSize * cols) / 2),
     offsetY: statusHeight + Math.floor((mapHeight - tileSize * rows) / 2),
-    buttons: ['sneak', 'shove', 'bag'].map((id, i, all) => {
-      const bw = Math.floor((w - pad * (all.length + 1)) / all.length);
-      return { id, x: pad + i * (bw + pad), y: h - barHeight + pad, w: bw, h: barHeight - pad * 2 };
-    }),
   };
   render();
 }
@@ -60,14 +57,25 @@ function updateCamera() {
   layout.camY = clamp(p.y - (layout.rows >> 1), world.height, layout.rows);
 }
 
+// Action bar buttons for the current state: while aiming, one big CANCEL; otherwise
+// SNEAK, SHOVE, BAG, plus FIRE when you're holding a gun.
+function currentButtons() {
+  const pad = 8, w = layout.width, h = layout.height, barH = layout.barHeight;
+  const p = world.entities.get(world.playerId);
+  const ids = aim ? ['cancel'] : ['sneak', 'shove', 'bag', ...(p && wieldedGun(world, p) ? ['fire'] : [])];
+  const bw = Math.floor((w - pad * (ids.length + 1)) / ids.length);
+  return ids.map((id, i) => ({ id, x: pad + i * (bw + pad), y: h - barH + pad, w: bw, h: barH - pad * 2 }));
+}
+
 function render() {
   updateCamera();
+  layout.buttons = currentButtons();
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
-  drawWorld(ctx, world, layout, inspect, debug);
+  drawWorld(ctx, world, layout, inspect, debug, aim ? aim.targets : null);
   drawStatus(ctx, world, layout, messages.message, blink);
   if (bagOpen) drawBag(ctx, world, layout);
-  drawButtons(ctx, world, layout, { armed, bagOpen });
+  drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
 }
 
@@ -79,6 +87,23 @@ let inspect = null; // { x, y } of the last inspected tile, until the next actio
 const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
 let armed = null; // one-shot action waiting for a target: 'shove' or null
 let bagOpen = false; // inventory panel showing (opening it takes no turn)
+let aim = null;      // aiming: { kind: 'throw', itemId, targets } or { kind: 'fire', targets } - targets = valid tile set
+
+function gunAmmo() {
+  const p = world.entities.get(world.playerId);
+  const g = p && wieldedGun(world, p);
+  return g ? g.Item.ammo : null;
+}
+
+function startAim(kind, itemId = null) {
+  const p = world.entities.get(world.playerId);
+  const range = kind === 'throw' ? CONFIG.throw.range : CONFIG.items[wieldedGun(world, p).Item.type].ranged.range;
+  aim = { kind, itemId, targets: validTargets(world, p, range) };
+  bagOpen = false; armed = null; inspect = null;
+  messages.show(aim.targets.size ? (kind === 'throw' ? 'Throw: tap a lit tile.' : 'Fire: tap a lit tile.') : 'Nothing in range.');
+  if (!aim.targets.size) aim = null;
+  render();
+}
 
 canvas.addEventListener('pointerdown', (e) => {
   const at = { x: e.clientX, y: e.clientY };
@@ -107,6 +132,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
   if (bagOpen) { onBagTap(e.clientX, e.clientY); return; }
+  if (aim) { onAimTap(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
 });
 canvas.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
@@ -143,6 +169,17 @@ function toggleNoiseMap() {
 function onButton(px, py) {
   const b = layout.buttons.find((b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h);
   if (!b) return;
+  if (b.id === 'cancel') {
+    aim = null;
+    messages.show('Cancelled.');
+    render();
+    return;
+  }
+  if (b.id === 'fire') {
+    if (gunAmmo() <= 0) { playerAct(world, { type: 'fire', x: -1, y: -1 }); render(); return; } // shows "Out of ammo."
+    startAim('fire');
+    return;
+  }
   if (b.id === 'bag') {
     inspect = null;
     armed = null;
@@ -175,6 +212,7 @@ function onBagTap(px, py) {
   const hit = (b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
   if (hit(bag.close)) { bagOpen = false; render(); return; }
   for (const r of bag.rows) {
+    if (hit(r.toss)) { startAim('throw', r.itemId); return; }
     const type = hit(r.use) ? 'use' : hit(r.drop) ? 'drop' : null;
     if (!type) continue;
     playerAct(world, { type, itemId: r.itemId });
@@ -185,8 +223,22 @@ function onBagTap(px, py) {
   }
 }
 
+// Aiming: tap a highlighted tile to throw/fire there. Tapping yourself cancels;
+// anything else just says so and keeps aiming.
+function onAimTap(px, py) {
+  const t = screenToTile(px, py);
+  const p = world.entities.get(world.playerId).Position;
+  if (t.x === p.x && t.y === p.y) { aim = null; messages.show('Cancelled.'); render(); return; }
+  if (!aim.targets.has(t.y * world.width + t.x)) { messages.show("Can't aim there."); render(); return; }
+  const a = aim;
+  aim = null;
+  playerAct(world, a.kind === 'throw' ? { type: 'throw', itemId: a.itemId, x: t.x, y: t.y } : { type: 'fire', x: t.x, y: t.y });
+  if (navigator.vibrate) navigator.vibrate(a.kind === 'fire' ? 30 : 10);
+  render();
+}
+
 function onLongPress(px, py) {
-  if (bagOpen) return;
+  if (bagOpen || aim) return;
   if (py < layout.statusHeight || py >= layout.height - layout.barHeight) return; // bars aren't tiles
   inspect = screenToTile(px, py);
   messages.show(describeTile(world, inspect.x, inspect.y));

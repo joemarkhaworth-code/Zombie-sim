@@ -5,13 +5,31 @@ export const CONFIG = {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
     bushClumpSize: 4,
-    items: { beans: 3, bandage: 2, bat: 1 }, // test items scattered on the map
+    items: { beans: 3, bandage: 2, bat: 1, airRifle: 1, shotgun: 1 }, // test items scattered on the map
   },
   // Item types. slots = how much bag space it takes. Effects are data: heal, stanch, weapon.
   items: {
     beans: { name: 'tin of beans', char: '%', fg: '#000000', bg: '#ff9030', slots: 1, heal: 1 }, // until hunger (step 16)
     bandage: { name: 'bandage', char: '+', fg: '#c00000', bg: '#f0f0f0', slots: 1, stanch: true },
     bat: { name: 'cricket bat', char: '/', fg: '#000000', bg: '#d8b878', slots: 2, weapon: { damage: 2, hitChance: 0.8, verb: 'hit' } },
+    // Guns: wield, then FIRE. ranged.noise is at the shooter. ammo = rounds it starts with.
+    airRifle: {
+      name: 'air rifle', char: '}', fg: '#000000', bg: '#a0a0ff', slots: 2, ammo: 10,
+      weapon: { damage: 1, hitChance: 0.7, verb: 'hit' },        // as a club
+      ranged: { range: 8, damage: 1, hitChance: 0.75, woundChance: 0.3, noise: 1 }, // quiet pfft, weak
+    },
+    shotgun: {
+      name: 'shotgun', char: '}', fg: '#ffffff', bg: '#803000', slots: 2, ammo: 4,
+      weapon: { damage: 1, hitChance: 0.7, verb: 'hit' },
+      ranged: { range: 4, damage: 4, hitChance: 0.9, woundChance: 0.8, noise: 3 }, // very loud, strong, short range
+    },
+  },
+  throw: {
+    range: 6,                        // tiles (round), needs a clear line you can see
+    hitChance: 0.75,                 // chance a thrown item hits a creature on the target tile
+    heavySlots: 2,                   // items this big or bigger hurt when they hit
+    heavyDamage: 1,
+    landNoise: 2,                    // clatter where it lands (~8 tiles): a lure
   },
   inventory: { capacity: 6 },        // bag size in slots
   scheduler: {
@@ -138,7 +156,9 @@ export const CONFIG = {
     bagText: '#ffffff',
     bagTitle: '#00ffff',
     bagButton: '#ffff00',
-    bagButtonText: '#000000',        // one-shot action waiting for a target (SHOVE)
+    bagButtonText: '#000000',
+    aimTile: 'rgba(255,255,0,0.22)', // valid target tiles while aiming
+    aimCreature: 'rgba(255,64,0,0.45)', // valid target with a creature on it        // one-shot action waiting for a target (SHOVE)
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',

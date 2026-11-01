@@ -9,6 +9,7 @@ import { setSneaking, moveCost } from './systems/stealth.js';
 import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
+import { throwItem, fire } from './systems/ranged.js';
 import { tickBleeding } from './systems/bleeding.js';
 
 // Brain type -> system that decides what an actor does with its action.
@@ -34,6 +35,7 @@ function onTick(world) {
 //         { type: 'wait' },
 //         { type: 'shove', dx, dy } (push the adjacent creature in that direction; takes a turn),
 //         { type: 'pickup' } (item underfoot), { type: 'use', itemId }, { type: 'drop', itemId },
+//         { type: 'throw', itemId, x, y }, { type: 'fire', x, y } (wielded gun),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -66,6 +68,10 @@ export function playerAct(world, action) {
     if (!useItem(world, player, action.itemId)) return false;
   } else if (action.type === 'drop') {
     if (!drop(world, player, action.itemId)) return false;
+  } else if (action.type === 'throw') {
+    if (!throwItem(world, player, action.itemId, action.x, action.y)) return false;
+  } else if (action.type === 'fire') {
+    if (!fire(world, player, action.x, action.y)) return false;
   } else if (action.type === 'wait') {
     world.events.emit('entity_waited', { id: player.id });
   } else {

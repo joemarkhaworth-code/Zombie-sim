@@ -39,7 +39,8 @@ function drawBushMark(ctx, px, py, s) {
 // camX/camY = world tile shown at the top-left of the view.
 // inspect: optional { x, y } tile to outline (long-press).
 // debug: { noise } toggles debug overlays.
-export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
+// aimTargets: optional Set of tile indexes to highlight while aiming (throw/fire).
+export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTargets = null) {
   const { tileSize: s, offsetX: ox, offsetY: oy, camX, camY, cols, rows } = layout;
   const player = world.entities.get(world.playerId) || world.fallenPlayer; // after death: the last view
   const visible = player ? player.Vision.visible : new Map();
@@ -134,7 +135,18 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
     }
   }
 
-  // 5. Inspect outline
+  // 5. Aiming: highlight valid target tiles (stronger where there's a creature).
+  if (aimTargets) {
+    const creatureTiles = new Set(query(world, 'Actor', 'Position').map((e) => e.Position.y * world.width + e.Position.x));
+    for (const idx of aimTargets) {
+      const x = idx % world.width, y = Math.floor(idx / world.width);
+      if (!onScreen(x, y)) continue;
+      ctx.fillStyle = creatureTiles.has(idx) ? C.aimCreature : C.aimTile;
+      ctx.fillRect(ox + (x - camX) * s, oy + (y - camY) * s, s - 1, s - 1);
+    }
+  }
+
+  // 6. Inspect outline
   if (inspect && onScreen(inspect.x, inspect.y)) {
     ctx.strokeStyle = C.inspect;
     ctx.lineWidth = 2;
