@@ -12,6 +12,7 @@ export function createWorld(seed) {
   const world = {
     seed, rng, width, height,
     tiles: generateTestGrid(rng, width, height),
+    light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
     events: createEventBus(),
     nextId: 1,
@@ -28,7 +29,7 @@ export function createWorld(seed) {
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
     Player: {},
     Prey: {},
-    Vision: { level: CONFIG.player.sight, visible: new Set() },
+    Vision: { level: CONFIG.player.sight, visible: new Map() },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },
@@ -39,7 +40,7 @@ export function createWorld(seed) {
     Position: zpos,
     Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
     Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
-    Vision: { level: CONFIG.zombie.sight, visible: new Set() },
+    Vision: { level: CONFIG.zombie.sight, visible: new Map() },
     Brain: { type: 'shamble', lastSeen: null },
     Blocks: {},
     Name: { name: 'zombie' },

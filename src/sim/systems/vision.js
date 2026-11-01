@@ -1,5 +1,9 @@
 // Vision: anything with a Vision component sees tiles within its sight radius
 // that it has a clear straight line to (tile centre to tile centre).
+// Each seen tile gets a visibility level 1-3 (0 = unseen, not stored):
+//   level = min(clarity, light)   clarity falls off with distance; light is world.light (0-3).
+// e.Vision.visible is a Map of tile index -> level. Day/night, weather and stealth
+// will lower these levels later; creatures are only noticed at minLevelToSpot or above.
 //  - Opaque tiles (walls) block the line. Creatures don't.
 //  - A line that passes exactly between two diagonal walls is blocked (no peeking
 //    through diagonal gaps); grazing the corner of a single wall is allowed.
@@ -50,24 +54,37 @@ export function sightRadius(e) {
 export function updateVision(world, e) {
   const r = sightRadius(e);
   const { x: ox, y: oy } = e.Position;
-  const inRange = (x, y) => (x - ox) ** 2 + (y - oy) ** 2 <= r * r + r; // round-ish circle
-  const visible = new Set();
+  const [band3, band2] = CONFIG.vision.clarityBands;
+  const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
+  const clarity = (x, y) => {
+    const f = Math.sqrt(d2(x, y)) / r;
+    return f <= band3 ? 3 : f <= band2 ? 2 : 1;
+  };
+  const level = (x, y) => Math.min(clarity(x, y), world.light[y * world.width + x]);
+
+  const visible = new Map();
+  const set = (x, y) => {
+    const lv = level(x, y);
+    if (lv > 0) visible.set(y * world.width + x, lv);
+  };
   const walls = [];
   for (let y = oy - r; y <= oy + r; y++) {
     for (let x = ox - r; x <= ox + r; x++) {
-      if (!inBounds(world, x, y) || !inRange(x, y)) continue;
-      if (lineClear(world, ox, oy, x, y)) visible.add(y * world.width + x);
+      if (!inBounds(world, x, y) || d2(x, y) > r * r + r) continue; // round-ish circle
+      if (lineClear(world, ox, oy, x, y)) set(x, y);
       else if (opaqueAt(world, x, y)) walls.push([x, y]);
     }
   }
   // Reveal wall faces next to visible floor that's closer to the viewer.
-  const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
   for (const [x, y] of walls) {
     for (const [ax, ay] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
       if (!inBounds(world, ax, ay) || opaqueAt(world, ax, ay)) continue;
-      if (visible.has(ay * world.width + ax) && d2(ax, ay) < d2(x, y)) { visible.add(y * world.width + x); break; }
+      if (visible.has(ay * world.width + ax) && d2(ax, ay) < d2(x, y)) { set(x, y); break; }
     }
   }
+  // You always know where you are, even in pitch darkness.
+  const own = oy * world.width + ox;
+  visible.set(own, Math.max(visible.get(own) ?? 0, 1));
   e.Vision.visible = visible;
 }
 
@@ -75,8 +92,14 @@ export function refreshAllVision(world) {
   for (const e of query(world, 'Vision', 'Position')) updateVision(world, e);
 }
 
+// Visibility level (0-3) of a tile for this viewer.
+export function visibilityAt(world, viewer, x, y) {
+  return (viewer.Vision && viewer.Vision.visible.get(y * world.width + x)) || 0;
+}
+
+// Can the viewer notice the target? Needs the target's tile at minLevelToSpot or better.
 export function canSee(world, viewer, target) {
-  return !!viewer.Vision && viewer.Vision.visible.has(target.Position.y * world.width + target.Position.x);
+  return visibilityAt(world, viewer, target.Position.x, target.Position.y) >= CONFIG.vision.minLevelToSpot;
 }
 
 // End of turn: emit entity_seen for actors that newly came into the player's view.

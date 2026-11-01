@@ -1,6 +1,8 @@
 // Turns sim events into one short status-line message per turn.
 // Lives on the render side: the sim never produces text. Pure JS (no DOM), so it's headless-testable.
 
+import { canSee } from '../sim/systems/vision.js';
+
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 // Priority: higher replaces lower within the same turn. Danger always wins.
@@ -35,7 +37,7 @@ export function createMessageLog(world) {
   });
   const playerCanSee = (id) => {
     const p = world.entities.get(world.playerId), e = world.entities.get(id);
-    return p && e && p.Vision.visible.has(e.Position.y * world.width + e.Position.x);
+    return !!(p && e && canSee(world, p, e));
   };
   ev.on('entity_seen', (d) => {
     if (isPlayer(d.viewerId)) say(`A ${name(d.id)} comes into view.`, PRIORITY.notice);

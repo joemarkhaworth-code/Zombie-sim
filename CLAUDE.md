@@ -161,3 +161,5 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Zombies only chase what they can see. Out of sight, a zombie walks to where it last saw you, then gives up and shuffles about at random.
 - Until map memory (step 5), anything outside your view is drawn black.
 - New messages: "A zombie comes into view." and "The zombie has seen you!" (the second only if you can see the zombie when it happens).
+- Visibility is a level per tile (0–3), not on/off. For each viewer, a seen tile's level = min(clarity, light): clarity falls off with distance (3 near, 2 mid, 1 at the edge of sight; bands in config), and light is a per-tile 0–3 map on the world (world.light, all 3 for now). Day/night, light sources, weather and stealth will lower these levels later. A creature is only noticed if its tile is at or above vision.minLevelToSpot (1 for now). You always see your own tile.
+- Greybox rendering of visibility: level 3 full colour, 2 and 1 slightly darker (black overlay, alpha in config), 0 black. The art pass will use dithering for levels 2 and 1 instead of plain darkening.

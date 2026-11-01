@@ -2,7 +2,7 @@
 // Usage: node tests/headless.js [turns] [seed]
 import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee, lineClear } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear, visibilityAt } from '../src/sim/systems/vision.js';
 import { playerAct, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
@@ -138,6 +138,35 @@ const range = (lvl) => CONFIG.vision.rangeByLevel[lvl];
   const maxSight = Math.max(...CONFIG.vision.rangeByLevel);
   assert(maxSight <= Math.floor(CONFIG.view.tilesAcross / 2), 'config: sight range is wider than the screen');
   console.log('fov: diagonal gaps blocked, symmetric, fits on screen OK');
+}
+
+{ // Visibility levels: 1-3, fade with distance, capped by light; darkness hides zombies.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 14); place(w, z, 18, 26);
+  const lv = (x, y) => visibilityAt(w, p, x, y);
+  for (const v of p.Vision.visible.values()) assert(v >= 1 && v <= 3, `levels: out of range ${v}`);
+  const r = range(CONFIG.player.sight);
+  assert(lv(10, 14) === 3 && lv(11, 14) === 3, 'levels: nearby tiles should be level 3');
+  assert(lv(10, 14 + r) >= 1 && lv(10, 14 + r) < 3, `levels: edge of sight should be dimmer, got ${lv(10, 14 + r)}`);
+  assert(lv(10, 14 + r + 2) === 0, 'levels: beyond sight should be 0');
+  const levels = new Set(p.Vision.visible.values());
+  assert(levels.has(1) && levels.has(2) && levels.has(3), `levels: expected all of 1,2,3, got ${[...levels]}`);
+
+  w.light.fill(1); refreshAllVision(w);
+  assert(Math.max(...p.Vision.visible.values()) === 1, 'levels: light 1 should cap visibility at 1');
+
+  w.light.fill(0); place(w, z, 11, 14);
+  assert(lv(10, 14) === 1, 'levels: you always see your own tile');
+  assert(lv(11, 14) === 0 && !canSee(w, p, z) && !canSee(w, z, p), 'levels: in pitch dark nobody sees anybody');
+
+  w.light.fill(CONFIG.light.ambient); place(w, z, 10, 14 + r);
+  const saved = CONFIG.vision.minLevelToSpot;
+  CONFIG.vision.minLevelToSpot = 3;
+  assert(!canSee(w, p, z), 'levels: a dim (far) zombie should not be noticed when level 3 is needed');
+  CONFIG.vision.minLevelToSpot = saved;
+  assert(canSee(w, p, z), 'levels: a dim zombie is noticed at the default threshold');
+  console.log('levels: 1-3 by distance, capped by light, darkness hides, spot threshold OK');
 }
 
 { // A zombie that can see you closes in, and the status line says so.
