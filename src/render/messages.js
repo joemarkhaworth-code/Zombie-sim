@@ -42,7 +42,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.id)) current = { text: d.sneaking ? 'You start sneaking.' : 'You stop sneaking.', priority: PRIORITY.info };
   });
   ev.on('attack_hit', (d) => {
-    if (isPlayer(d.id)) say(`You hit the ${name(d.targetId)}.`, PRIORITY.blocked);
+    if (isPlayer(d.id)) say(d.sneak ? 'Sneak attack!' : `You hit the ${name(d.targetId)}.`, d.sneak ? PRIORITY.notice : PRIORITY.blocked);
     else if (isPlayer(d.targetId)) say(`The ${name(d.id)} ${verbs(d.id)} you!`, PRIORITY.danger);
   });
   ev.on('attack_missed', (d) => {

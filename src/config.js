@@ -43,6 +43,10 @@ export const CONFIG = {
   },
   melee: {
     noise: 2,                        // fighting noise level (carries ~8 tiles)
+    // Sneak attack: hitting a creature that hasn't noticed you. Always lands and adds
+    // bonus damage (enough to kill a zombie outright at 4 health).
+    sneakAttackHitChance: 1,
+    sneakAttackBonus: 3,
   },
   bleeding: {
     intervalByLevel: [Infinity, 12, 7, 4], // ticks between losing 1 health, by bleeding level
@@ -66,6 +70,8 @@ export const CONFIG = {
     footsteps: 0,                    // shuffle quietly (raise to let zombies hear each other)
     wanderChance: 0.5,               // with nothing to chase, chance to shuffle a step
     staggerChance: 0.2,
+    reactActions: 1,                 // on first noticing prey (or being hit), spend this many actions reacting before attacking
+    groanNoise: 1,                   // reacting is a groan: noise level (warns you, and other zombies may hear)
     searchActions: 4,                // after reaching a last-seen spot or noise, shuffle about this many moves
     searchRadius: 2,                 // ...staying within this many tiles of it              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start

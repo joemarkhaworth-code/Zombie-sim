@@ -488,6 +488,7 @@ const range = (e) => sightRadius(e);
   const w = openWorld();
   const p = playerOf(w), z = zombieOf(w);
   place(w, p, 10, 10); place(w, z, 11, 10);
+  z.Brain.seesPrey = true; z.Brain.trackingId = p.id; // it already knows you're there: no sneak attack
   let hits = 0, misses = 0, noise = 0;
   w.events.on('attack_hit', (d) => { if (d.id === p.id) hits++; });
   w.events.on('attack_missed', (d) => { if (d.id === p.id) misses++; });
@@ -559,6 +560,73 @@ const range = (e) => sightRadius(e);
   assert(w2.gameOver && w2.gameOver.cause === 'bite' && w2.gameOver.killerName === 'zombie', `death: player killed by a bite, got ${JSON.stringify(w2.gameOver)}`);
   assert(!w2.entities.has(p2.id) && !playerAct(w2, { type: 'wait' }), 'death: dead player cannot act');
   console.log('death: corpse left, player death ends the game OK');
+}
+
+// 7. Who strikes first.
+function firstStrike(setup, playerMoves) {
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  setup(w, p, z);
+  let first = null;
+  w.events.on('attack_hit', (d) => { first ??= d.id === p.id ? 'player' : 'zombie'; });
+  w.events.on('attack_missed', (d) => { first ??= d.id === p.id ? 'player' : 'zombie'; });
+  for (let i = 0; i < 40 && !first; i++) {
+    const dx = Math.sign(z.Position.x - p.Position.x), dy = Math.sign(z.Position.y - p.Position.y);
+    if (cheb(p.Position, z.Position) <= 1 || playerMoves) playerAct(w, { type: 'move', dx, dy });
+    else playerAct(w, { type: 'wait' });
+  }
+  return { first, w, p, z };
+}
+
+{ // A zombie that steps next to you used its action moving: you strike first.
+  for (let k = 0; k < 20; k++) {
+    const { first } = firstStrike((w, p, z) => { place(w, p, 10, 5); place(w, z, 10, 9 + (k % 3)); }, false);
+    assert(first === 'player', `first: zombie walked up but struck first (case ${k})`);
+  }
+  console.log('first strike: a zombie that walks up to you never hits first OK');
+}
+
+{ // Sneak attack: an unaware zombie dies in one hit and never strikes.
+  const { first, w, z } = firstStrike((w, p, z) => {
+    place(w, p, 10, 5); place(w, z, 10, 6);
+    z.Brain.seesPrey = false; // hasn't noticed you
+  }, true);
+  assert(first === 'player' && !w.entities.has(z.id), 'sneak attack: unaware zombie killed in one hit');
+  // A tougher unaware creature survives, but reacts instead of striking back at once.
+  const w2 = openWorld();
+  const p2 = playerOf(w2), z2 = zombieOf(w2);
+  place(w2, p2, 10, 5); place(w2, z2, 10, 6);
+  z2.Health.hp = z2.Health.max = 20;
+  z2.Melee.hitChance = 1;
+  let sneakHits = 0, zombieSwings = 0, reacted = 0;
+  w2.events.on('attack_hit', (d) => { if (d.id === p2.id && d.sneak) sneakHits++; if (d.id === z2.id) zombieSwings++; });
+  w2.events.on('attack_missed', (d) => { if (d.id === z2.id) zombieSwings++; });
+  w2.events.on('entity_reacted', (d) => { if (d.id === z2.id) reacted++; });
+  playerAct(w2, { type: 'move', dx: 0, dy: 1 });
+  assert(sneakHits === 1 && z2.Health.hp === 20 - CONFIG.player.melee.damage - CONFIG.melee.sneakAttackBonus, 'sneak attack: bonus damage');
+  playerAct(w2, { type: 'wait' }); // zombie's next action: react, not bite
+  assert(reacted === 1 && zombieSwings === 0, `sneak attack: zombie reacts before striking (reacted ${reacted}, swings ${zombieSwings})`);
+  playerAct(w2, { type: 'move', dx: 0, dy: 1 });
+  const hpAfter = z2.Health.hp;
+  assert(hpAfter <= 20 - 4, 'sneak attack: second hit is a normal hit');
+  for (let i = 0; i < 4; i++) playerAct(w2, { type: 'wait' });
+  assert(zombieSwings >= 1, 'sneak attack: after reacting, the zombie fights back');
+  console.log('sneak attack: unaware = one-hit kill, no free strike, then normal fight OK');
+}
+
+{ // Noticing: the first action after spotting you is a groan (noise), not a step or bite.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 5); place(w, z, 10, 9);
+  const zStart = { ...z.Position };
+  let groan = null;
+  w.events.on('noise_made', (d) => { if (d.sourceId === z.id) groan = d; });
+  let reacted = false;
+  w.events.on('entity_reacted', () => { reacted = true; });
+  for (let i = 0; i < 2 && !reacted; i++) playerAct(w, { type: 'wait' });
+  assert(reacted && z.Position.x === zStart.x && z.Position.y === zStart.y, 'react: zombie stays put while reacting');
+  assert(groan && groan.level === CONFIG.zombie.groanNoise, 'react: reacting is a groan (noise)');
+  console.log('react: noticing costs the zombie an action and makes a groan OK');
 }
 
 console.log('PASS');

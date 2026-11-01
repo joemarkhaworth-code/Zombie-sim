@@ -56,7 +56,7 @@ export function createWorld(seed) {
     Health: { hp: CONFIG.zombie.health, max: CONFIG.zombie.health },
     Melee: { ...CONFIG.zombie.melee },
     Noisy: { move: CONFIG.zombie.footsteps },
-    Brain: { type: 'shamble', goal: null, seesPrey: false, trackingId: null }, // goal: { x, y, why: 'seen' | 'heard' }
+    Brain: { type: 'shamble', goal: null, seesPrey: false, trackingId: null, reacting: 0 }, // goal: { x, y, why: 'seen' | 'heard' }
     Blocks: {},
     Name: { name: 'zombie' },
   });

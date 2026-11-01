@@ -15,7 +15,8 @@
 //   entity_seen      { viewerId, id }        an actor came into the player's view (end of turn)
 //   vision_updated   { id }                  a viewer's visible tiles were recomputed
 //   stance_changed   { id, sneaking }        started or stopped sneaking
-//   attack_hit       { id, targetId, damage }
+//   attack_hit       { id, targetId, damage, sneak }   sneak = target hadn't noticed the attacker
+//   entity_reacted   { id, preyId }          a hunter spent its action reacting to noticing prey (groan)
 //   attack_missed    { id, targetId }
 //   entity_damaged   { id, amount, hp }
 //   bleeding_started { id, level }           a wound opened or got worse

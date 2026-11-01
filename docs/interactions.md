@@ -22,3 +22,5 @@ Every new system must read from or affect at least one existing system. One line
 | Melee (step 8) | Health, Melee, adjacency, Vision (zombies attack prey they see) | health, wounds/bleeding, blood on tiles, noise level 2 (draws zombies), death + corpse |
 | Bleeding (step 8) | Bleeding level, scheduler ticks | health drain, blood on tiles (memory remembers it), death. Future: scent trail |
 | Death (step 8) | health reaching 0 | corpse entity (memory, inspect), game over screen. Future: crows, infection |
+| Sneak attack (step 8b) | target's awareness (zombie tracking / player sight), stealth | heavy bonus damage, guaranteed hit |
+| Zombie reaction (step 8b) | first noticing prey or being hit | lost action (you get first strike), groan noise (other zombies hear) |

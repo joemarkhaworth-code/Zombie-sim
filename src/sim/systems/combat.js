@@ -1,6 +1,9 @@
 // Melee: any creature with Health can be attacked by any creature with Melee.
 // attack() rolls to hit (seeded RNG), deals damage, may open a wound (bleeding),
 // splashes blood, makes fighting noise, and kills at 0 health.
+// Sneak attack: if the target hadn't noticed the attacker, the hit always lands and
+// deals bonus damage. Being attacked makes the target notice the attacker (a zombie
+// then spends its next action reacting, so it can't strike back straight away).
 //
 // Components:
 //   Health { hp, max }                 whole numbers, coarse
@@ -11,20 +14,33 @@ import { CONFIG } from '../../config.js';
 import { addEntity } from '../world.js';
 import { makeNoise } from './noise.js';
 import { addBlood, wound } from './bleeding.js';
+import { canSee } from './vision.js';
+
+// Had the target noticed the attacker before this attack?
+//  - creatures with a Brain: only if they were tracking it on their last look;
+//  - others (the player): if they can see the attacker now.
+export function isAwareOf(world, target, attacker) {
+  if (target.Brain) return !!(target.Brain.seesPrey && target.Brain.trackingId === attacker.id);
+  return !!(target.Vision && canSee(world, target, attacker));
+}
 
 export function attack(world, attacker, target) {
   const m = attacker.Melee;
   if (!m || !target.Health) return false;
   const { x, y } = target.Position;
+  const sneak = !isAwareOf(world, target, attacker);
   makeNoise(world, x, y, CONFIG.melee.noise, attacker.id); // fights are loud
-  if (!world.rng.chance(m.hitChance)) {
+  if (target.Brain) target.Brain.goal = { x: attacker.Position.x, y: attacker.Position.y, why: 'seen' }; // now it knows
+  const hitChance = sneak ? CONFIG.melee.sneakAttackHitChance : m.hitChance;
+  if (!world.rng.chance(hitChance)) {
     world.events.emit('attack_missed', { id: attacker.id, targetId: target.id });
     return true;
   }
-  world.events.emit('attack_hit', { id: attacker.id, targetId: target.id, damage: m.damage });
+  const dmg = m.damage + (sneak ? CONFIG.melee.sneakAttackBonus : 0);
+  world.events.emit('attack_hit', { id: attacker.id, targetId: target.id, damage: dmg, sneak });
   addBlood(world, x, y, 1);
   if (world.rng.chance(m.woundChance)) wound(world, target);
-  damage(world, target, m.damage, { killerId: attacker.id, cause: m.verb });
+  damage(world, target, dmg, { killerId: attacker.id, cause: m.verb });
   return true;
 }
 
