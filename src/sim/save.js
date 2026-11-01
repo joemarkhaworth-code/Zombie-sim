@@ -57,6 +57,23 @@ export function deserialize(json, createWorld) {
     if (e.Vision) e.Vision.visible = new Map();
     world.entities.set(e.id, e);
   }
+  // Older saves: keys were carried in the bag. Move them onto the keyring.
+  for (const e of world.entities.values()) {
+    if (!e.Inventory || !e.Player) continue;
+    e.Keyring = e.Keyring || { keys: [] };
+    for (const id of [...e.Inventory.items]) {
+      const it = world.entities.get(id);
+      if (it && it.Item && CONFIG.items[it.Item.type]?.key) {
+        e.Inventory.items.splice(e.Inventory.items.indexOf(id), 1);
+        it.Item.slots = 0;
+        it.Item.lockId = it.Item.lockId || CONFIG.items[it.Item.type].lockId;
+        e.Keyring.keys.push(id);
+      }
+    }
+  }
+  for (const e of world.entities.values()) { // older saves: doors had no lockId
+    if (e.Door && e.Door.lockId === undefined) e.Door.lockId = e.Door.locked ? CONFIG.items.key.lockId : null;
+  }
   world.structures = new Map();
   for (const e of world.entities.values()) {
     if (e.Structure && e.Position) world.structures.set(e.Position.y * world.width + e.Position.x, e.id);

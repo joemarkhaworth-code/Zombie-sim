@@ -896,12 +896,12 @@ function firstStrike(setup, playerMoves) {
 
 // 11. Materials: walls, doors, windows, barricades.
 // A small room: walls x 8..12, y 8..12, door at (10,12), window at (12,10).
-function roomWorld({ locked = false } = {}) {
+function roomWorld({ locked = false, lockId = null } = {}) {
   const walls = [];
   for (let x = 8; x <= 12; x++) for (const y of [8, 12]) walls.push([x, y]);
   for (let y = 9; y <= 11; y++) for (const x of [8, 12]) walls.push([x, y]);
   const w = openWorld(walls.filter(([x, y]) => !(x === 10 && y === 12) && !(x === 12 && y === 10)));
-  const door = w.entities.get(makeDoor(w, 10, 12, { locked }));
+  const door = w.entities.get(makeDoor(w, 10, 12, { locked, lockId }));
   const win = w.entities.get(makeWindow(w, 12, 10));
   refreshAllVision(w);
   return { w, door, win };
@@ -915,6 +915,7 @@ function roomWorld({ locked = false } = {}) {
   const b = CONFIG.testGrid.building;
   assert(w.tileHp[b.y * w.width + b.x] === CONFIG.materials[CONFIG.build.wall].hp, 'build: walls have their material\'s health');
   assert(query(w, 'Item').some((i) => i.Item.type === 'key') && query(w, 'Item').some((i) => i.Item.type === 'planks'), 'build: key and planks on the map');
+  assert(query(w, 'Item').find((i) => i.Item.type === 'key').Item.lockId === doors[0].Door.lockId, 'build: the scattered key fits the building door');
   for (let y = b.y - 1; y <= b.y + b.h; y++) for (let x = b.x - 1; x <= b.x + b.w; x++) {
     const ring = x === b.x - 1 || y === b.y - 1 || x === b.x + b.w || y === b.y + b.h;
     if (ring && x > 0 && y > 0 && x < w.width - 1 && y < w.height - 1) assert(w.tiles[y * w.width + x] === TILE.FLOOR, `build: yard should be clear at ${x},${y}`);
@@ -952,13 +953,29 @@ function roomWorld({ locked = false } = {}) {
   assert(!door.Door.open && door.Structure.hp === CONFIG.materials.wood.hp - 1 && bash === 1, 'locked: a deliberate bash damages it, noisily');
   for (let i = 0; i < 10 && !door.Door.broken; i++) playerAct(w, { type: 'bash', x: 10, y: 12 });
   assert(door.Door.broken && isPassable(w, 10, 12), 'locked: enough blows break the door down');
-  // Key
-  const r2 = roomWorld({ locked: true });
+  // Key: goes on the keyring (no bag slot); walking into the locked door unlocks it; closing locks it.
+  const r2 = roomWorld({ locked: true, lockId: CONFIG.items.key.lockId });
   const p2 = playerOf(r2.w);
   place(r2.w, zombieOf(r2.w), 18, 26); place(r2.w, p2, 10, 13);
   const key = makeItem(r2.w, 'key', 10, 13); playerAct(r2.w, { type: 'pickup' });
-  assert(playerAct(r2.w, { type: 'use', itemId: key }) && !r2.door.Door.locked, 'key: unlocks the adjacent door');
-  assert(playerAct(r2.w, { type: 'use', itemId: key }) && r2.door.Door.locked, 'key: locks it again');
+  assert(p2.Keyring.keys.includes(key) && !p2.Inventory.items.includes(key) && usedSlots(r2.w, p2) === 0, 'key: goes on the keyring, takes no bag slot');
+  assert(playerAct(r2.w, { type: 'move', dx: 0, dy: -1 }) && r2.door.Door.open && !r2.door.Door.locked, 'key: walking into the locked door unlocks and opens it');
+  playerAct(r2.w, { type: 'move', dx: 0, dy: -1 }); playerAct(r2.w, { type: 'move', dx: 0, dy: -1 }); // through, inside
+  assert(playerAct(r2.w, { type: 'door', x: 10, y: 12 }) && !r2.door.Door.open && r2.door.Door.locked, 'key: closing the door locks it behind you');
+  // A key for a different lock does nothing.
+  const r3 = roomWorld({ locked: true, lockId: 'somewhere-else' });
+  const p3 = playerOf(r3.w);
+  place(r3.w, zombieOf(r3.w), 18, 26); place(r3.w, p3, 10, 13);
+  makeItem(r3.w, 'key', 10, 13); playerAct(r3.w, { type: 'pickup' });
+  assert(!playerAct(r3.w, { type: 'move', dx: 0, dy: -1 }) && r3.door.Door.locked, 'key: the wrong key does not open it');
+  // Old saves with a key in the bag get it moved onto the keyring.
+  const old = JSON.parse(serialize(r2.w));
+  const op = old.entities.find((e) => e.Player);
+  delete op.Keyring; op.Inventory.items.push(key);
+  old.entities.find((e) => e.id === key).Item.slots = 1;
+  const loaded = deserialize(JSON.stringify(old), createWorld);
+  const lp = playerOf(loaded);
+  assert(lp.Keyring.keys.includes(key) && !lp.Inventory.items.includes(key), 'key: old saves move the key from the bag to the keyring');
   console.log('locked: bump is harmless, deliberate bash breaks it, key works OK');
 }
 

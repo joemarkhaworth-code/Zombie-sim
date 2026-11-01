@@ -6,20 +6,21 @@
 //      heal: n     - eat/drink it: restore n health, used up
 //      stanch: true - bandage: stops bleeding, used up
 //      barricade: true - planks: nail over an adjacent door/window (used up)
-//      key: true   - lock/unlock an adjacent closed door
+//      key: true   - goes on the Keyring { keys: [ids] } instead of the bag (no slot);
+//                    opens doors whose Door.lockId matches the key's Item.lockId
 //      weapon: {...} - wield it (or put it away); wielded weapon replaces your bare-hands
 //                      melee damage/hit chance. Wielded = Inventory.wielded holds its id.
 // Picking up: walking onto an item picks it up for free if it fits; tapping yourself
 // while standing on one picks it up (takes a turn). Use, drop, wield take a turn.
 import { CONFIG } from '../../config.js';
 import { addEntity, isPassable, query } from '../world.js';
-import { adjacentStructures, addBarricade, toggleLock } from './structures.js';
+import { adjacentStructures, addBarricade } from './structures.js';
 
 export function makeItem(world, type, x, y) {
   const def = CONFIG.items[type];
   return addEntity(world, {
     Position: { x, y },
-    Item: def.ammo !== undefined ? { type, slots: def.slots, ammo: def.ammo } : { type, slots: def.slots },
+    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(def.lockId ? { lockId: def.lockId } : {}) },
     Glyph: { char: def.char, fg: def.fg, bg: def.bg },
     Name: { name: def.name },
   });
@@ -42,6 +43,12 @@ export function pickUp(world, carrier) {
   const items = itemsAt(world, carrier.Position.x, carrier.Position.y);
   if (!items.length) return false;
   const item = items[items.length - 1];
+  if (itemDef(item).key && carrier.Keyring) { // keys go on the keyring: no bag space
+    delete item.Position;
+    carrier.Keyring.keys.push(item.id);
+    world.events.emit('item_picked_up', { id: carrier.id, itemId: item.id, keyring: true });
+    return true;
+  }
   if (usedSlots(world, carrier) + item.Item.slots > carrier.Inventory.capacity) {
     world.events.emit('pickup_failed', { id: carrier.id, itemId: item.id, reason: 'full' });
     return false;
@@ -89,14 +96,6 @@ export function useItem(world, carrier, itemId) {
     }
     inv.items.splice(inv.items.indexOf(itemId), 1);
     world.entities.delete(itemId);
-    return true;
-  }
-  if (def.key) {
-    const door = adjacentStructures(world, carrier, (st) => st.Door && !st.Door.open && !st.Door.broken)[0];
-    if (!door || !toggleLock(world, carrier, door)) {
-      world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'no_door' });
-      return false;
-    }
     return true;
   }
   if (def.stanch) {

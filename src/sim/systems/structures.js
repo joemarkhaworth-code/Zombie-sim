@@ -53,10 +53,10 @@ function register(world, id, x, y) {
   return id;
 }
 
-export function makeDoor(world, x, y, { material = CONFIG.build.door, locked = false, open = false } = {}) {
+export function makeDoor(world, x, y, { material = CONFIG.build.door, locked = false, open = false, lockId = null } = {}) {
   const hp = CONFIG.materials[material].hp;
   const id = addEntity(world, {
-    Position: { x, y }, Structure: { material, hp, max: hp }, Door: { open, locked, broken: false },
+    Position: { x, y }, Structure: { material, hp, max: hp }, Door: { open, locked, broken: false, lockId },
     Glyph: { char: '+', fg: '#000', bg: '#000' }, Name: { name: 'door' },
   });
   refresh(world.entities.get(id));
@@ -99,21 +99,33 @@ export function refresh(e) {
   e.Name = { name };
 }
 
-// Open/close a door (not locked, not barricaded, not broken; closing needs the doorway clear).
+// Does this actor carry a key for this door? (Keyring item whose lockId matches.)
+export function hasKeyFor(world, actor, door) {
+  if (!actor.Keyring || !door.Door || !door.Door.lockId) return false;
+  return actor.Keyring.keys.some((id) => world.entities.get(id)?.Item?.lockId === door.Door.lockId);
+}
+
+// Open/close a door (not barricaded, not broken; closing needs the doorway clear).
+// With the right key on your keyring, a locked door unlocks as you open it, and a door
+// you close locks behind you.
 export function toggleDoor(world, actor, door) {
   const d = door.Door;
   if (!d || d.broken || door.Barricade) return false;
+  const key = hasKeyFor(world, actor, door);
+  let unlocked = false, locked = false;
   if (!d.open) {
-    if (d.locked) { world.events.emit('door_locked', { id: actor.id, doorId: door.id }); return false; }
+    if (d.locked && !key) { world.events.emit('door_locked', { id: actor.id, doorId: door.id }); return false; }
+    if (d.locked) { d.locked = false; unlocked = true; }
     d.open = true;
   } else {
     const { x, y } = door.Position;
     const occupied = [...world.entities.values()].some((e) => e.Actor && e.Position && e.Position.x === x && e.Position.y === y);
     if (occupied) { world.events.emit('door_blocked', { id: actor.id, doorId: door.id }); return false; }
     d.open = false;
+    if (key) { d.locked = true; locked = true; }
   }
   refresh(door);
-  world.events.emit(d.open ? 'door_opened' : 'door_closed', { id: actor.id, doorId: door.id });
+  world.events.emit(d.open ? 'door_opened' : 'door_closed', { id: actor.id, doorId: door.id, unlocked, locked });
   world.events.emit('structure_changed', { id: door.id });
   return true;
 }

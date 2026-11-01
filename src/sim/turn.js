@@ -10,7 +10,7 @@ import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
 import { throwItem, fire } from './systems/ranged.js';
-import { structureAt, toggleDoor, damageStructure, isObstacle } from './systems/structures.js';
+import { structureAt, toggleDoor, damageStructure, isObstacle, hasKeyFor } from './systems/structures.js';
 import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 
@@ -60,8 +60,8 @@ export function playerAct(world, action) {
     if (thing && thing.Health) {
       action = { ...action, attack: true };
       attack(world, player, thing); // moving into a creature attacks it
-    } else if (thing && thing.Door && !thing.Door.locked && !thing.Barricade && toggleDoor(world, player, thing)) {
-      action = { ...action, attack: true }; // moving into a closed door opens it (a normal-cost action)
+    } else if (thing && thing.Door && (!thing.Door.locked || hasKeyFor(world, player, thing)) && !thing.Barricade && toggleDoor(world, player, thing)) {
+      action = { ...action, attack: true }; // moving into a closed door opens it (unlocking it if you have the key)
     } else if (isObstacle(thing)) {
       // Walking into a window, locked door or barricade never breaks it by accident:
       // it just says what's there (no turn). Bashing is a deliberate tap on the tile itself.

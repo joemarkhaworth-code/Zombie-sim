@@ -167,6 +167,14 @@ export function drawBag(ctx, world, layout, ui = {}) {
     }
     return;
   }
+  // Keyring: keys don't take bag slots; listed on one line.
+  const p = world.entities.get(world.playerId);
+  const keys = p && p.Keyring ? p.Keyring.keys.map((id) => world.entities.get(id)?.Name?.name).filter(Boolean) : [];
+  ctx.fillStyle = C.bagTitle;
+  ctx.font = '15px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`Keys: ${keys.length ? keys.join(', ') : 'none'}`, pad * 2, bag.newGame.y + bag.newGame.h / 2, bag.newGame.x - pad * 4);
   // NEW GAME: small and dim so it isn't hit by accident.
   ctx.fillStyle = C.bagRow;
   ctx.fillRect(bag.newGame.x, bag.newGame.y, bag.newGame.w, bag.newGame.h);

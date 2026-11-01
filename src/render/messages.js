@@ -60,8 +60,9 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     else if (playerCanSee(d.id)) say(`The ${name(d.id)} slams into ${into}!`, PRIORITY.notice);
   });
   const CONFIG_NOISY = (itemId) => { const t = world.entities.get(itemId)?.Item?.type; return t && CONFIG.items[t].ranged.noise >= 3; };
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
   const itemName = (id) => world.entities.get(id)?.Name?.name ?? 'something';
-  ev.on('item_picked_up', (d) => { if (isPlayer(d.id)) say(`You pick up the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
+  ev.on('item_picked_up', (d) => { if (isPlayer(d.id)) say(d.keyring ? `${cap(itemName(d.itemId))} on your keyring.` : `You pick up the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('pickup_failed', (d) => { if (isPlayer(d.id)) say('Your bag is full.', PRIORITY.blocked); });
   ev.on('item_dropped', (d) => { if (isPlayer(d.id)) say(`You drop the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_used', (d) => {
@@ -82,8 +83,8 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('action_attempted', (d) => { if (isPlayer(d.id)) heardFrom.clear(); });
   ev.on('noise_heard', (d) => { if (isPlayer(d.id) && d.sourceId !== null) heardFrom.add(d.sourceId); });
   const thingName = (id) => world.entities.get(id)?.Name?.name ?? 'something';
-  ev.on('door_opened', (d) => { if (isPlayer(d.id)) say('You open the door.', PRIORITY.blocked); });
-  ev.on('door_closed', (d) => { if (isPlayer(d.id)) say('You close the door.', PRIORITY.blocked); });
+  ev.on('door_opened', (d) => { if (isPlayer(d.id)) say(d.unlocked ? 'You unlock and open the door.' : 'You open the door.', PRIORITY.blocked); });
+  ev.on('door_closed', (d) => { if (isPlayer(d.id)) say(d.locked ? 'You close and lock the door.' : 'You close the door.', PRIORITY.blocked); });
   ev.on('door_locked', (d) => { if (isPlayer(d.id)) say('The door is locked.', PRIORITY.blocked); });
   ev.on('door_blocked', (d) => { if (isPlayer(d.id)) say('Something is in the way.', PRIORITY.blocked); });
   ev.on('door_lock', (d) => { if (isPlayer(d.id)) say('You lock the door.', PRIORITY.blocked); });
@@ -106,7 +107,6 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('use_failed', (d) => {
     if (!isPlayer(d.id)) return;
     if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
-    if (d.reason === 'no_door') say('No closed door by you.', PRIORITY.blocked);
   });
   ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });

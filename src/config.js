@@ -14,7 +14,8 @@ export const CONFIG = {
     bandage: { name: 'bandage', char: '+', fg: '#c00000', bg: '#f0f0f0', slots: 1, stanch: true },
     bat: { name: 'cricket bat', char: '/', fg: '#000000', bg: '#d8b878', slots: 2, weapon: { damage: 2, hitChance: 0.8, verb: 'hit' } },
     planks: { name: 'planks', char: '=', fg: '#000000', bg: '#b07840', slots: 2, barricade: true }, // use next to a door/window
-    key: { name: 'door key', char: '-', fg: '#000000', bg: '#ffd700', slots: 1, key: true },        // use next to a door: lock/unlock
+    // Keys go on your keyring, not in the bag (no slot). A key opens doors with the same lockId.
+    key: { name: 'door key', char: '-', fg: '#000000', bg: '#ffd700', slots: 0, key: true, lockId: 'test-building' },
     // Guns: wield, then FIRE. ranged.noise is at the shooter. ammo = rounds it starts with.
     airRifle: {
       name: 'air rifle', char: '}', fg: '#000000', bg: '#a0a0ff', slots: 2, ammo: 10,

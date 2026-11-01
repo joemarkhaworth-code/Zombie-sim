@@ -22,7 +22,7 @@ export function buildTestBuilding(world) {
   const win1 = [b.x + b.w - 1, b.y + Math.floor(b.h / 2)];             // right wall
   const win2 = [b.x + 2, b.y];                                         // top wall
   for (const [x, y] of [[doorX, doorY], win1, win2]) set(x, y, TILE.FLOOR);
-  makeDoor(world, doorX, doorY, { locked: true });
+  makeDoor(world, doorX, doorY, { locked: true, lockId: CONFIG.items.key.lockId }); // the scattered door key fits it
   makeWindow(world, ...win1);
   makeWindow(world, ...win2);
   world.testBuilding = buildingInfo(b);

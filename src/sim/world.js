@@ -48,6 +48,7 @@ export function createWorld(seed) {
     Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
     Melee: { ...CONFIG.player.melee },
     Inventory: { items: [], capacity: CONFIG.inventory.capacity, wielded: null },
+    Keyring: { keys: [] }, // keys don't take bag slots
     Noisy: { move: CONFIG.player.footsteps },
     Stealth: { sneaking: false, walkFootsteps: CONFIG.player.footsteps, sneakFootsteps: CONFIG.player.sneakFootsteps },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
