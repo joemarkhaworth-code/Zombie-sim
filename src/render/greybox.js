@@ -81,7 +81,10 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
 
   // 2. Entities on visible tiles. Creatures only if you've noticed them (a zombie
   // hiding in a bush stays hidden); things like items whenever their tile is in sight.
-  for (const e of query(world, 'Position', 'Glyph')) {
+  // Draw order: things (corpses, items) first, then creatures, then the player on top.
+  const layer = (e) => (e.id === world.playerId ? 2 : e.Actor ? 1 : 0);
+  const drawables = query(world, 'Position', 'Glyph').sort((a, b) => layer(a) - layer(b));
+  for (const e of drawables) {
     const { x, y } = e.Position;
     if (!onScreen(x, y) || !levelAt(x, y)) continue;
     if (e.Actor && player && e.id !== player.id && !canSee(world, player, e)) continue;
