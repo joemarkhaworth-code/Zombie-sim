@@ -192,8 +192,8 @@ export const CONFIG = {
     lane: '#6a6050',
     stream: '#2f6fb0',
     streamMark: '#9cc8f0',
-    bridge: '#8a8a80',
-    bridgeMark: '#5a5a54',
+    bridge: '#a99f88',               // paved like the road (walkable), not like a wall
+    parapet: '#4e4b45',              // low stone parapet along the edges facing water
     drystone: '#7a7a72',
     drystoneMark: '#4a4a46',
     hedge: '#1f4a1a',

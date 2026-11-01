@@ -27,8 +27,16 @@ const greyOf = (hex) => {
 const MEMORY_COLOUR = Object.fromEntries(Object.entries(TILE_COLOUR).map(([k, v]) => [k, greyOf(v)]));
 MEMORY_COLOUR[TILE.FLOOR] = C.memoryFloor; MEMORY_COLOUR[TILE.WALL] = C.memoryWall; MEMORY_COLOUR[TILE.BUSH] = C.memoryBush;
 
+// Which sides of (x, y) touch water - a bridge draws its parapets there.
+const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND]);
+function waterSides(world, x, y) {
+  const w = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < world.width && ny < world.height && WATER.has(world.tiles[ny * world.width + nx]); };
+  return { n: w(0, -1), s: w(0, 1), e: w(1, 0), w: w(-1, 0) };
+}
+
 // Marks so tiles read as what they are (greybox: simple shapes, no art yet).
-function drawTileMark(ctx, t, px, py, s, memory) {
+// water: { n, s, e, w } - which sides of a bridge face water (parapets go there).
+function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   const dim = (c) => (memory ? 'rgba(0,0,0,0.35)' : c);
   if (t === TILE.BUSH) { if (!memory) drawBushMark(ctx, px, py, s); return; }
   if (t === TILE.HEDGE) { ctx.fillStyle = dim(C.hedgeMark); for (const [fx, fy] of [[0.15, 0.2], [0.55, 0.15], [0.35, 0.5], [0.75, 0.55], [0.2, 0.75], [0.6, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, s / 6, s / 6); return; }
@@ -42,8 +50,20 @@ function drawTileMark(ctx, t, px, py, s, memory) {
   if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
-  if (t === TILE.DRYSTONE || t === TILE.BRIDGE) {
-    ctx.fillStyle = dim(t === TILE.DRYSTONE ? C.drystoneMark : C.bridgeMark);
+  if (t === TILE.BRIDGE) {
+    // Plain road surface (walkable, like the lane) with a low parapet on each side over the water.
+    if (water) {
+      const p = Math.max(3, Math.floor(s / 7));
+      ctx.fillStyle = dim(C.parapet);
+      if (water.n) ctx.fillRect(px, py, s - 1, p);
+      if (water.s) ctx.fillRect(px, py + s - 1 - p, s - 1, p);
+      if (water.w) ctx.fillRect(px, py, p, s - 1);
+      if (water.e) ctx.fillRect(px + s - 1 - p, py, p, s - 1);
+    }
+    return;
+  }
+  if (t === TILE.DRYSTONE) {
+    ctx.fillStyle = dim(C.drystoneMark);
     const h = Math.max(1, Math.floor(s / 14));
     ctx.fillRect(px, py + s * 0.33, s - 1, h); ctx.fillRect(px, py + s * 0.66, s - 1, h);
     ctx.fillRect(px + s * 0.5, py, h, s * 0.33); ctx.fillRect(px + s * 0.25, py + s * 0.33, h, s * 0.33); ctx.fillRect(px + s * 0.7, py + s * 0.66, h, s * 0.33);
@@ -107,7 +127,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         const t = world.tiles[y * world.width + x];
         ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
-        drawTileMark(ctx, t, px, py, s, false);
+        drawTileMark(ctx, t, px, py, s, false, t === TILE.BRIDGE ? waterSides(world, x, y) : null);
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
@@ -116,7 +136,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       if (!snap) continue;
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
-      drawTileMark(ctx, snap.tile, px, py, s, true);
+      drawTileMark(ctx, snap.tile, px, py, s, true, snap.tile === TILE.BRIDGE ? waterSides(world, x, y) : null);
       drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
       drawGlass(ctx, px, py, s, snap.glass || 0, C.memoryGlass);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
