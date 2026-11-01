@@ -1,8 +1,8 @@
 // Throwing and shooting.
 //  - Any item can be thrown at a tile within CONFIG.throw.range that you can see in a
 //    clear line. It lands there and clatters (noise at the landing spot - a lure).
-//    If a creature is on that tile it may be hit: heavy items (slots >= throw.heavySlots)
-//    do throw.heavyDamage, light ones just bounce off.
+//    If a creature is on that tile it may be hit: any hit staggers it (loses its next
+//    action); heavy items (slots >= throw.heavySlots) also do throw.heavyDamage.
 //  - Guns are items with a `ranged` property (CONFIG.items) and their own ammo count
 //    (Item.ammo). Wield one, then fire at a tile in its range and line of sight.
 //    The shot makes noise where the shooter stands (quiet air rifle, very loud shotgun)
@@ -16,6 +16,7 @@ import { makeNoise } from './noise.js';
 import { damage } from './combat.js';
 import { addBlood, wound } from './bleeding.js';
 import { itemDef } from './items.js';
+import { stagger } from './shove.js';
 
 // Tiles the shooter can aim at: within range (round), in sight, clear line, not solid.
 export function validTargets(world, e, range) {
@@ -48,6 +49,7 @@ export function throwItem(world, thrower, itemId, x, y) {
     const heavy = item.Item.slots >= CONFIG.throw.heavySlots;
     world.events.emit('thrown_hit', { id: thrower.id, itemId, targetId: target.id, heavy });
     if (target.Brain) target.Brain.goal = { x: thrower.Position.x, y: thrower.Position.y, why: 'seen' };
+    stagger(world, target, CONFIG.throw.staggerActions); // knocked off balance
     if (heavy) damage(world, target, CONFIG.throw.heavyDamage, { killerId: thrower.id, cause: 'thrown' });
   }
   item.Position = { x, y }; // lands on the tile either way

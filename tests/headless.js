@@ -838,12 +838,18 @@ function firstStrike(setup, playerMoves) {
   const beans = makeItem(w, 'beans', 5, 5); playerAct(w, { type: 'pickup' });
   const bat = makeItem(w, 'bat', 5, 5); playerAct(w, { type: 'pickup' });
   const hp = z.Health.hp;
+  let lost = 0;
+  w.events.on('entity_lost_action', (d) => { if (d.id === z.id) lost++; });
+  const zPos = { ...z.Position };
   playerAct(w, { type: 'throw', itemId: beans, x: z.Position.x, y: z.Position.y });
-  assert(z.Health.hp === hp, 'throw: a tin of beans bounces off');
+  assert(z.Health.hp === hp, 'throw: a tin of beans does no damage');
+  assert(z.Staggered || lost === 1, 'throw: ...but it staggers the zombie');
+  playerAct(w, { type: 'wait' }); playerAct(w, { type: 'wait' });
+  assert(lost === 1 && z.Position.x === zPos.x && z.Position.y === zPos.y, 'throw: the staggered zombie loses its next action');
   playerAct(w, { type: 'throw', itemId: bat, x: z.Position.x, y: z.Position.y });
   assert(z.Health.hp === hp - CONFIG.throw.heavyDamage, 'throw: a cricket bat hurts');
   CONFIG.throw.hitChance = saved;
-  console.log('throw: heavy items hurt, light ones bounce OK');
+  console.log('throw: any hit staggers, heavy items also hurt OK');
 }
 
 { // Shotgun: loud, strong, short range, limited ammo. Air rifle: quiet, weak.

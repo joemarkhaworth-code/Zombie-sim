@@ -70,7 +70,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('use_failed', (d) => { if (isPlayer(d.id) && d.reason === 'not_bleeding') say("You're not bleeding.", PRIORITY.blocked); });
   ev.on('item_thrown', (d) => { if (isPlayer(d.id)) say(`You throw the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('thrown_hit', (d) => {
-    if (isPlayer(d.id)) say(d.heavy ? `It hits the ${name(d.targetId)}!` : `It bounces off the ${name(d.targetId)}.`, PRIORITY.notice);
+    if (isPlayer(d.id)) say(d.heavy ? `It hits the ${name(d.targetId)}!` : `The ${name(d.targetId)} staggers!`, PRIORITY.notice);
   });
   ev.on('shot_fired', (d) => { if (isPlayer(d.id)) say(CONFIG_NOISY(d.itemId) ? 'BANG!' : 'Pfft.', PRIORITY.blocked); });
   ev.on('shot_hit', (d) => { if (isPlayer(d.id)) say(`You shoot the ${name(d.targetId)}!`, PRIORITY.notice); });

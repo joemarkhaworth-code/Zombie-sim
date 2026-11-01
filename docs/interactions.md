@@ -26,5 +26,5 @@ Every new system must read from or affect at least one existing system. One line
 | Zombie reaction (step 8b) | first noticing prey or being hit | lost action (you get first strike), groan noise (other zombies hear) |
 | Shove (shove) | adjacent creature, tile behind (blocked?) | position (entity_pushed: hook for water/fire/ledges), stagger (lost action), slam damage, noise level 1, target notices you |
 | Items (step 9) | tiles (on the map), Inventory (carried), memory (items are remembered things) | health (eat), bleeding (bandage), melee damage (wielded weapon) |
-| Throwing (step 10) | items, line of sight, range | item position (lands), noise at landing (lures zombies), damage if heavy |
+| Throwing (step 10) | items, line of sight, range | item position (lands), noise at landing (lures zombies), stagger on any hit, damage if heavy |
 | Guns (step 10) | wielded gun, ammo, line of sight, range | damage/wounds/blood, very loud noise at the shooter (shotgun draws everything) |

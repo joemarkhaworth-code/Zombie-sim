@@ -29,6 +29,7 @@ export const CONFIG = {
     hitChance: 0.75,                 // chance a thrown item hits a creature on the target tile
     heavySlots: 2,                   // items this big or bigger hurt when they hit
     heavyDamage: 1,
+    staggerActions: 1,               // anything that hits staggers the target (loses its next action), light or heavy
     landNoise: 2,                    // clatter where it lands (~8 tiles): a lure
   },
   inventory: { capacity: 6 },        // bag size in slots
