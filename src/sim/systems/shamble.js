@@ -1,7 +1,7 @@
 // Shamble: lurch one tile toward the nearest Prey. Sometimes staggers randomly.
 // Works for anything with Brain { type: 'shamble' }, chasing anything with Prey.
 import { CONFIG } from '../../config.js';
-import { query, isPassable } from '../world.js';
+import { query, isPassable, tryMove } from '../world.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 
@@ -11,7 +11,8 @@ export function shamble(world, e) {
 
   if (rng.chance(CONFIG.zombie.staggerChance)) {
     const [dx, dy] = DIRS[rng.int(DIRS.length)];
-    if (isPassable(world, pos.x + dx, pos.y + dy)) { pos.x += dx; pos.y += dy; }
+    world.events.emit('entity_staggered', { id: e.id });
+    if (isPassable(world, pos.x + dx, pos.y + dy)) tryMove(world, e, dx, dy);
     return;
   }
 
@@ -31,7 +32,7 @@ export function shamble(world, e) {
   }
   if (!best.length) return; // stuck or already adjacent: just stand there groaning
   const [nx, ny] = best[rng.int(best.length)];
-  pos.x = nx; pos.y = ny;
+  tryMove(world, e, nx - pos.x, ny - pos.y);
 }
 
 function nearestPrey(world, e) {

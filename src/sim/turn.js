@@ -1,6 +1,6 @@
 // Turn loop: the player acts, then the scheduler runs the world until the
 // player has enough energy to act again.
-import { isPassable } from './world.js';
+import { tryMove } from './world.js';
 import { advance, spend } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
 
@@ -17,16 +17,15 @@ function act(world, e) {
 export function playerAct(world, action) {
   const player = world.entities.get(world.playerId);
   if (!player) return false;
+  world.events.emit('action_attempted', { id: player.id, action: { ...action } });
 
   if (action.type === 'move') {
     const { dx, dy } = action;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return false;
-    const nx = player.Position.x + dx;
-    const ny = player.Position.y + dy;
-    if (!isPassable(world, nx, ny)) return false; // bumping a wall or zombie costs nothing (melee is step 8)
-    player.Position.x = nx;
-    player.Position.y = ny;
-  } else if (action.type !== 'wait') {
+    if (!tryMove(world, player, dx, dy)) return false; // bumping costs nothing (melee is step 8)
+  } else if (action.type === 'wait') {
+    world.events.emit('entity_waited', { id: player.id });
+  } else {
     return false;
   }
 
@@ -34,6 +33,7 @@ export function playerAct(world, action) {
   spend(player);
   world.turn++;
   advance(world, act);
+  world.events.emit('turn_ended', { turn: world.turn });
   return true;
 }
 

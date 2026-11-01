@@ -1,0 +1,29 @@
+// Event bus: systems emit events, other systems (and the UI) subscribe.
+// Internal plumbing only: events carry data, never player-facing text.
+//
+// Event types (payloads):
+//   action_attempted { id, action }          an actor tries to act (before it succeeds or fails)
+//   entity_moved     { id, from, to }        an entity changed tile
+//   move_blocked     { id, x, y, blockerId } a move failed; blockerId null = tile/edge
+//   entity_waited    { id }
+//   entity_staggered { id }                  a shambler lurched randomly
+//   turn_ended       { turn }                the world finished its turn
+export function createEventBus() {
+  const handlers = new Map();
+  return {
+    on(type, fn) {
+      if (!handlers.has(type)) handlers.set(type, []);
+      handlers.get(type).push(fn);
+      return () => this.off(type, fn);
+    },
+    off(type, fn) {
+      const list = handlers.get(type);
+      if (list) handlers.set(type, list.filter((f) => f !== fn));
+    },
+    emit(type, data = {}) {
+      const list = handlers.get(type);
+      if (!list) return;
+      for (const fn of [...list]) fn(data, type);
+    },
+  };
+}

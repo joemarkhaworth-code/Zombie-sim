@@ -4,6 +4,7 @@ import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
 import { drawStatus } from './render/ui.js';
+import { createMessageLog } from './render/messages.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -14,6 +15,7 @@ const seed = params.has('seed')
   : Math.floor(Math.random() * 1e9);
 const world = createWorld(seed);
 window.world = world; // handy for debugging from the console
+const messages = createMessageLog(world);
 
 let layout;
 
@@ -51,7 +53,7 @@ function render() {
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout);
-  drawStatus(ctx, world, layout);
+  drawStatus(ctx, world, layout, messages.message);
 }
 
 // Tap = short press without much movement. (Long-press inspect comes in step 5.)
@@ -86,7 +88,8 @@ function onTap(px, py) {
     const [dx, dy] = dirs[sector];
     action = { type: 'move', dx, dy };
   }
-  if (playerAct(world, action)) render();
+  playerAct(world, action);
+  render(); // even a failed move (bump) shows a message
 }
 
 window.addEventListener('resize', resize);

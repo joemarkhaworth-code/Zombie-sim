@@ -27,5 +27,8 @@ export const CONFIG = {
     playerText: '#000000',
     statusBg: '#0000aa',
     statusText: '#ffffff',
+    statusTurn: '#00ffff',
+    statusDanger: '#ffff00',
+    statusDim: '#8080ff',
   },
 };

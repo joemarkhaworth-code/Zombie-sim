@@ -3,6 +3,7 @@
 import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { generateTestGrid, TILE_INFO } from './gen/testgrid.js';
+import { createEventBus } from './events.js';
 
 export function createWorld(seed) {
   const { width, height } = CONFIG.grid;
@@ -11,6 +12,7 @@ export function createWorld(seed) {
     seed, rng, width, height,
     tiles: generateTestGrid(rng, width, height),
     entities: new Map(),
+    events: createEventBus(),
     nextId: 1,
     turn: 0,      // player turns taken
     tick: 0,      // scheduler ticks elapsed
@@ -64,12 +66,31 @@ export function tileAt(world, x, y) {
   return world.tiles[y * world.width + x];
 }
 
-export function isPassable(world, x, y) {
-  if (!inBounds(world, x, y)) return false;
-  if (TILE_INFO[tileAt(world, x, y)].blocks) return false;
+// What stops movement into (x, y): null if open, { tile: true } for walls/edges,
+// or { entity } for a blocking entity.
+export function blockerAt(world, x, y) {
+  if (!inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].blocks) return { tile: true };
   for (const e of query(world, 'Position', 'Blocks')) {
-    if (e.Position.x === x && e.Position.y === y) return false;
+    if (e.Position.x === x && e.Position.y === y) return { entity: e };
   }
+  return null;
+}
+
+export function isPassable(world, x, y) {
+  return blockerAt(world, x, y) === null;
+}
+
+// Try to step an entity by (dx, dy). Emits entity_moved or move_blocked.
+export function tryMove(world, e, dx, dy) {
+  const nx = e.Position.x + dx, ny = e.Position.y + dy;
+  const blocker = blockerAt(world, nx, ny);
+  if (blocker) {
+    world.events.emit('move_blocked', { id: e.id, x: nx, y: ny, blockerId: blocker.entity ? blocker.entity.id : null });
+    return false;
+  }
+  const from = { x: e.Position.x, y: e.Position.y };
+  e.Position.x = nx; e.Position.y = ny;
+  world.events.emit('entity_moved', { id: e.id, from, to: { x: nx, y: ny } });
   return true;
 }
 
