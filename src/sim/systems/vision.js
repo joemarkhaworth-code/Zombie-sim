@@ -8,6 +8,8 @@
 //       don't look patchy.
 //  2. Light: how far anyone can see in the open (CONFIG.light.range, scaled by the
 //     viewer's eyesight 0-3) and how lit each tile is (world.light, 0-3).
+// Vision { clip: { x, y } } optionally limits sight to a box around the viewer: the
+// player's is screen-shaped, so you never see or remember what the screen can't show.
 // A seen tile's visibility level = its light level (1-3); 0 = unseen (not stored).
 // e.Vision.visible is a Map of tile index -> level. Creatures are only noticed at
 // CONFIG.vision.minLevelToSpot or above. Day/night, weather and stealth will lower
@@ -64,9 +66,11 @@ export function updateVision(world, e) {
     if (lv > 0) visible.set(y * world.width + x, lv);
   };
   const walls = [];
+  const clip = e.Vision.clip; // optional screen-shaped limit (the player)
   for (let y = oy - r; y <= oy + r; y++) {
     for (let x = ox - r; x <= ox + r; x++) {
       if (!inBounds(world, x, y) || d2(x, y) > r * r + r) continue; // round-ish circle
+      if (clip && (Math.abs(x - ox) > clip.x || Math.abs(y - oy) > clip.y)) continue;
       if (lineClear(world, ox, oy, x, y)) set(x, y);
       else if (opaqueAt(world, x, y)) walls.push([x, y]);
     }

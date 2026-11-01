@@ -84,16 +84,16 @@ for (const seed of SEEDS) {
       : r === 3 ? { type: 'pickup' } : { type: 'move', ...dir };
     if (playerAct(world, action)) acted++;
     checkPositions(world, seed);
+    for (const k of (playerOf(world) || world.fallenPlayer).Vision.visible.keys()) everSeen.add(k);
     if (world.gameOver) break;
     const m = log.message;
     if (m) assert(typeof m.text === 'string' && m.text.length <= 32, `seed ${seed}: bad message ${JSON.stringify(m)}`);
     if (m && m.priority === PRIORITY.danger) sawDanger = true;
-    for (const k of playerOf(world).Vision.visible.keys()) everSeen.add(k);
   }
   // Map memory = exactly the tiles ever seen; terrain matches (tiles don't change yet); no creatures.
   const mem = playerMemory.tiles;
   for (let i = 0; i < mem.length; i++) {
-    assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i}`);
+    assert(!!mem[i] === everSeen.has(i), `seed ${seed}: memory mismatch at tile ${i} (remembered ${!!mem[i]}, seen ${everSeen.has(i)}, dead ${!!world.gameOver})`);
     if (mem[i]) {
       assert(mem[i].tile === world.tiles[i], `seed ${seed}: remembered wrong tile at ${i}`);
       assert(mem[i].things.every((t) => t.name !== 'zombie' && t.name !== 'you'), `seed ${seed}: a creature got into memory at ${i}`);
@@ -158,14 +158,20 @@ const range = (e) => sightRadius(e);
   place(w, zombieOf(w), 18, 26);
   assert(seesTile(w, p, 7, 5), 'fov: wall itself should be visible');
   assert(!seesTile(w, p, 8, 5) && !seesTile(w, p, 9, 5), 'fov: tiles behind a wall should be hidden');
-  assert(seesTile(w, p, 5, 5 + range(p) - 1), 'fov: far tile in the open should be visible on a clear day');
-  place(w, p, 2, 2);
-  assert(!seesTile(w, p, 2 + range(p) + 1, 2 + range(p) + 1), 'fov: tile beyond light range should be hidden');
+  const clip = p.Vision.clip;
+  assert(seesTile(w, p, 5, 5 + clip.y) && seesTile(w, p, 5 - 4, 5 + clip.y), 'fov: the whole screen-shaped box is visible on a clear day');
+  assert(!seesTile(w, p, 5, 5 + clip.y + 1), 'fov: nothing below the screen box');
+  place(w, p, 10, 10);
+  assert(seesTile(w, p, 10 + clip.x, 10) && !seesTile(w, p, 10 + clip.x + 1, 10), 'fov: nothing beyond the screen sides, even in range');
+  // Light range on its own (zombies have no screen box).
+  const z = zombieOf(w);
+  place(w, z, 2, 2);
+  assert(seesTile(w, z, 2, 2 + range(z)) && !seesTile(w, z, 2, 2 + range(z) + 1), 'fov: light range limits distance');
   const saved = CONFIG.light.range;
   CONFIG.light.range = 3; refreshAllVision(w);
-  assert(seesTile(w, p, 2, 5) && !seesTile(w, p, 2, 7), 'fov: shorter light range should shorten sight');
+  assert(seesTile(w, p, 10, 13) && !seesTile(w, p, 10, 15), 'fov: shorter light range should shorten sight');
   CONFIG.light.range = saved; refreshAllVision(w);
-  console.log('fov: walls block sight, light range limits distance OK');
+  console.log('fov: walls block sight, screen box + light range limit distance OK');
 }
 
 { // No peeking through diagonal gaps; sight is symmetric; clear-day light covers the screen.
@@ -194,7 +200,7 @@ const range = (e) => sightRadius(e);
   place(w, p, 10, 14); place(w, z, 18, 26);
   const lv = (x, y) => visibilityAt(w, p, x, y);
   for (const v of p.Vision.visible.values()) assert(v === CONFIG.light.ambient, `levels: clear day should be uniform, got ${v}`);
-  assert(lv(10, 14) === 3 && lv(10, 24) === 3, 'levels: near and far tiles equally visible in daylight');
+  assert(lv(10, 14) === 3 && lv(10, 22) === 3, 'levels: near and far tiles equally visible in daylight');
 
   w.light[16 * w.width + 10] = 1; w.light[17 * w.width + 10] = 2; refreshAllVision(w);
   assert(lv(10, 16) === 1 && lv(10, 17) === 2 && lv(10, 18) === 3, 'levels: visibility should equal tile light');
@@ -212,15 +218,39 @@ const range = (e) => sightRadius(e);
   console.log('levels: from light, darkness hides, spot threshold OK');
 }
 
-{ // "Comes into view" only for zombies on screen.
+{ // You never remember tiles the screen couldn't have shown you.
+  for (const seed of [1, 3, 42]) {
+    const w = createWorld(seed);
+    const p = playerOf(w), clip = p.Vision.clip;
+    const visited = [{ ...p.Position }];
+    const drv = createRng(seed);
+    for (let i = 0; i < 200 && !w.gameOver; i++) {
+      playerAct(w, { type: 'move', dx: drv.int(3) - 1, dy: drv.int(3) - 1 });
+      if (playerOf(w)) visited.push({ ...playerOf(w).Position });
+    }
+    (playerOf(w) || w.fallenPlayer).Memory.tiles.forEach((m, i) => {
+      if (!m) return;
+      const x = i % w.width, y = Math.floor(i / w.width);
+      assert(visited.some((v) => Math.abs(x - v.x) <= clip.x && Math.abs(y - v.y) <= clip.y), `memory: seed ${seed} remembers ${x},${y}, never on screen`);
+    });
+  }
+  console.log('memory: only tiles that were on screen OK');
+}
+
+{ // Off the side of the screen: not seen at all (screen-shaped view), so never announced.
   const w = openWorld();
   const p = playerOf(w), z = zombieOf(w);
-  place(w, p, 5, 10); place(w, z, 12, 10); // 7 tiles to the side: in sight, but off a 5-tile half-width screen
-  const offLog = createMessageLog(w, { onScreen: (x) => Math.abs(x - p.Position.x) <= 5 });
+  place(w, p, 5, 10); place(w, z, 12, 10); // 7 tiles to the side: within light range, off screen
+  const log = createMessageLog(w);
   playerAct(w, { type: 'wait' });
-  assert(canSee(w, p, z), 'onscreen: zombie should be in sight');
-  assert(offLog.message?.text !== 'A zombie comes into view.', 'onscreen: off-screen zombie should not be announced');
-  console.log('onscreen: off-screen zombies not announced OK');
+  assert(!canSee(w, p, z), 'onscreen: zombie off the side of the screen is not seen');
+  assert(log.message?.text !== 'A zombie comes into view.', 'onscreen: off-screen zombie should not be announced');
+  // The render-side on-screen filter still applies on top (e.g. camera clamped at map edges).
+  place(w, z, 7, 10);
+  const offLog = createMessageLog(w, { onScreen: () => false });
+  playerAct(w, { type: 'wait' });
+  assert(canSee(w, p, z) && offLog.message?.text !== 'A zombie comes into view.', 'onscreen: filter suppresses announcements');
+  console.log('onscreen: off-screen zombies not seen or announced OK');
 }
 
 { // Map memory keeps seen tiles after you leave; inspect describes what you know.

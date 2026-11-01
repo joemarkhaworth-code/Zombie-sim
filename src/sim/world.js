@@ -36,7 +36,8 @@ export function createWorld(seed) {
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
     Player: {},
     Prey: {},
-    Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
+    // clip: your view is screen-shaped, so you never see or remember off-screen tiles.
+    Vision: { eyesight: CONFIG.player.eyesight, visible: new Map(), clip: { x: Math.floor(CONFIG.view.tilesAcross / 2), y: CONFIG.view.sightHalfHeight } },
     Hearing: { level: CONFIG.player.hearing },
     Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
     Melee: { ...CONFIG.player.melee },

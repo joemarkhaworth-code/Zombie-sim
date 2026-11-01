@@ -93,7 +93,13 @@ export const CONFIG = {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,                    // health blocks blink this fast while bleeding
   },
-  view: { tilesAcross: 11 },        // camera width in tiles (odd keeps the player centred)
+  view: {
+    tilesAcross: 11,                 // camera width in tiles (odd keeps the player centred)
+    // The player's sight is clipped to a screen-shaped box around them, so you only
+    // see (and remember) what the screen can show: tilesAcross/2 to each side, and this
+    // many up/down (fits most portrait phones; taller screens just show extra dark rows).
+    sightHalfHeight: 9,
+  },
   input: {
     longPressMs: 450,                // hold this long without moving = inspect (shorter = tap)
     tapMaxMovePx: 20,
