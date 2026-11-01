@@ -44,7 +44,10 @@ function resize() {
     width: w, height: h, statusHeight, barHeight, tileSize, cols, rows,
     offsetX: Math.floor((w - tileSize * cols) / 2),
     offsetY: statusHeight + Math.floor((mapHeight - tileSize * rows) / 2),
-    buttons: [{ id: 'sneak', x: pad, y: h - barHeight + pad, w: w - pad * 2, h: barHeight - pad * 2 }],
+    buttons: ['sneak', 'shove'].map((id, i, all) => {
+      const bw = Math.floor((w - pad * (all.length + 1)) / all.length);
+      return { id, x: pad + i * (bw + pad), y: h - barHeight + pad, w: bw, h: barHeight - pad * 2 };
+    }),
   };
   render();
 }
@@ -63,7 +66,7 @@ function render() {
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout, inspect, debug);
   drawStatus(ctx, world, layout, messages.message, blink);
-  drawButtons(ctx, world, layout);
+  drawButtons(ctx, world, layout, { armed });
   if (world.gameOver) drawDeath(ctx, layout, deathText(world.gameOver));
 }
 
@@ -73,6 +76,7 @@ function render() {
 let down = null;
 let inspect = null; // { x, y } of the last inspected tile, until the next action
 const debug = { noise: false }; // tap the top bar to toggle the noise heatmap
+let armed = null; // one-shot action waiting for a target: 'shove' or null
 
 canvas.addEventListener('pointerdown', (e) => {
   const at = { x: e.clientX, y: e.clientY };
@@ -136,6 +140,14 @@ function toggleNoiseMap() {
 function onButton(px, py) {
   const b = layout.buttons.find((b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h);
   if (!b) return;
+  if (b.id === 'shove') {
+    inspect = null;
+    armed = armed === 'shove' ? null : 'shove';
+    messages.show(armed ? 'Shove: tap a creature by you.' : 'Shove cancelled.');
+    if (navigator.vibrate) navigator.vibrate(10);
+    render();
+    return;
+  }
   if (b.id === 'sneak') {
     const p = world.entities.get(world.playerId);
     inspect = null;
@@ -161,15 +173,22 @@ function onTap(px, py) {
   const cy = layout.offsetY + (p.y - layout.camY + 0.5) * s;
   const ddx = px - cx, ddy = py - cy;
   let action;
-  if (Math.hypot(ddx, ddy) < s * CONFIG.input.waitRadiusTiles) {
-    action = { type: 'wait' };
-  } else {
+  const onSelf = Math.hypot(ddx, ddy) < s * CONFIG.input.waitRadiusTiles;
+  let dx = 0, dy = 0;
+  if (!onSelf) {
     const sector = Math.round(Math.atan2(ddy, ddx) / (Math.PI / 4)); // -4..4
     const dirs = { 0: [1, 0], 1: [1, 1], 2: [0, 1], 3: [-1, 1], 4: [-1, 0], '-4': [-1, 0], '-3': [-1, -1], '-2': [0, -1], '-1': [1, -1] };
-    const [dx, dy] = dirs[sector];
-    action = { type: 'move', dx, dy };
+    [dx, dy] = dirs[sector];
   }
   inspect = null;
+  if (armed === 'shove') {
+    // One-shot: this tap picks the direction. Nothing there (or tapping yourself) cancels.
+    armed = null;
+    if (onSelf || !playerAct(world, { type: 'shove', dx, dy })) messages.show(onSelf ? 'Shove cancelled.' : 'Nothing to shove there.');
+    render();
+    return;
+  }
+  action = onSelf ? { type: 'wait' } : { type: 'move', dx, dy };
   playerAct(world, action);
   render(); // even a failed move (bump) shows a message
 }

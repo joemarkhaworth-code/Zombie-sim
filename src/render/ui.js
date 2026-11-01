@@ -42,22 +42,26 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
   }
 }
 
-// Bottom bar: big thumb-friendly buttons. For now just SNEAK (a toggle).
+// Bottom bar: big thumb-friendly buttons side by side.
+//   SNEAK  - toggle (yellow "SNEAKING" when on)
+//   SHOVE  - one-shot: orange when armed, waiting for you to tap a creature
 // layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
-export function drawButtons(ctx, world, layout) {
+// ui: { armed } - which one-shot action (if any) is waiting for a target.
+const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'] };
+export function drawButtons(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
   const player = world.entities.get(world.playerId);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, layout.height - layout.barHeight, layout.width, layout.barHeight);
   for (const b of layout.buttons) {
-    const on = b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking;
-    ctx.fillStyle = on ? C.buttonOnBg : C.buttonBg;
+    const on = (b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking) || ui.armed === b.id;
+    ctx.fillStyle = !on ? C.buttonBg : b.id === 'shove' ? C.buttonArmedBg : C.buttonOnBg;
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? C.buttonOnText : C.buttonText;
-    ctx.font = `bold ${Math.floor(b.h * 0.4)}px monospace`;
+    ctx.font = `bold ${Math.floor(Math.min(b.h * 0.4, b.w / 6))}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(on ? 'SNEAKING' : 'SNEAK', b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.fillText(LABELS[b.id][on ? 1 : 0], b.x + b.w / 2, b.y + b.h / 2 + 1);
   }
 }
 

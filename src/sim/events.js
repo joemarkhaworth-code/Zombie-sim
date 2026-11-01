@@ -22,6 +22,12 @@
 //   bleeding_started { id, level }           a wound opened or got worse
 //   bleeding_stopped { id }
 //   entity_died      { id, name, killerId, cause, x, y }
+//   entity_shoved    { id, by, dx, dy }      someone shoved it
+//   entity_pushed    { id, by, from, to, dx, dy }  forced movement (shoves; later knockback,
+//                                            currents...). Water/fire/ledges react to `to`.
+//   entity_slammed   { id, x, y, blockerId } pushed into something solid at (x, y)
+//   entity_staggered_hit { id, actions }     will lose its next n actions
+//   entity_lost_action { id }                a staggered creature's action was wasted
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

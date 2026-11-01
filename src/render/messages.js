@@ -49,6 +49,14 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.id)) say(`You miss the ${name(d.targetId)}.`, PRIORITY.blocked);
     else if (isPlayer(d.targetId)) say(`The ${name(d.id)} misses you.`, PRIORITY.notice);
   });
+  ev.on('entity_shoved', (d) => {
+    if (isPlayer(d.by)) say(`You shove the ${name(d.id)}.`, PRIORITY.blocked);
+  });
+  ev.on('entity_slammed', (d) => {
+    const into = d.blockerId !== null ? `the ${name(d.blockerId)}` : 'the wall';
+    if (isPlayer(d.id)) say(`You slam into ${into}!`, PRIORITY.danger);
+    else if (playerCanSee(d.id)) say(`The ${name(d.id)} slams into ${into}!`, PRIORITY.notice);
+  });
   ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });
   ev.on('bleeding_stopped', (d) => { if (isPlayer(d.id)) say('Your bleeding stops.', PRIORITY.info); });
   ev.on('entity_died', (d) => {

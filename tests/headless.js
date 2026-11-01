@@ -57,7 +57,7 @@ for (const seed of SEEDS) {
   const world = createWorld(seed);
   const counts = {};
   const moves = new Map(); // id -> moves seen via events
-  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen', 'noise_made', 'noise_heard', 'noise_investigated']) {
+  for (const t of ['action_attempted', 'entity_moved', 'move_blocked', 'entity_waited', 'entity_staggered', 'turn_ended', 'prey_spotted', 'prey_lost', 'entity_seen', 'noise_made', 'noise_heard', 'noise_investigated', 'entity_shoved']) {
     world.events.on(t, (d) => {
       counts[t] = (counts[t] || 0) + 1;
       if (t === 'entity_moved') {
@@ -75,7 +75,8 @@ for (const seed of SEEDS) {
   let acted = 0;
   for (let i = 0; i < TURNS; i++) {
     const r = driver.int(10);
-    const action = r === 0 ? { type: 'wait' } : { type: 'move', dx: driver.int(3) - 1, dy: driver.int(3) - 1 };
+    const dir = { dx: driver.int(3) - 1, dy: driver.int(3) - 1 };
+    const action = r === 0 ? { type: 'wait' } : r === 1 ? { type: 'shove', ...dir } : { type: 'move', ...dir };
     if (playerAct(world, action)) acted++;
     checkPositions(world, seed);
     if (world.gameOver) break;
@@ -627,6 +628,63 @@ function firstStrike(setup, playerMoves) {
   assert(reacted && z.Position.x === zStart.x && z.Position.y === zStart.y, 'react: zombie stays put while reacting');
   assert(groan && groan.level === CONFIG.zombie.groanNoise, 'react: reacting is a groan (noise)');
   console.log('react: noticing costs the zombie an action and makes a groan OK');
+}
+
+// 8. Shove.
+{ // Push into open ground: moves one tile away, loses its next action, makes noise.
+  const w = openWorld();
+  const log = createMessageLog(w, { onScreen: () => false }); // only check the shove line
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  z.Brain.seesPrey = true; z.Brain.trackingId = p.id;
+  let pushed = null, noise = null, lost = 0;
+  w.events.on('entity_pushed', (d) => { pushed = d; });
+  w.events.on('noise_made', (d) => { if (d.sourceId === p.id) noise = d; });
+  w.events.on('entity_lost_action', (d) => { if (d.id === z.id) lost++; });
+  const turn0 = w.turn;
+  assert(playerAct(w, { type: 'shove', dx: 1, dy: 0 }) && w.turn === turn0 + 1, 'shove: takes a turn');
+  assert(z.Position.x === 12 && z.Position.y === 10 && p.Position.x === 10, 'shove: target pushed one tile away, you stay put');
+  assert(pushed && pushed.to.x === 12 && pushed.by === p.id && pushed.dx === 1, 'shove: entity_pushed carries the destination (hook for water/fire/ledges)');
+  assert(noise && noise.level === CONFIG.shove.noise, 'shove: makes noise');
+  assert(log.message?.text === 'You shove the zombie.', `shove: message, got ${log.message?.text}`);
+  assert(w.inputs.at(-1).action.type === 'shove', 'shove: recorded for replay');
+  const zActions = z.Actor.actions;
+  for (let i = 0; i < 2; i++) playerAct(w, { type: 'wait' });
+  assert(lost === 1 && z.Position.x === 12, 'shove: zombie loses its next action (stays put)');
+  assert(z.Actor.actions > zActions, 'shove: the lost action still uses its time');
+  console.log('shove: pushes, staggers, noisy, recorded OK');
+}
+
+{ // Blocked behind: slams into the wall, takes minor damage, still staggered.
+  const w = openWorld([[12, 10]]);
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 11, 10);
+  let slammed = null, lost = 0;
+  w.events.on('entity_slammed', (d) => { slammed = d; });
+  w.events.on('entity_lost_action', () => { lost++; });
+  playerAct(w, { type: 'shove', dx: 1, dy: 0 });
+  assert(z.Position.x === 11 && slammed && slammed.blockerId === null, 'slam: blocked target stays and slams the wall');
+  assert(z.Health.hp === CONFIG.zombie.health - CONFIG.shove.slamDamage, 'slam: minor damage');
+  for (let i = 0; i < 2; i++) playerAct(w, { type: 'wait' });
+  assert(lost === 1, 'slam: still staggered');
+  // Into another creature: the shoved one takes the damage.
+  const w2 = openWorld();
+  const p2 = playerOf(w2), z2 = zombieOf(w2);
+  place(w2, p2, 10, 10); place(w2, z2, 11, 10);
+  const z3 = addEntity(w2, { Position: { x: 12, y: 10 }, Actor: { speed: 50, energy: 0, actions: 0 }, Blocks: {}, Health: { hp: 4, max: 4 }, Name: { name: 'zombie' }, Glyph: { char: 'Z', fg: '#000', bg: '#0f0' } });
+  playerAct(w2, { type: 'shove', dx: 1, dy: 0 });
+  assert(z2.Health.hp === CONFIG.zombie.health - 1 && w2.entities.get(z3).Health.hp === 4, 'slam: shoved creature hurt, the one behind is not');
+  console.log('slam: blocked shove = minor damage + stagger OK');
+}
+
+{ // Nothing there: no turn, nothing recorded.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 18, 26);
+  const n = w.inputs.length, t = w.turn;
+  assert(!playerAct(w, { type: 'shove', dx: 1, dy: 0 }) && w.turn === t && w.inputs.length === n, 'shove: empty tile costs nothing');
+  assert(!playerAct(w, { type: 'shove', dx: 2, dy: 0 }), 'shove: must be adjacent');
+  console.log('shove: nothing to shove = no turn OK');
 }
 
 console.log('PASS');

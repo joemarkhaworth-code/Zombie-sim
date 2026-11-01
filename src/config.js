@@ -48,6 +48,11 @@ export const CONFIG = {
     sneakAttackHitChance: 1,
     sneakAttackBonus: 3,
   },
+  shove: {
+    noise: 1,                        // scuffle noise level (~3 tiles)
+    staggerActions: 1,               // the shoved creature loses this many actions
+    slamDamage: 1,                   // if the tile behind is blocked, it slams into it
+  },
   bleeding: {
     intervalByLevel: [Infinity, 12, 7, 4], // ticks between losing 1 health, by bleeding level
     clotChance: 0.3,                 // each drip, chance the bleeding drops a level
@@ -113,6 +118,7 @@ export const CONFIG = {
     buttonText: '#c0c0c0',
     buttonOnBg: '#ffff00',
     buttonOnText: '#000000',
+    buttonArmedBg: '#ff8000',        // one-shot action waiting for a target (SHOVE)
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',

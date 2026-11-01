@@ -7,12 +7,19 @@ import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
 import { attack } from './systems/combat.js';
+import { shove } from './systems/shove.js';
 import { tickBleeding } from './systems/bleeding.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
 
 function act(world, e) {
+  if (e.Staggered && e.Staggered.actions > 0) { // staggered: this action is lost
+    e.Staggered.actions--;
+    if (e.Staggered.actions === 0) delete e.Staggered;
+    world.events.emit('entity_lost_action', { id: e.id });
+    return;
+  }
   const brain = e.Brain && BRAINS[e.Brain.type];
   if (brain) brain(world, e);
 }
@@ -24,6 +31,7 @@ function onTick(world) {
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),
 //         { type: 'wait' },
+//         { type: 'shove', dx, dy } (push the adjacent creature in that direction; takes a turn),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -46,6 +54,8 @@ export function playerAct(world, action) {
     } else if (!tryMove(world, player, dx, dy)) {
       return false; // bumping a wall costs nothing
     }
+  } else if (action.type === 'shove') {
+    if (!shove(world, player, action.dx, action.dy)) return false; // nothing to shove: no turn
   } else if (action.type === 'wait') {
     world.events.emit('entity_waited', { id: player.id });
   } else {
