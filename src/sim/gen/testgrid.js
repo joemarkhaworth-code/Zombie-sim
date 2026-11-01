@@ -6,7 +6,7 @@ export const TILE = { FLOOR: 0, WALL: 1, BUSH: 2 };
 // cover: anything standing here can only be noticed from an adjacent tile.
 export const TILE_INFO = {
   [TILE.FLOOR]: { name: 'floor', blocks: false, opaque: false, cover: false },
-  [TILE.WALL]: { name: 'wall', blocks: true, opaque: true, cover: false },
+  [TILE.WALL]: { name: 'wall', blocks: true, opaque: true, cover: false }, // material: CONFIG.build.wall
   [TILE.BUSH]: { name: 'bush', blocks: false, opaque: false, cover: true },
 };
 // Short description for long-press inspect (render side picks the wording).

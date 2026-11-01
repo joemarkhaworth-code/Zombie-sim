@@ -3,11 +3,13 @@
 // Walls are tiles; their health comes from their material (world.tileHp, stone).
 // Doors and windows are entities standing on a floor tile, indexed in world.structures
 // (tile index -> entity id). Components:
-//   Structure { material, hp, max }   health from CONFIG.materials[material].hp
+//   Structure { material, hp, max }   material is a key of CONFIG.materials (hp, flammability,
+//                                      seeThrough, hitNoise, breakNoise, shards)
 //   Door { open, locked, broken }      closed: Blocks + Opaque. open/broken: neither.
 //   Window { broken }                  intact: Blocks (see-through). broken: walk through.
-//   Barricade { hp, max }              planks nailed over a door/window: soaks damage
-//                                      first; blocks movement and sight while it lasts.
+//   Barricade { material, hp, max }    planks nailed over a door/window: soaks damage
+//                                      first; blocks movement (and sight unless its
+//                                      material is see-through) while it lasts.
 // Anything solid here also muffles noise like a wall (noise.js) and stops thrown items
 // and shots (ranged.js).
 //
@@ -27,14 +29,17 @@ export function installStructures(world) {
     const i = d.to.y * world.width + d.to.x;
     if (world.glass[i]) {
       world.events.emit('glass_crunched', { id: d.id, x: d.to.x, y: d.to.y });
-      makeNoise(world, d.to.x, d.to.y, CONFIG.materials.glass.crunchNoise, d.id);
+      makeNoise(world, d.to.x, d.to.y, CONFIG.build.glassCrunchNoise, d.id);
     }
   });
 }
 
-// Walls get their health from their material.
+const mat = (name) => CONFIG.materials[name];
+
+// Walls get their health from their material (CONFIG.build.wall for now).
 export function initTileHp(world, isWall) {
-  for (let i = 0; i < world.tiles.length; i++) if (isWall(world.tiles[i])) world.tileHp[i] = CONFIG.materials.stone.hp;
+  const hp = mat(CONFIG.build.wall).hp;
+  for (let i = 0; i < world.tiles.length; i++) if (isWall(world.tiles[i])) world.tileHp[i] = hp;
 }
 
 export const structureAt = (world, x, y) => {
@@ -48,7 +53,7 @@ function register(world, id, x, y) {
   return id;
 }
 
-export function makeDoor(world, x, y, { material = 'wood', locked = false, open = false } = {}) {
+export function makeDoor(world, x, y, { material = CONFIG.build.door, locked = false, open = false } = {}) {
   const hp = CONFIG.materials[material].hp;
   const id = addEntity(world, {
     Position: { x, y }, Structure: { material, hp, max: hp }, Door: { open, locked, broken: false },
@@ -58,7 +63,7 @@ export function makeDoor(world, x, y, { material = 'wood', locked = false, open 
   return register(world, id, x, y);
 }
 
-export function makeWindow(world, x, y, { material = 'glass' } = {}) {
+export function makeWindow(world, x, y, { material = CONFIG.build.window } = {}) {
   const hp = CONFIG.materials[material].hp;
   const id = addEntity(world, {
     Position: { x, y }, Structure: { material, hp, max: hp }, Window: { broken: false },
@@ -73,13 +78,17 @@ export function refresh(e) {
   const C = CONFIG.colours;
   const barricaded = !!e.Barricade;
   let solid, opaque, char, fg, bg, name;
+  const clear = mat(e.Structure.material).seeThrough;
+  const barricadeClear = barricaded && mat(e.Barricade.material).seeThrough;
   if (e.Door) {
     const shut = !e.Door.open && !e.Door.broken;
-    solid = shut || barricaded; opaque = shut || barricaded;
+    solid = shut || barricaded;
+    opaque = (shut && !clear) || (barricaded && !barricadeClear);
     char = e.Door.broken ? '/' : shut ? '+' : "'"; fg = C.doorText; bg = shut ? C.door : C.doorOpen;
     name = e.Door.broken ? 'broken door' : shut ? 'door' : 'open door';
   } else {
-    solid = !e.Window.broken || barricaded; opaque = barricaded;
+    solid = !e.Window.broken || barricaded;
+    opaque = (!e.Window.broken && !clear) || (barricaded && !barricadeClear);
     char = e.Window.broken ? ',' : '='; fg = C.windowText; bg = e.Window.broken ? C.windowBroken : C.window;
     name = e.Window.broken ? 'broken window' : 'window';
   }
@@ -125,27 +134,23 @@ export function isObstacle(e) {
 export function damageStructure(world, e, amount, byId = null) {
   if (!isObstacle(e)) return false;
   const { x, y } = e.Position;
-  const glass = e.Window && !e.Window.broken && !e.Barricade;
-  makeNoise(world, x, y, glass ? CONFIG.materials.glass.breakNoise : CONFIG.materials.bashNoise, byId);
-  if (e.Barricade) {
-    e.Barricade.hp = Math.max(0, e.Barricade.hp - amount);
-    world.events.emit('structure_damaged', { id: e.id, by: byId, part: 'barricade', hp: e.Barricade.hp });
-    if (e.Barricade.hp <= 0) {
+  const part = e.Barricade ? e.Barricade : e.Structure;  // a barricade soaks blows first
+  const m = mat(part.material);
+  part.hp = Math.max(0, part.hp - amount);
+  const broke = part.hp <= 0;
+  makeNoise(world, x, y, broke ? Math.max(m.hitNoise, m.breakNoise) : m.hitNoise, byId);
+  world.events.emit('structure_damaged', { id: e.id, by: byId, part: e.Barricade ? 'barricade' : e.Door ? 'door' : 'window', hp: part.hp, material: part.material });
+  if (broke) {
+    if (e.Barricade) {
       delete e.Barricade;
       world.events.emit('barricade_broken', { id: e.id, by: byId });
-    }
-  } else {
-    e.Structure.hp = Math.max(0, e.Structure.hp - amount);
-    world.events.emit('structure_damaged', { id: e.id, by: byId, part: e.Door ? 'door' : 'window', hp: e.Structure.hp });
-    if (e.Structure.hp <= 0) {
-      if (e.Window) {
-        e.Window.broken = true;
-        scatterGlass(world, x, y);
-        world.events.emit('window_smashed', { id: e.id, by: byId });
-      } else {
-        e.Door.broken = true;
-        world.events.emit('door_broken', { id: e.id, by: byId });
-      }
+    } else if (e.Window) {
+      e.Window.broken = true;
+      if (m.shards) scatterGlass(world, x, y);
+      world.events.emit('window_smashed', { id: e.id, by: byId });
+    } else {
+      e.Door.broken = true;
+      world.events.emit('door_broken', { id: e.id, by: byId });
     }
   }
   refresh(e);
@@ -168,10 +173,11 @@ export function addBarricade(world, actor, e) {
   if (e.Door && e.Door.open && !e.Door.broken) return false; // close it first
   const occupied = [...world.entities.values()].some((c) => c.Actor && c.Position && c.Position.x === e.Position.x && c.Position.y === e.Position.y);
   if (occupied) return false;
-  const hp = CONFIG.materials.planks.hp;
-  e.Barricade = { hp, max: hp };
+  const material = CONFIG.build.barricade;
+  const hp = mat(material).hp;
+  e.Barricade = { material, hp, max: hp };
   refresh(e);
-  makeNoise(world, e.Position.x, e.Position.y, CONFIG.materials.hammerNoise, actor.id); // hammering
+  makeNoise(world, e.Position.x, e.Position.y, CONFIG.build.hammerNoise, actor.id); // hammering
   world.events.emit('barricade_built', { id: actor.id, structureId: e.id });
   world.events.emit('structure_changed', { id: e.id });
   return true;

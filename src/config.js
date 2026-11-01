@@ -27,14 +27,30 @@ export const CONFIG = {
       ranged: { range: 4, damage: 4, hitChance: 0.9, woundChance: 0.8, noise: 3 }, // very loud, strong, short range
     },
   },
-  // Materials: health of walls, doors, windows, barricades.
+  // Materials: what walls, doors, windows and barricades are made of.
+  //   hp           - blows to break it (at 1 damage per blow)
+  //   flammability - 0-3, how readily it burns (used by fire, step 19)
+  //   seeThrough   - does sight pass through it while it's intact
+  //   hitNoise     - noise level of each blow against it
+  //   breakNoise   - noise level when it finally breaks
+  //   shards       - leaves broken glass when it breaks
   materials: {
-    stone: { hp: 20 },               // walls (tiles)
-    wood: { hp: 6 },                 // doors
-    glass: { hp: 1, breakNoise: 3, crunchNoise: 1 }, // windows: one blow; smashing is loud; shards crunch
-    planks: { hp: 6 },               // a barricade adds this much on top
-    bashNoise: 2,                    // each blow against a door or barricade
+    stone:           { hp: 20, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
+    slate:           { hp: 16, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
+    brick:           { hp: 18, flammability: 0, seeThrough: false, hitNoise: 2, breakNoise: 3 },
+    wood:            { hp: 6,  flammability: 2, seeThrough: false, hitNoise: 2, breakNoise: 2 },
+    glass:           { hp: 1,  flammability: 0, seeThrough: true,  hitNoise: 3, breakNoise: 3, shards: true },
+    corrugatedMetal: { hp: 8,  flammability: 0, seeThrough: false, hitNoise: 3, breakNoise: 3 }, // clangs
+    thatch:          { hp: 4,  flammability: 3, seeThrough: false, hitNoise: 1, breakNoise: 1 },
+  },
+  // What things are made of (for now; step 14 picks per building).
+  build: {
+    wall: 'stone',                   // wall tiles
+    door: 'wood',
+    window: 'glass',
+    barricade: 'wood',               // planks
     hammerNoise: 2,                  // nailing up a barricade
+    glassCrunchNoise: 1,             // stepping on broken glass
   },
   throw: {
     range: 6,                        // tiles (round), needs a clear line you can see

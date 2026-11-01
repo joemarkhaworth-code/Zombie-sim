@@ -910,7 +910,7 @@ function roomWorld({ locked = false } = {}) {
   assert(doors.length === 1 && doors[0].Door.locked && doors[0].Structure.hp === CONFIG.materials.wood.hp, 'build: one locked wooden door');
   assert(windows.length === 2 && windows[0].Structure.hp === CONFIG.materials.glass.hp, 'build: two glass windows');
   const b = CONFIG.testGrid.building;
-  assert(w.tileHp[b.y * w.width + b.x] === CONFIG.materials.stone.hp, 'build: stone walls have stone health');
+  assert(w.tileHp[b.y * w.width + b.x] === CONFIG.materials[CONFIG.build.wall].hp, 'build: walls have their material\'s health');
   assert(query(w, 'Item').some((i) => i.Item.type === 'key') && query(w, 'Item').some((i) => i.Item.type === 'planks'), 'build: key and planks on the map');
   for (let y = b.y - 1; y <= b.y + b.h; y++) for (let x = b.x - 1; x <= b.x + b.w; x++) {
     const ring = x === b.x - 1 || y === b.y - 1 || x === b.x + b.w || y === b.y + b.h;
@@ -942,7 +942,7 @@ function roomWorld({ locked = false } = {}) {
   const p = playerOf(w), z = zombieOf(w);
   place(w, z, 18, 26); place(w, p, 10, 13);
   let bash = 0;
-  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.bashNoise && d.sourceId === p.id) bash++; });
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.wood.hitNoise && d.sourceId === p.id) bash++; });
   const t0 = w.turn;
   assert(!playerAct(w, { type: 'move', dx: 0, dy: -1 }) && w.turn === t0 && door.Structure.hp === CONFIG.materials.wood.hp, 'locked: walking into it does not bash it (no turn)');
   playerAct(w, { type: 'bash', x: 10, y: 12 });
@@ -975,7 +975,7 @@ function roomWorld({ locked = false } = {}) {
   assert(isPassable(w, 12, 10), 'window: climb through a broken window');
   playerAct(w, { type: 'sneak', on: true });
   let crunch = null;
-  w.events.on('noise_made', (d) => { if (d.sourceId === p.id && d.level === CONFIG.materials.glass.crunchNoise) crunch = d; });
+  w.events.on('noise_made', (d) => { if (d.sourceId === p.id && d.level === CONFIG.build.glassCrunchNoise) crunch = d; });
   playerAct(w, { type: 'move', dx: -1, dy: 0 });
   assert(crunch && crunch.x === 12, 'glass: crunches underfoot even when sneaking');
   assert(rememberedAt(w, p, 12, 10).glass > 0, 'glass: remembered in map memory');
@@ -988,12 +988,12 @@ function roomWorld({ locked = false } = {}) {
   place(w, z, 18, 26); place(w, p, 11, 10); // inside, next to the window
   const planks = makeItem(w, 'planks', 11, 10); playerAct(w, { type: 'pickup' });
   let hammer = false;
-  w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.hammerNoise && d.sourceId === p.id) hammer = true; });
+  w.events.on('noise_made', (d) => { if (d.level === CONFIG.build.hammerNoise && d.sourceId === p.id) hammer = true; });
   assert(playerAct(w, { type: 'use', itemId: planks }) && win.Barricade && hammer, 'planks: barricade the window (noisy)');
   assert(!p.Inventory.items.includes(planks), 'planks: used up');
   assert(visibilityAt(w, p, 13, 10) === 0, 'planks: a boarded window blocks sight');
   playerAct(w, { type: 'bash', x: 12, y: 10 });
-  assert(win.Barricade.hp === CONFIG.materials.planks.hp - 1 && !win.Window.broken, 'planks: blows hit the barricade first');
+  assert(win.Barricade.hp === CONFIG.materials[CONFIG.build.barricade].hp - 1 && !win.Window.broken, 'planks: blows hit the barricade first');
   const n = p.Inventory.items.length;
   const planks2 = makeItem(w, 'planks', 11, 10); playerAct(w, { type: 'pickup' });
   assert(!playerAct(w, { type: 'use', itemId: planks2 }) && p.Inventory.items.includes(planks2), 'planks: nothing left to barricade = kept, no turn');
@@ -1012,6 +1012,28 @@ function roomWorld({ locked = false } = {}) {
   for (let i = 0; i < 40 && !door.Door.broken; i++) playerAct(w, { type: 'wait' });
   assert(door.Door.broken, 'zombie: eventually breaks the door down');
   console.log('zombie: bashes doors to reach you OK');
+}
+
+{ // Materials table: every material has the same fields, and properties drive behaviour.
+  for (const [name, m] of Object.entries(CONFIG.materials)) {
+    for (const k of ['hp', 'flammability', 'seeThrough', 'hitNoise', 'breakNoise']) assert(k in m, `materials: ${name} is missing ${k}`);
+    assert(m.flammability >= 0 && m.flammability <= 3 && m.hitNoise >= 0 && m.hitNoise <= 3 && m.breakNoise >= 0 && m.breakNoise <= 3, `materials: ${name} levels must be 0-3`);
+  }
+  for (const n of ['stone', 'slate', 'brick', 'wood', 'glass', 'corrugatedMetal', 'thatch']) assert(CONFIG.materials[n], `materials: ${n} defined`);
+  // A see-through door (glass) doesn't block sight; a metal window does; health follows material.
+  const { w } = roomWorld();
+  const p = playerOf(w);
+  place(w, zombieOf(w), 18, 26);
+  const glassDoor = w.entities.get(makeDoor(w, 5, 5, { material: 'glass' }));
+  const metalWin = w.entities.get(makeWindow(w, 5, 7, { material: 'corrugatedMetal' }));
+  assert(glassDoor.Blocks && !glassDoor.Opaque && glassDoor.Structure.hp === CONFIG.materials.glass.hp, 'materials: glass door blocks movement, not sight');
+  assert(metalWin.Blocks && metalWin.Opaque && metalWin.Structure.hp === CONFIG.materials.corrugatedMetal.hp, 'materials: metal window blocks sight');
+  let clang = null;
+  w.events.on('noise_made', (d) => { if (d.x === 5 && d.y === 7) clang = d.level; });
+  place(w, p, 5, 6);
+  playerAct(w, { type: 'bash', x: 5, y: 7 });
+  assert(clang === CONFIG.materials.corrugatedMetal.hitNoise, 'materials: hit noise comes from the material');
+  console.log('materials: table complete, properties drive sight/health/noise OK');
 }
 
 console.log('PASS');
