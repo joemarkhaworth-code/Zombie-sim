@@ -1,6 +1,7 @@
 // Turn loop: the player acts, then the scheduler runs the world until the
 // player has enough energy to act again.
-import { tryMove, blockerAt } from './world.js';
+import { tryMove, blockerAt, tileAt } from './world.js';
+import { TILE_INFO } from './gen/testgrid.js';
 import { advance, spend } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
 import { updateSightings } from './systems/vision.js';
@@ -103,7 +104,9 @@ export function playerAct(world, action) {
 
   const { attack: _a, ...recorded } = action;
   world.inputs.push({ turn: world.turn, action: recorded });
-  spend(player, action.type === 'move' && !action.attack ? moveCost(player) : undefined);
+  const tileCost = TILE_INFO[tileAt(world, player.Position.x, player.Position.y)].moveCost;
+  spend(player, action.type === 'move' && !action.attack ? moveCost(player, tileCost) : undefined);
+  delete player.Actor.nextCost;
   world.turn++;
   advance(world, act, onTick);
   updateSightings(world);

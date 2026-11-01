@@ -20,8 +20,10 @@ export function advance(world, act, onTick = () => {}) {
     for (const e of actors) {
       if (e.id === world.playerId || !world.entities.has(e.id)) continue;
       while (e.Actor.energy >= actionCost && world.entities.has(e.id)) {
+        delete e.Actor.nextCost;
         act(world, e);
-        spend(e);
+        spend(e, e.Actor.nextCost || actionCost); // a slow step (hedge, stream) costs more
+        delete e.Actor.nextCost;
       }
     }
   }

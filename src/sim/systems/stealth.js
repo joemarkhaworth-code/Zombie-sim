@@ -24,7 +24,7 @@ export function inCover(world, x, y) {
   return inBounds(world, x, y) && TILE_INFO[tileAt(world, x, y)].cover;
 }
 
-// Energy cost of a move for this entity.
-export function moveCost(e) {
-  return CONFIG.scheduler.actionCost * (isSneaking(e) ? CONFIG.stealth.sneakMoveCost : 1);
+// Energy cost of a move for this entity (onto a tile with moveCost tileCost).
+export function moveCost(e, tileCost = 1) {
+  return CONFIG.scheduler.actionCost * tileCost * (isSneaking(e) ? CONFIG.stealth.sneakMoveCost : 1);
 }

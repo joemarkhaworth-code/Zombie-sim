@@ -49,6 +49,7 @@
 //   window_smashed / door_broken { id, by }
 //   barricade_built  { id, structureId }     barricade_broken { id, by }
 //   glass_crunched   { id, x, y }            something stepped on broken glass
+//   ground_noise     { id, x, y, tile }      stepped onto noisy ground (stream splash, hedge rustle)
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

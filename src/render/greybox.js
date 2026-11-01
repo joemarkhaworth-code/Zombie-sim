@@ -12,8 +12,37 @@ import { rememberedAt } from '../sim/systems/memory.js';
 import { canSee } from '../sim/systems/vision.js';
 
 const C = CONFIG.colours;
-const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush };
-const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall, [TILE.BUSH]: C.memoryBush };
+const TILE_COLOUR = {
+  [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush,
+  [TILE.GRASS]: C.grass, [TILE.LANE]: C.lane, [TILE.STREAM]: C.stream, [TILE.BRIDGE]: C.bridge,
+  [TILE.DRYSTONE]: C.drystone, [TILE.HEDGE]: C.hedge, [TILE.TREE]: C.tree, [TILE.POND]: C.pond,
+};
+// Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
+const greyOf = (hex) => {
+  const n = parseInt(hex.slice(1), 16), l = Math.round((0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) * 0.45);
+  return `rgb(${l},${l},${l})`;
+};
+const MEMORY_COLOUR = Object.fromEntries(Object.entries(TILE_COLOUR).map(([k, v]) => [k, greyOf(v)]));
+MEMORY_COLOUR[TILE.FLOOR] = C.memoryFloor; MEMORY_COLOUR[TILE.WALL] = C.memoryWall; MEMORY_COLOUR[TILE.BUSH] = C.memoryBush;
+
+// Marks so tiles read as what they are (greybox: simple shapes, no art yet).
+function drawTileMark(ctx, t, px, py, s, memory) {
+  const dim = (c) => (memory ? 'rgba(0,0,0,0.35)' : c);
+  if (t === TILE.BUSH) { if (!memory) drawBushMark(ctx, px, py, s); return; }
+  if (t === TILE.HEDGE) { ctx.fillStyle = dim(C.hedgeMark); for (const [fx, fy] of [[0.15, 0.2], [0.55, 0.15], [0.35, 0.5], [0.75, 0.55], [0.2, 0.75], [0.6, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, s / 6, s / 6); return; }
+  if (t === TILE.TREE) {
+    ctx.fillStyle = dim(C.treeCrown);
+    ctx.beginPath(); ctx.arc(px + s / 2, py + s / 2, s * 0.42, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
+  if (t === TILE.DRYSTONE || t === TILE.BRIDGE) {
+    ctx.fillStyle = dim(t === TILE.DRYSTONE ? C.drystoneMark : C.bridgeMark);
+    const h = Math.max(1, Math.floor(s / 14));
+    ctx.fillRect(px, py + s * 0.33, s - 1, h); ctx.fillRect(px, py + s * 0.66, s - 1, h);
+    ctx.fillRect(px + s * 0.5, py, h, s * 0.33); ctx.fillRect(px + s * 0.25, py + s * 0.33, h, s * 0.33); ctx.fillRect(px + s * 0.7, py + s * 0.66, h, s * 0.33);
+  }
+}
 
 // Blood: red spots, more for higher levels (1-3).
 const BLOOD_SPOTS = [[0.2, 0.6], [0.65, 0.3], [0.45, 0.75], [0.3, 0.25], [0.75, 0.7], [0.5, 0.45]];
@@ -72,7 +101,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         const t = world.tiles[y * world.width + x];
         ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
-        if (t === TILE.BUSH) drawBushMark(ctx, px, py, s);
+        drawTileMark(ctx, t, px, py, s, false);
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
@@ -81,6 +110,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       if (!snap) continue;
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
+      drawTileMark(ctx, snap.tile, px, py, s, true);
       drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
       drawGlass(ctx, px, py, s, snap.glass || 0, C.memoryGlass);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
@@ -109,7 +139,8 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       ctx.fillStyle = C.sneakDim;
       ctx.fillRect(px, py, s - 1, s - 1);
     }
-    if (world.tiles[y * world.width + x] === TILE.BUSH) drawBushMark(ctx, px, py, s); // in cover: leaves over it
+    const under = world.tiles[y * world.width + x];
+    if (under === TILE.BUSH || under === TILE.HEDGE) drawBushMark(ctx, px, py, s); // in cover / pushing through: leaves over it
   }
 
   // 3. Darken dimly seen tiles (levels 1-2), entities included

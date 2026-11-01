@@ -66,6 +66,10 @@ Phase 1 — Core loop (plain test grid)
 
 Phase 2 — One village (the MVP)
 14. Generate one small village: pub, corner shop, church, cottages, phone box, allotments, lane, stream, bridge, trees, hedges, dry-stone walls
+    - 14a. Land: lane, stream + stone bridge, fields with dry-stone walls and hedges, trees and a small wood, a pond, empty building plots
+    - 14b. Buildings on the plots: cottage, pub, shop, church, shed, greenhouse - walls, doors, windows, rooms; materials chosen per building
+    - 14c. Upstairs and cellars: small separate maps reached by stairs or ladders; ladders can be pulled up
+    - 14d. Village life: phone box, allotments, loot by building type, zombies placed around the village, play-test and tune
 15. Day/night + light sources
 16. Hunger, thirst, fatigue
 17. Weather (rain, fog, snow) + getting wet and cold; weather affects sight, noise, scent and fire
@@ -225,7 +229,20 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Causes of death come from world.gameOver.cause: bite -> "Bitten by a zombie", bleeding -> "Bled out", hit -> "Beaten by a ...", shot -> "Shot by a ...", thrown, shove ("Slammed into a wall"). Wording lives in src/render/messages.js deathText().
 - Taps are ignored for ui.deathTapDelayMs (1 s) after death so a fast tapper sees the screen; then any tap starts a new game with a fresh seed. The save is deleted on death.
 
-## Decisions for step 14 (village) - recorded now, built then
+## Decisions for step 14a (village land) - built
+- Maps: CONFIG.world.map picks what a new game uses: 'village' (default) or 'testgrid' (the phase-1 grid, kept for testing). createWorld(seed, { map }). Saves record their map (older saves load as testgrid). Debug overlay (tap the top bar) shows a TO GRID / TO VILL. button under TUNE that switches and starts a new game; ?map=testgrid|village in the URL does the same. The choice is remembered in localStorage ('zombie-sim-map').
+- The village (src/sim/gen/village.js) is 40 x 56 tiles, generated from the seed in this order: a 2-wide lane winding top to bottom (random walk that leans back toward the middle); a shallow stream winding across, 4-connected so it always shares tiles with the lane - every lane tile touching water becomes a stone bridge; building plots beside the lane; a pond; fields split into rough rectangles whose edges are dry-stone walls or hedges (one kind per edge) with 1-2 gates; a dry-stone wall round the map edge (the lane runs out through gaps); a small wood in a corner (dense trees, bushes under them); scattered trees and bushes. A final pass guarantees every walkable tile is reachable from the lane, carving the shortest gap through walls/hedges/trees where needed. ~2 ms per village. Numbers in CONFIG.village.
+- New tiles (TILE_INFO in gen/testgrid.js, now shared by both maps): grass, lane, stream, bridge, dry-stone wall, hedge, tree, pond. Properties, not special cases: blocks, opaque, cover, moveCost (time multiplier for a step onto it), stepNoise (noise level when stepped on; sneaking makes it one less), material.
+  - Dry-stone walls, trees: block movement and sight (stone / wood).
+  - Hedges: block sight but can be pushed through slowly (moveCost 3 = 6 minutes a step) and rustle (noise 1); creatures in a hedge are drawn with leaves over them.
+  - Stream: shallow - wade it slowly (moveCost 2) and noisily (splash, noise 2; 1 when sneaking). Messages: "You splash through the stream.", "You push through the hedge."
+  - Pond: too deep to wade (blocks movement, not sight; swimming is step 20). Bumping it: "The pond is too deep." Other bumps name the tile ("A tree blocks the way.").
+  - Rough ground slows zombies too: tryMove records the step's cost and the scheduler charges it (Actor.nextCost).
+- Building plots: world.plots = [{ x, y, w, h, gate, side }] - 6-9 x 5-7 tiles of clear grass beside the lane, ringed by a hedge or dry-stone wall with a gate facing the lane. Usually 8 per village (99% of seeds get at least 5). 14b builds on them.
+- Start: the player starts on the lane nearest the middle of the map. The single test zombie and the test items are still scattered (not in streams or hedges) until 14d places village loot and zombies.
+- Greybox look: each tile type has a colour plus a simple mark (stone courses for walls and the bridge, leaf dots for hedges, a dark round crown for trees, ripples for the stream). Remembered tiles use a dark grey of each tile's own colour, so they keep their shapes.
+
+## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Buildings can have an upstairs and/or a cellar. Each extra floor is a small separate map, reached by stairs or a ladder from a tile in the ground floor (and back). Creatures, items, noise and sight work per map; travelling between maps takes a turn on the stairs/ladder tile.
 - Ladders can be pulled up from the top: a pulled-up ladder can't be climbed from below, so zombies can't follow you up (you can lower it again). Stairs can't be pulled up (barricade them instead).
 - Building types are generated at step 14, each with its own rooms: cottage, pub, shop, church, shed, greenhouse. Room layouts and contents (and which have upstairs/cellars) are decided then.

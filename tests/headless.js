@@ -1,6 +1,8 @@
 // Headless test run: drive the sim for N turns without rendering.
 // Usage: node tests/headless.js [turns] [seed]
-import { createWorld, tileAt, inBounds, query, isPassable } from '../src/sim/world.js';
+import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable } from '../src/sim/world.js';
+// Most tests below were written for the phase-1 test grid; default to it. Village tests pass { map: 'village' }.
+const createWorld = (seed, opts = {}) => createWorldAny(seed, { map: 'testgrid', ...opts });
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
 import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
@@ -1196,6 +1198,95 @@ console.log('save: exact round trip, loaded games play on identically OK');
   assert(getPath('light.range') === 7 && getPath('zombie.speed') === def, 'tune: saved overrides apply; bad ones are ignored');
   resetAll();
   console.log('tune: nudge, clamp, sync to live zombies, reset, load overrides OK');
+}
+
+// 16. Village land (step 14a).
+for (const seed of [1, 5, 11, 42, 2024]) {
+  const w = createWorld(seed, { map: 'village' });
+  const again = createWorld(seed, { map: 'village' });
+  assert(w.tiles.every((t, i) => t === again.tiles[i]), `village ${seed}: same seed, same land`);
+  const count = (t) => w.tiles.filter((x) => x === t).length;
+  for (const [name, t] of Object.entries({ lane: TILE.LANE, stream: TILE.STREAM, bridge: TILE.BRIDGE, wall: TILE.DRYSTONE, hedge: TILE.HEDGE, tree: TILE.TREE, pond: TILE.POND })) {
+    assert(count(t) > 0, `village ${seed}: has ${name}`);
+  }
+  assert(count(TILE.TREE) >= 20, `village ${seed}: has a wood and scattered trees`);
+  // The lane is never interrupted by water: every lane-to-stream contact is a bridge.
+  for (let i = 0; i < w.tiles.length; i++) assert(!(w.tiles[i] === TILE.STREAM && [1, -1, w.width, -w.width].some((d) => w.tiles[i + d] === TILE.LANE)), `village ${seed}: stream touches the lane without a bridge`);
+  // Plots: several, clear grass inside, with a passable gate.
+  assert(w.plots.length >= 5, `village ${seed}: ${w.plots.length} plots`);
+  for (const pl of w.plots) {
+    for (let y = pl.y; y < pl.y + pl.h; y++) for (let x = pl.x; x < pl.x + pl.w; x++) assert(tileAt(w, x, y) === TILE.GRASS, `village ${seed}: plot not clear at ${x},${y}`);
+    assert(isPassable(w, pl.gate.x, pl.gate.y) || query(w, 'Item').some((i) => i.Position && i.Position.x === pl.gate.x), `village ${seed}: plot gate blocked`);
+  }
+  // Everything walkable is reachable from the start (8-way moves).
+  const p = playerOf(w);
+  const seen = new Uint8Array(w.width * w.height);
+  const q = [[p.Position.x, p.Position.y]]; seen[p.Position.y * w.width + p.Position.x] = 1;
+  while (q.length) {
+    const [x, y] = q.pop();
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy, i = ny * w.width + nx;
+      if (!inBounds(w, nx, ny) || seen[i] || TILE_INFO[w.tiles[i]].blocks) continue;
+      seen[i] = 1; q.push([nx, ny]);
+    }
+  }
+  for (let i = 0; i < w.tiles.length; i++) if (!TILE_INFO[w.tiles[i]].blocks) assert(seen[i], `village ${seed}: unreachable tile ${i % w.width},${Math.floor(i / w.width)}`);
+  assert(tileAt(w, p.Position.x, p.Position.y) === TILE.LANE, `village ${seed}: you start on the lane`);
+}
+console.log('village: deterministic, has every feature, bridges, clear plots, all reachable OK');
+
+{ // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
+  const w = openWorld([[12, 5]]);
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, z, 18, 26);
+  w.tiles[5 * w.width + 6] = TILE.HEDGE; w.tiles[5 * w.width + 8] = TILE.STREAM; w.tiles[9 * w.width + 5] = TILE.POND;
+  w.tiles[12 * w.width + 5] = TILE.TREE; w.tiles[12 * w.width + 8] = TILE.DRYSTONE;
+  place(w, p, 5, 5);
+  let t = w.tick;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 }); // into the hedge
+  assert(w.tick - t === TILE_INFO[TILE.HEDGE].moveCost, `ground: hedge step took ${w.tick - t} ticks`);
+  playerAct(w, { type: 'move', dx: 1, dy: 0 }); // out to grass/floor (7,5)
+  let splash = null;
+  w.events.on('noise_made', (d) => { if (d.x === 8 && d.y === 5) splash = d.level; });
+  t = w.tick;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 }); // into the stream
+  assert(w.tick - t === TILE_INFO[TILE.STREAM].moveCost && splash === TILE_INFO[TILE.STREAM].stepNoise, `ground: stream step ${w.tick - t} ticks, splash ${splash}`);
+  assert(!playerAct(w, { type: 'move', dx: 0, dy: 1 }) || true, 'ground: (move off)');
+  place(w, p, 5, 7);
+  assert(!isPassable(w, 5, 9) && visibilityAt(w, p, 5, 10) > 0, 'ground: the pond blocks walking, not sight');
+  place(w, p, 5, 10);
+  assert(visibilityAt(w, p, 5, 13) === 0, 'ground: a tree blocks sight');
+  place(w, p, 8, 10);
+  assert(visibilityAt(w, p, 8, 13) === 0, 'ground: a dry-stone wall blocks sight');
+  place(w, p, 6, 3);
+  assert(visibilityAt(w, p, 6, 7) === 0, 'ground: a hedge blocks sight');
+  // Zombies are slowed by rough ground too.
+  const w2 = openWorld();
+  const z2 = zombieOf(w2), p2 = playerOf(w2);
+  place(w2, p2, 5, 5); place(w2, z2, 10, 10);
+  w2.tiles[10 * w2.width + 11] = TILE.STREAM;
+  w2.light.fill(0);
+  z2.Brain.goal = { x: 15, y: 10, why: 'heard' };
+  CONFIG.zombie.staggerChance = 0;
+  const actions0 = z2.Actor.actions, tick0 = w2.tick;
+  while (z2.Position.x === 10 && w2.tick - tick0 < 20) playerAct(w2, { type: 'wait' });
+  const stepTick = w2.tick;
+  while (z2.Position.x === 11 && w2.tick - stepTick < 20) playerAct(w2, { type: 'wait' });
+  CONFIG.zombie.staggerChance = 0.2;
+  assert(w2.tick - stepTick >= 3, `ground: a zombie wading the stream takes longer to leave it (${w2.tick - stepTick} ticks)`);
+  console.log('ground: hedge/stream slow + splash, sight blockers, zombies slowed too OK');
+}
+
+{ // Village: long stress run, save round trip, test grid still available.
+  const w = createWorld(7, { map: 'village' });
+  playerOf(w).Health.hp = playerOf(w).Health.max = 1e9;
+  const drv = createRng(99);
+  for (let i = 0; i < 2000; i++) { playerAct(w, randomAction(w, drv)); checkPositions(w, 7); }
+  const back = deserialize(serialize(w), createWorldAny);
+  assert(back.map === 'village' && serialize(back) === serialize(w), 'village: saves round-trip and remember the map');
+  const tg = createWorldAny(7, { map: 'testgrid' });
+  assert(tg.map === 'testgrid' && tg.width === CONFIG.grid.width && query(tg, 'Door').length === 1, 'village: the test grid is still available');
+  console.log(`village: ${w.turn}-turn stress run, save round trip, test grid available OK`);
 }
 
 console.log('PASS');

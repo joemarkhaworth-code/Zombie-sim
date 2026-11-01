@@ -2,7 +2,8 @@
 // Never touches the DOM or canvas.
 import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
-import { generateTestGrid, TILE_INFO } from './gen/testgrid.js';
+import { generateTestGrid, TILE_INFO, TILE } from './gen/testgrid.js';
+import { generateVillage } from './gen/village.js';
 import { createEventBus } from './events.js';
 import { installVision, refreshAllVision } from './systems/vision.js';
 import { installMemory, createMemory } from './systems/memory.js';
@@ -13,12 +14,18 @@ import { scatterTestItems } from './systems/items.js';
 import { installStructures, initTileHp } from './systems/structures.js';
 import { buildTestBuilding } from './gen/building.js';
 
-export function createWorld(seed) {
-  const { width, height } = CONFIG.grid;
+// opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
+export function createWorld(seed, opts = {}) {
+  const map = opts.map || CONFIG.world.map;
+  const { width, height } = map === 'village' ? CONFIG.village : CONFIG.grid;
   const rng = createRng(seed);
+  let tiles, plots = [], lane = null;
+  if (map === 'village') ({ tiles, plots, lane } = generateVillage(rng, width, height));
+  else tiles = generateTestGrid(rng, width, height);
   const world = {
-    seed, rng, width, height,
-    tiles: generateTestGrid(rng, width, height),
+    seed, rng, width, height, map,
+    plots, // village: empty building plots { x, y, w, h, gate, side } for step 14b
+    tiles,
     light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
     events: createEventBus(),
@@ -32,11 +39,11 @@ export function createWorld(seed) {
   };
   installBleeding(world); // world.blood
   installStructures(world); // world.structures, world.glass, world.tileHp
-  buildTestBuilding(world);
-  initTileHp(world, (t) => TILE_INFO[t].opaque);
+  if (map === 'testgrid') buildTestBuilding(world);
+  initTileHp(world, (t) => !!TILE_INFO[t].material && TILE_INFO[t].blocks);
 
-  // Player starts on the floor tile nearest the centre.
-  const start = nearestOpenTile(world, width >> 1, height >> 1);
+  // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.
+  const start = map === 'village' ? nearestTileOf(world, width >> 1, height >> 1, TILE.LANE) : nearestOpenTile(world, width >> 1, height >> 1);
   world.playerId = addEntity(world, {
     Position: { x: start.x, y: start.y },
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },
@@ -128,6 +135,8 @@ export function tryMove(world, e, dx, dy) {
   }
   const from = { x: e.Position.x, y: e.Position.y };
   e.Position.x = nx; e.Position.y = ny;
+  // Rough ground (hedge, stream) makes the step take longer: the scheduler charges it.
+  if (e.Actor) e.Actor.nextCost = CONFIG.scheduler.actionCost * TILE_INFO[tileAt(world, nx, ny)].moveCost;
   world.events.emit('entity_moved', { id: e.id, from, to: { x: nx, y: ny } });
   return true;
 }
@@ -144,6 +153,16 @@ function spawnTile(world, from, minDist) {
   if (far.length) { const t = far[world.rng.int(far.length)]; return { x: t.x, y: t.y }; }
   const t = open.reduce((a, b) => (b.d > a.d ? b : a));
   return { x: t.x, y: t.y };
+}
+
+function nearestTileOf(world, cx, cy, type) {
+  let best = null, bd = Infinity;
+  for (let y = 0; y < world.height; y++) for (let x = 0; x < world.width; x++) {
+    if (world.tiles[y * world.width + x] !== type || !isPassable(world, x, y)) continue;
+    const d = (x - cx) ** 2 + (y - cy) ** 2;
+    if (d < bd) { bd = d; best = { x, y }; }
+  }
+  return best || nearestOpenTile(world, cx, cy);
 }
 
 function nearestOpenTile(world, cx, cy) {

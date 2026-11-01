@@ -5,7 +5,7 @@ import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
 import { dayOf, daysSurvived, clockOf } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
-import { TILE_DESC, TILE_INFO } from '../sim/gen/testgrid.js';
+import { TILE_DESC, TILE_INFO, TILE } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -104,6 +104,10 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('door_broken', (d) => { if (isPlayer(d.by)) say('The door gives way!', PRIORITY.notice); else say('A door gives way!', PRIORITY.danger); });
   ev.on('barricade_broken', (d) => { if (!isPlayer(d.by)) say('A barricade gives way!', PRIORITY.danger); });
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
+  ev.on('ground_noise', (d) => {
+    if (!isPlayer(d.id)) return;
+    say(d.tile === TILE.STREAM ? 'You splash through the stream.' : d.tile === TILE.HEDGE ? 'You push through the hedge.' : 'Noisy ground.', PRIORITY.info);
+  });
   ev.on('use_failed', (d) => {
     if (!isPlayer(d.id)) return;
     if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
@@ -118,7 +122,11 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('entity_waited', (d) => { if (isPlayer(d.id)) say('You wait.', PRIORITY.info); });
   ev.on('move_blocked', (d) => {
     if (!isPlayer(d.id)) return;
-    if (d.blockerId === null) { say('A wall blocks the way.', PRIORITY.bump); return; }
+    if (d.blockerId === null) {
+      const t = inBounds(world, d.x, d.y) ? tileAt(world, d.x, d.y) : TILE.WALL;
+      say(t === TILE.POND ? 'The pond is too deep.' : `A ${TILE_INFO[t].name} blocks the way.`, PRIORITY.bump);
+      return;
+    }
     const st = world.entities.get(d.blockerId);
     if (st && st.Structure) { // hint how to break it on purpose
       say(st.Barricade ? 'Boarded up. Tap it to bash.' : st.Window ? 'Tap the window to smash it.' : 'Locked. Tap it to bash it.', PRIORITY.blocked);

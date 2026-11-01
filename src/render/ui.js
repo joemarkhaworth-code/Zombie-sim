@@ -307,3 +307,22 @@ export function drawTuning(ctx, layout, rows) {
     ctx.textAlign = 'left';
   });
 }
+
+// Debug: MAP button (below TUNE) switches between the village and the test grid.
+export function mapButtonRect(layout) {
+  const t = tuneButtonRect(layout);
+  return { x: t.x, y: t.y + t.h + 6, w: t.w, h: t.h };
+}
+export function drawMapButton(ctx, layout, current) {
+  const b = mapButtonRect(layout);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = CONFIG.colours.statusTurn;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+  ctx.fillStyle = CONFIG.colours.statusTurn;
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(current === 'village' ? 'TO GRID' : 'TO VILL.', b.x + b.w / 2, b.y + b.h / 2 + 1);
+}

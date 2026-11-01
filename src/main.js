@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout } from './render/ui.js';
+import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout, drawMapButton, mapButtonRect } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
@@ -34,8 +34,17 @@ function clearSave() {
   try { localStorage.removeItem(CONFIG.save.key); } catch (e) { /* storage blocked */ }
 }
 
+// Which map new games use: ?map=testgrid|village, else the choice saved by the debug MAP
+// button, else CONFIG.world.map.
+const MAP_KEY = 'zombie-sim-map';
+function chosenMap() {
+  if (params.has('map')) return params.get('map') === 'testgrid' ? 'testgrid' : 'village';
+  try { const m = localStorage.getItem(MAP_KEY); if (m === 'testgrid' || m === 'village') return m; } catch (e) { /* ignore */ }
+  return CONFIG.world.map;
+}
+
 function boot() {
-  if (params.has('seed')) return createWorld(Number(params.get('seed')) >>> 0);
+  if (params.has('seed')) return createWorld(Number(params.get('seed')) >>> 0, { map: chosenMap() });
   const saved = readSave();
   if (saved) {
     try { return deserialize(saved, createWorld); } catch (e) {
@@ -43,7 +52,7 @@ function boot() {
       bootNote = 'Old save lost. New game.';
     }
   }
-  return createWorld(Math.floor(Math.random() * 1e9));
+  return createWorld(Math.floor(Math.random() * 1e9), { map: chosenMap() });
 }
 
 const world = boot();
@@ -121,7 +130,7 @@ function render() {
   drawWorld(ctx, world, layout, inspect, debug, aim ? aim.targets : null);
   drawStatus(ctx, world, layout, messages.message, blink);
   if (bagOpen) drawBag(ctx, world, layout, { confirmNew });
-  if (debug.noise && !tuneOpen) drawTuneButton(ctx, layout);
+  if (debug.noise && !tuneOpen) { drawTuneButton(ctx, layout); drawMapButton(ctx, layout, world.map); }
   if (tuneOpen) drawTuning(ctx, layout, tuneRows());
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) {
@@ -189,6 +198,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
   if (tuneOpen) { onTuneTap(e.clientX, e.clientY); return; }
   if (debug.noise && inRect(tuneButtonRect(layout), e.clientX, e.clientY)) { tuneOpen = true; render(); return; }
+  if (debug.noise && inRect(mapButtonRect(layout), e.clientX, e.clientY)) { switchMap(); return; }
   if (bagOpen) { onBagTap(e.clientX, e.clientY); return; }
   if (aim) { onAimTap(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
@@ -229,6 +239,14 @@ function onTuneTap(px, py) {
   saveTuning();
   persist();
   render();
+}
+
+// Debug: switch between the village and the phase-1 test grid. Starts a new game.
+function switchMap() {
+  const next = world.map === 'village' ? 'testgrid' : 'village';
+  try { localStorage.setItem(MAP_KEY, next); } catch (e) { /* ignore */ }
+  clearSave();
+  location.href = location.pathname;
 }
 
 // After death, any tap starts a new run with a fresh random seed.

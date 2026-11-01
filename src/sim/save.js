@@ -29,6 +29,7 @@ export function serialize(world) {
   return JSON.stringify({
     version: CONFIG.save.version,
     seed: world.seed,
+    map: world.map,
     turn: world.turn,
     tick: world.tick,
     nextId: world.nextId,
@@ -49,7 +50,7 @@ export function deserialize(json, createWorld) {
   let data;
   try { data = JSON.parse(json); } catch (err) { throw new SaveError('save is not valid JSON'); }
   if (!data || data.version !== CONFIG.save.version) throw new SaveError(`save version ${data && data.version} != ${CONFIG.save.version}`);
-  const world = createWorld(data.seed);
+  const world = createWorld(data.seed, { map: data.map || 'testgrid' }); // older saves were all test grid
   if (world.width * world.height !== data.tilesArrays.tiles.length) throw new SaveError('map size changed');
   for (const k of TILE_ARRAYS) world[k].set(data.tilesArrays[k]);
   world.entities = new Map();

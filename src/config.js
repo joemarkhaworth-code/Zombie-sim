@@ -1,6 +1,20 @@
 // All tuning numbers live here.
 export const CONFIG = {
-  grid: { width: 20, height: 28 },
+  // Which map a new game uses: 'village' (step 14) or 'testgrid' (phase 1). Debug overlay
+  // -> MAP switches; ?map=testgrid in the URL too. Saves remember their map.
+  world: { map: 'village' },
+  grid: { width: 20, height: 28 },   // test grid size
+  village: {
+    width: 40, height: 56,
+    laneMargin: 6, laneWiggle: 0.35, // how often the lane changes direction
+    streamRow: 0.62, streamWiggle: 0.5,
+    pondRadius: 3,
+    plots: 8, plotW: [6, 9], plotH: [5, 7], // empty building plots beside the lane (14b builds on them)
+    fieldMin: 9,                     // smallest field side
+    hedgeShare: 0.5,                 // fraction of field edges that are hedges (rest dry-stone walls)
+    woodSize: 10, woodDensity: 0.7,
+    scatteredTrees: 30, bushes: 25,
+  },
   testGrid: {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
@@ -167,6 +181,19 @@ export const CONFIG = {
   colours: {
     background: '#000000',
     floor: '#203020',
+    grass: '#2f5a24',
+    lane: '#6a6050',
+    stream: '#2f6fb0',
+    streamMark: '#9cc8f0',
+    bridge: '#8a8a80',
+    bridgeMark: '#5a5a54',
+    drystone: '#7a7a72',
+    drystoneMark: '#4a4a46',
+    hedge: '#1f4a1a',
+    hedgeMark: '#0f2e0c',
+    tree: '#2f5a24',                 // grass under the tree
+    treeCrown: '#14380f',
+    pond: '#163e78',
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out
     memoryWall: '#3c3c3c',

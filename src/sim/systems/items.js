@@ -15,6 +15,7 @@
 import { CONFIG } from '../../config.js';
 import { addEntity, isPassable, query } from '../world.js';
 import { adjacentStructures, addBarricade } from './structures.js';
+import { TILE_INFO } from '../gen/testgrid.js';
 
 export function makeItem(world, type, x, y) {
   const def = CONFIG.items[type];
@@ -132,7 +133,8 @@ export function scatterTestItems(world) {
       for (let tries = 0; tries < 200; tries++) {
         const x = 1 + world.rng.int(world.width - 2), y = 1 + world.rng.int(world.height - 2);
         const indoors = world.testBuilding && world.testBuilding.inside(x, y);
-        if (!indoors && isPassable(world, x, y) && !itemsAt(world, x, y).length) { makeItem(world, type, x, y); break; }
+        const rough = TILE_INFO[world.tiles[y * world.width + x]].moveCost > 1; // not in streams or hedges
+        if (!indoors && !rough && isPassable(world, x, y) && !itemsAt(world, x, y).length) { makeItem(world, type, x, y); break; }
       }
     }
   }
