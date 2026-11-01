@@ -941,12 +941,13 @@ function roomWorld({ locked = false } = {}) {
   const { w, door } = roomWorld({ locked: true });
   const p = playerOf(w), z = zombieOf(w);
   place(w, z, 18, 26); place(w, p, 10, 13);
-  let lockedMsg = false, bash = 0;
-  w.events.on('door_locked', () => { lockedMsg = true; });
+  let bash = 0;
   w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.bashNoise && d.sourceId === p.id) bash++; });
-  playerAct(w, { type: 'move', dx: 0, dy: -1 });
-  assert(lockedMsg && !door.Door.open && door.Structure.hp === CONFIG.materials.wood.hp - 1 && bash === 1, 'locked: bumping bashes it, noisily');
-  for (let i = 0; i < 10 && !door.Door.broken; i++) playerAct(w, { type: 'move', dx: 0, dy: -1 });
+  const t0 = w.turn;
+  assert(!playerAct(w, { type: 'move', dx: 0, dy: -1 }) && w.turn === t0 && door.Structure.hp === CONFIG.materials.wood.hp, 'locked: walking into it does not bash it (no turn)');
+  playerAct(w, { type: 'bash', x: 10, y: 12 });
+  assert(!door.Door.open && door.Structure.hp === CONFIG.materials.wood.hp - 1 && bash === 1, 'locked: a deliberate bash damages it, noisily');
+  for (let i = 0; i < 10 && !door.Door.broken; i++) playerAct(w, { type: 'bash', x: 10, y: 12 });
   assert(door.Door.broken && isPassable(w, 10, 12), 'locked: enough blows break the door down');
   // Key
   const r2 = roomWorld({ locked: true });
@@ -955,7 +956,7 @@ function roomWorld({ locked = false } = {}) {
   const key = makeItem(r2.w, 'key', 10, 13); playerAct(r2.w, { type: 'pickup' });
   assert(playerAct(r2.w, { type: 'use', itemId: key }) && !r2.door.Door.locked, 'key: unlocks the adjacent door');
   assert(playerAct(r2.w, { type: 'use', itemId: key }) && r2.door.Door.locked, 'key: locks it again');
-  console.log('locked: bash it down or use the key OK');
+  console.log('locked: bump is harmless, deliberate bash breaks it, key works OK');
 }
 
 { // Windows: see-through, not walk-through; smashing is loud and leaves glass that crunches.
@@ -966,7 +967,10 @@ function roomWorld({ locked = false } = {}) {
   assert(!validTargets(w, p, CONFIG.throw.range).has(10 * w.width + 11), 'window: you cannot throw through glass');
   let smash = null;
   w.events.on('noise_made', (d) => { if (d.level === CONFIG.materials.glass.breakNoise) smash = d; });
-  playerAct(w, { type: 'move', dx: -1, dy: 0 });
+  const t0 = w.turn;
+  assert(!playerAct(w, { type: 'move', dx: -1, dy: 0 }) && !win.Window.broken && w.turn === t0, 'window: walking into it does NOT smash it');
+  assert(!playerAct(w, { type: 'bash', x: 12, y: 12 }), 'window: bash needs an adjacent obstacle');
+  playerAct(w, { type: 'bash', x: 12, y: 10 });
   assert(win.Window.broken && smash && w.glass[10 * w.width + 12] > 0, 'window: one blow smashes it, loudly, leaving glass');
   assert(isPassable(w, 12, 10), 'window: climb through a broken window');
   playerAct(w, { type: 'sneak', on: true });
@@ -988,7 +992,7 @@ function roomWorld({ locked = false } = {}) {
   assert(playerAct(w, { type: 'use', itemId: planks }) && win.Barricade && hammer, 'planks: barricade the window (noisy)');
   assert(!p.Inventory.items.includes(planks), 'planks: used up');
   assert(visibilityAt(w, p, 13, 10) === 0, 'planks: a boarded window blocks sight');
-  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  playerAct(w, { type: 'bash', x: 12, y: 10 });
   assert(win.Barricade.hp === CONFIG.materials.planks.hp - 1 && !win.Window.broken, 'planks: blows hit the barricade first');
   const n = p.Inventory.items.length;
   const planks2 = makeItem(w, 'planks', 11, 10); playerAct(w, { type: 'pickup' });

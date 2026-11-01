@@ -91,8 +91,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('structure_damaged', (d) => {
     const what = d.part === 'barricade' ? 'barricade' : d.part;
     if (isPlayer(d.by)) {
-      const locked = d.part === 'door' && world.entities.get(d.id)?.Door?.locked;
-      if (d.part !== 'window') say(locked ? 'Locked! You bash the door.' : `You bash the ${what}.`, PRIORITY.blocked);
+      if (d.part !== 'window') say(`You bash the ${what}.`, PRIORITY.blocked);
       return;
     }
     const by = world.entities.get(d.by);
@@ -118,7 +117,12 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('entity_waited', (d) => { if (isPlayer(d.id)) say('You wait.', PRIORITY.info); });
   ev.on('move_blocked', (d) => {
     if (!isPlayer(d.id)) return;
-    if (d.blockerId === null) say('A wall blocks the way.', PRIORITY.bump);
+    if (d.blockerId === null) { say('A wall blocks the way.', PRIORITY.bump); return; }
+    const st = world.entities.get(d.blockerId);
+    if (st && st.Structure) { // hint how to break it on purpose
+      say(st.Barricade ? 'Boarded up. Tap it to bash.' : st.Window ? 'Tap the window to smash it.' : 'Locked. Tap it to bash it.', PRIORITY.blocked);
+      return;
+    }
     else say(`The ${name(d.blockerId)} is in the way.`, PRIORITY.blocked);
   });
   const playerCanSee = (id) => {

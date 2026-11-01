@@ -39,6 +39,7 @@ function onTick(world) {
 //         { type: 'pickup' } (item underfoot), { type: 'use', itemId }, { type: 'drop', itemId },
 //         { type: 'throw', itemId, x, y }, { type: 'fire', x, y } (wielded gun),
 //         { type: 'door', x, y } (open/close the adjacent door at x, y),
+//         { type: 'bash', x, y } (smash/bash the adjacent window, locked door or barricade),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -62,9 +63,10 @@ export function playerAct(world, action) {
     } else if (thing && thing.Door && !thing.Door.locked && !thing.Barricade && toggleDoor(world, player, thing)) {
       action = { ...action, attack: true }; // moving into a closed door opens it (a normal-cost action)
     } else if (isObstacle(thing)) {
-      if (thing.Door && thing.Door.locked && !thing.Barricade) world.events.emit('door_locked', { id: player.id, doorId: thing.id });
-      action = { ...action, attack: true };
-      damageStructure(world, thing, meleeStats(world, player).damage, player.id); // bash: locked door, window, barricade
+      // Walking into a window, locked door or barricade never breaks it by accident:
+      // it just says what's there (no turn). Bashing is a deliberate tap on the tile itself.
+      world.events.emit('move_blocked', { id: player.id, x: thing.Position.x, y: thing.Position.y, blockerId: thing.id });
+      return false;
     } else if (!tryMove(world, player, dx, dy)) {
       return false; // bumping a wall costs nothing
     } else if (itemsAt(world, player.Position.x, player.Position.y).length) {
@@ -72,6 +74,12 @@ export function playerAct(world, action) {
     }
   } else if (action.type === 'shove') {
     if (!shove(world, player, action.dx, action.dy)) return false; // nothing to shove: no turn
+  } else if (action.type === 'bash') {
+    // Deliberately bash the adjacent window / locked door / barricade at x, y.
+    const st = structureAt(world, action.x, action.y);
+    const adj = Math.max(Math.abs(action.x - player.Position.x), Math.abs(action.y - player.Position.y)) === 1;
+    if (!adj || !isObstacle(st)) return false;
+    damageStructure(world, st, meleeStats(world, player).damage, player.id);
   } else if (action.type === 'door') {
     // Open or close the door on an adjacent tile (tap exactly on it).
     const door = structureAt(world, action.x, action.y);
