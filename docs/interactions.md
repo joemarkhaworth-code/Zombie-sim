@@ -35,5 +35,5 @@ Every new system must read from or affect at least one existing system. One line
 | Barricades (step 11) | planks item, adjacent door/window | extra health, blocks movement and sight, hammering noise |
 | Save/load (step 12) | the whole world state (all systems' data) | resumes the run exactly; version mismatch -> fresh game |
 | Days + death page (step 13) | turn count, gameOver cause, kills, seed | top-bar day; Ceefax P302 page; save deleted |
-| Village land (step 14a) | seed | terrain: sight blockers (walls, hedges, trees), movement cost (hedges, stream), ground noise (stream splash, hedge rustle), plots for buildings |
+| Village land (step 14a) | seed | Lakeland dale terrain: sight blockers (walls, hedges, trees, rock), cover (bracken, bushes), movement cost (hedges, beck, scree), ground noise (beck, hedge, bracken, scree, shingle), lake (impassable), plots for buildings |
 | Rough ground (step 14a) | tile moveCost / stepNoise | time taken per step for player and zombies (scheduler), noise heard by zombies |

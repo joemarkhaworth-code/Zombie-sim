@@ -5,6 +5,7 @@ import { CONFIG } from '../../config.js';
 export const TILE = {
   FLOOR: 0, WALL: 1, BUSH: 2,
   GRASS: 3, LANE: 4, STREAM: 5, BRIDGE: 6, DRYSTONE: 7, HEDGE: 8, TREE: 9, POND: 10,
+  FELL: 11, BRACKEN: 12, ROCK: 13, SCREE: 14, LAKE: 15, SHORE: 16,
 };
 // blocks: stops movement. opaque: stops sight (and muffles noise).
 // cover: anything standing here can only be noticed from an adjacent tile.
@@ -18,12 +19,18 @@ export const TILE_INFO = {
   [TILE.BUSH]: T('bush', { cover: true }),
   [TILE.GRASS]: T('grass'),
   [TILE.LANE]: T('lane'),
-  [TILE.STREAM]: T('stream', { moveCost: 2, stepNoise: 2 }),            // shallow: wade it, slowly and noisily
+  [TILE.STREAM]: T('beck', { moveCost: 2, stepNoise: 2 }),              // shallow beck/gill: wade it, slowly and noisily
   [TILE.BRIDGE]: T('bridge', { material: 'stone' }),
   [TILE.DRYSTONE]: T('dry-stone wall', { blocks: true, opaque: true, material: 'stone' }),
   [TILE.HEDGE]: T('hedge', { opaque: true, moveCost: 3, stepNoise: 1, material: 'wood' }), // push through slowly
   [TILE.TREE]: T('tree', { blocks: true, opaque: true, material: 'wood' }),
   [TILE.POND]: T('pond', { blocks: true }),                             // too deep to wade (swimming: step 20)
+  [TILE.FELL]: T('fell'),                                               // open rough grazing above the fell wall
+  [TILE.BRACKEN]: T('bracken', { cover: true, stepNoise: 1 }),          // tall: hides you; rustles
+  [TILE.ROCK]: T('rock', { blocks: true, opaque: true, material: 'stone' }), // outcrop / crag
+  [TILE.SCREE]: T('scree', { moveCost: 2, stepNoise: 2 }),              // loose stones: slow, clattering
+  [TILE.LAKE]: T('lake', { blocks: true }),                             // too deep to wade
+  [TILE.SHORE]: T('shore', { stepNoise: 1 }),                           // shingle: crunches
 };
 // Short description for long-press inspect (render side picks the wording).
 export const TILE_DESC = {
@@ -32,12 +39,18 @@ export const TILE_DESC = {
   [TILE.BUSH]: 'A bush.',
   [TILE.GRASS]: 'Grass.',
   [TILE.LANE]: 'A lane.',
-  [TILE.STREAM]: 'A shallow stream.',
+  [TILE.STREAM]: 'A shallow beck.',
   [TILE.BRIDGE]: 'A stone bridge.',
   [TILE.DRYSTONE]: 'A dry-stone wall.',
   [TILE.HEDGE]: 'A hedge.',
   [TILE.TREE]: 'A tree.',
   [TILE.POND]: 'A pond. Too deep to wade.',
+  [TILE.FELL]: 'Open fell.',
+  [TILE.BRACKEN]: 'Bracken.',
+  [TILE.ROCK]: 'A rocky outcrop.',
+  [TILE.SCREE]: 'Loose scree.',
+  [TILE.LAKE]: 'The lake. Too deep to wade.',
+  [TILE.SHORE]: 'A shingle shore.',
 };
 
 export function generateTestGrid(rng, width, height) {

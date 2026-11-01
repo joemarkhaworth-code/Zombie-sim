@@ -19,12 +19,13 @@ export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
   const { width, height } = map === 'village' ? CONFIG.village : CONFIG.grid;
   const rng = createRng(seed);
-  let tiles, plots = [], lane = null;
-  if (map === 'village') ({ tiles, plots, lane } = generateVillage(rng, width, height));
+  let tiles, plots = [], lane = null, green = null, bridgeRow = null;
+  if (map === 'village') ({ tiles, plots, lane, green, bridgeRow } = generateVillage(rng, width, height));
   else tiles = generateTestGrid(rng, width, height);
   const world = {
     seed, rng, width, height, map,
     plots, // village: empty building plots { x, y, w, h, gate, side } for step 14b
+    green, bridgeRow, // village: the green { x, y, w, h } and the row of the village bridge
     tiles,
     light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
@@ -43,7 +44,8 @@ export function createWorld(seed, opts = {}) {
   initTileHp(world, (t) => !!TILE_INFO[t].material && TILE_INFO[t].blocks);
 
   // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.
-  const start = map === 'village' ? nearestTileOf(world, width >> 1, height >> 1, TILE.LANE) : nearestOpenTile(world, width >> 1, height >> 1);
+  // Village: on the road at the bridge (the village centre).
+  const start = map === 'village' ? nearestTileOf(world, width >> 1, bridgeRow, TILE.LANE) : nearestOpenTile(world, width >> 1, height >> 1);
   world.playerId = addEntity(world, {
     Position: { x: start.x, y: start.y },
     Glyph: { char: '@', fg: CONFIG.colours.playerText, bg: CONFIG.colours.player },

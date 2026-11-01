@@ -16,6 +16,8 @@ const TILE_COLOUR = {
   [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush,
   [TILE.GRASS]: C.grass, [TILE.LANE]: C.lane, [TILE.STREAM]: C.stream, [TILE.BRIDGE]: C.bridge,
   [TILE.DRYSTONE]: C.drystone, [TILE.HEDGE]: C.hedge, [TILE.TREE]: C.tree, [TILE.POND]: C.pond,
+  [TILE.FELL]: C.fell, [TILE.BRACKEN]: C.bracken, [TILE.ROCK]: C.rock, [TILE.SCREE]: C.scree,
+  [TILE.LAKE]: C.lake, [TILE.SHORE]: C.shore,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
 const greyOf = (hex) => {
@@ -35,6 +37,10 @@ function drawTileMark(ctx, t, px, py, s, memory) {
     ctx.beginPath(); ctx.arc(px + s / 2, py + s / 2, s * 0.42, 0, Math.PI * 2); ctx.fill();
     return;
   }
+  if (t === TILE.BRACKEN) { ctx.fillStyle = dim(C.brackenMark); for (const [fx, fy] of [[0.2, 0.25], [0.6, 0.2], [0.4, 0.55], [0.75, 0.6], [0.15, 0.7]]) { ctx.fillRect(px + fx * s, py + fy * s, s / 12, s / 4); ctx.fillRect(px + fx * s - s / 12, py + fy * s + s / 12, s / 4, s / 14); } return; }
+  if (t === TILE.ROCK) { ctx.fillStyle = dim(C.rockMark); ctx.beginPath(); ctx.moveTo(px + s * 0.15, py + s * 0.8); ctx.lineTo(px + s * 0.45, py + s * 0.2); ctx.lineTo(px + s * 0.85, py + s * 0.8); ctx.fill(); return; }
+  if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
+  if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
   if (t === TILE.DRYSTONE || t === TILE.BRIDGE) {
     ctx.fillStyle = dim(t === TILE.DRYSTONE ? C.drystoneMark : C.bridgeMark);

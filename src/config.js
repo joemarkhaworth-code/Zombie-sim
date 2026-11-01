@@ -5,16 +5,23 @@ export const CONFIG = {
   world: { map: 'village' },
   grid: { width: 20, height: 28 },   // test grid size
   village: {
-    width: 40, height: 56,
-    laneMargin: 6, laneWiggle: 0.35, // how often the lane changes direction
-    streamRow: 0.62, streamWiggle: 0.5,
-    pondRadius: 3,
-    plots: 8, plotW: [6, 9], plotH: [5, 7], // empty building plots beside the lane (14b builds on them)
-    fieldMin: 9,                     // smallest field side
-    hedgeShare: 0.5,                 // fraction of field edges that are hedges (rest dry-stone walls)
-    woodSize: 10, woodDensity: 0.7,
-    scatteredTrees: 30, bushes: 25,
+    width: 48, height: 64,
+    floorHalf: [5, 9],               // valley floor half-width at the valley head / near the lake
+    intake: 5,                       // intake fields between the floor and the fell wall
+    lakeRows: 12,                    // the lake fills the foot of the dale
+    gills: 3,                        // side streams off the fells
+    roadOffset: 3,                   // road runs this far from the beck
+    bridgeAt: 0.5,                   // the bridge (village centre) sits this far down to the lake
+    villageRows: 13,                 // plots within this many rows of the bridge (a tight village)
+    plots: 8, plotW: [6, 8], plotH: [5, 6], // empty building plots (14b builds on them)
+    gardenHedge: 0.15,               // garden boundaries that are hedges (the rest dry-stone; hedges are rare in the Lakes)
+    laneGateChance: 0.08,            // gaps in the walled lane
+    fields: 16, fieldGateChance: 0.04, // walled enclosures on floor + intake
+    fellWalls: 3,                    // walls climbing the open fell
+    screeFrom: 6,                    // scree only this far up the fellside
+    beckTrees: 0.3, woodRows: 14, woodDensity: 0.55, fieldTrees: 14,
   },
+
   testGrid: {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
@@ -194,6 +201,15 @@ export const CONFIG = {
     tree: '#2f5a24',                 // grass under the tree
     treeCrown: '#14380f',
     pond: '#163e78',
+    fell: '#55683a',
+    bracken: '#8a5a24',              // November: rusty brown
+    brackenMark: '#5e3c14',
+    rock: '#6e6a64',
+    rockMark: '#4c4944',
+    scree: '#8c877c',
+    screeMark: '#5f5b52',
+    lake: '#1d4f8a',
+    shore: '#9a917c',
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out
     memoryWall: '#3c3c3c',

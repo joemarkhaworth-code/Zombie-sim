@@ -106,7 +106,8 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
   ev.on('ground_noise', (d) => {
     if (!isPlayer(d.id)) return;
-    say(d.tile === TILE.STREAM ? 'You splash through the stream.' : d.tile === TILE.HEDGE ? 'You push through the hedge.' : 'Noisy ground.', PRIORITY.info);
+    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.' }[d.tile];
+    say(t || 'Noisy ground.', PRIORITY.info);
   });
   ev.on('use_failed', (d) => {
     if (!isPlayer(d.id)) return;
@@ -124,7 +125,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (!isPlayer(d.id)) return;
     if (d.blockerId === null) {
       const t = inBounds(world, d.x, d.y) ? tileAt(world, d.x, d.y) : TILE.WALL;
-      say(t === TILE.POND ? 'The pond is too deep.' : `A ${TILE_INFO[t].name} blocks the way.`, PRIORITY.bump);
+      say(t === TILE.POND ? 'The pond is too deep.' : t === TILE.LAKE ? 'The lake is too deep.' : t === TILE.ROCK ? 'Rock blocks the way.' : `A ${TILE_INFO[t].name} blocks the way.`, PRIORITY.bump);
       return;
     }
     const st = world.entities.get(d.blockerId);

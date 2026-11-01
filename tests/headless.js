@@ -1206,10 +1206,16 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const again = createWorld(seed, { map: 'village' });
   assert(w.tiles.every((t, i) => t === again.tiles[i]), `village ${seed}: same seed, same land`);
   const count = (t) => w.tiles.filter((x) => x === t).length;
-  for (const [name, t] of Object.entries({ lane: TILE.LANE, stream: TILE.STREAM, bridge: TILE.BRIDGE, wall: TILE.DRYSTONE, hedge: TILE.HEDGE, tree: TILE.TREE, pond: TILE.POND })) {
+  for (const [name, t] of Object.entries({ road: TILE.LANE, beck: TILE.STREAM, bridge: TILE.BRIDGE, wall: TILE.DRYSTONE, tree: TILE.TREE, fell: TILE.FELL, bracken: TILE.BRACKEN, rock: TILE.ROCK, lake: TILE.LAKE, shore: TILE.SHORE })) {
     assert(count(t) > 0, `village ${seed}: has ${name}`);
   }
-  assert(count(TILE.TREE) >= 20, `village ${seed}: has a wood and scattered trees`);
+  assert(count(TILE.TREE) >= 20, `village ${seed}: has a wood and trees along the beck`);
+  assert(count(TILE.DRYSTONE) > 3 * Math.max(1, count(TILE.HEDGE)), `village ${seed}: Lakeland walls are mostly dry stone, hedges rare`);
+  // Lake at the foot of the dale; fell on both sides.
+  const lakeRows = new Set(); w.tiles.forEach((t, i) => { if (t === TILE.LAKE) lakeRows.add(Math.floor(i / w.width)); });
+  assert(Math.min(...lakeRows) > w.height * 0.6, `village ${seed}: the lake sits at the foot of the dale`);
+  const midRow = Math.floor(w.height / 3);
+  assert(tileAt(w, 1, midRow) !== TILE.LANE && [TILE.FELL, TILE.BRACKEN, TILE.ROCK, TILE.SCREE, TILE.TREE, TILE.DRYSTONE, TILE.STREAM].includes(tileAt(w, 1, midRow)) && [TILE.FELL, TILE.BRACKEN, TILE.ROCK, TILE.SCREE, TILE.TREE, TILE.DRYSTONE, TILE.STREAM].includes(tileAt(w, w.width - 2, midRow)), `village ${seed}: fells on both sides`);
   // The lane is never interrupted by water: every lane-to-stream contact is a bridge.
   for (let i = 0; i < w.tiles.length; i++) assert(!(w.tiles[i] === TILE.STREAM && [1, -1, w.width, -w.width].some((d) => w.tiles[i + d] === TILE.LANE)), `village ${seed}: stream touches the lane without a bridge`);
   // Plots: several, clear grass inside, with a passable gate.
@@ -1231,9 +1237,11 @@ for (const seed of [1, 5, 11, 42, 2024]) {
     }
   }
   for (let i = 0; i < w.tiles.length; i++) if (!TILE_INFO[w.tiles[i]].blocks) assert(seen[i], `village ${seed}: unreachable tile ${i % w.width},${Math.floor(i / w.width)}`);
-  assert(tileAt(w, p.Position.x, p.Position.y) === TILE.LANE, `village ${seed}: you start on the lane`);
+  assert([TILE.LANE, TILE.BRIDGE].includes(tileAt(w, p.Position.x, p.Position.y)), `village ${seed}: you start on the road`);
+  // The village clusters round the bridge.
+  for (const pl of w.plots) assert(Math.abs(pl.y + pl.h / 2 - w.bridgeRow) <= CONFIG.village.villageRows + 6, `village ${seed}: plot far from the village`);
 }
-console.log('village: deterministic, has every feature, bridges, clear plots, all reachable OK');
+console.log('village: deterministic, dale features (beck, bridge, walls, fell, bracken, rock, lake), clear plots near the bridge, all reachable OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);
