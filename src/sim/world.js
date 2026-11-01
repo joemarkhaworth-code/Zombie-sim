@@ -35,6 +35,7 @@ export function createWorld(seed) {
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map() },
     Hearing: { level: CONFIG.player.hearing },
     Noisy: { move: CONFIG.player.footsteps },
+    Stealth: { sneaking: false, walkFootsteps: CONFIG.player.footsteps, sneakFootsteps: CONFIG.player.sneakFootsteps },
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost, actions: 0 },
     Blocks: {},
     Name: { name: 'you' },

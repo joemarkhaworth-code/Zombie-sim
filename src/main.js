@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus } from './render/ui.js';
+import { drawStatus, drawButtons } from './render/ui.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
@@ -34,13 +34,17 @@ function resize() {
   canvas.style.height = `${h}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const statusHeight = 32;
+  const barHeight = CONFIG.ui.barHeight; // bottom button bar
   const tileSize = Math.floor(w / CONFIG.view.tilesAcross);
   const cols = CONFIG.view.tilesAcross;
-  const rows = Math.floor((h - statusHeight) / tileSize);
+  const mapHeight = h - statusHeight - barHeight;
+  const rows = Math.floor(mapHeight / tileSize);
+  const pad = 8;
   layout = {
-    width: w, height: h, statusHeight, tileSize, cols, rows,
+    width: w, height: h, statusHeight, barHeight, tileSize, cols, rows,
     offsetX: Math.floor((w - tileSize * cols) / 2),
-    offsetY: statusHeight + Math.floor((h - statusHeight - tileSize * rows) / 2),
+    offsetY: statusHeight + Math.floor((mapHeight - tileSize * rows) / 2),
+    buttons: [{ id: 'sneak', x: pad, y: h - barHeight + pad, w: w - pad * 2, h: barHeight - pad * 2 }],
   };
   render();
 }
@@ -59,6 +63,7 @@ function render() {
   ctx.fillRect(0, 0, layout.width, layout.height);
   drawWorld(ctx, world, layout, inspect, debug);
   drawStatus(ctx, world, layout, messages.message);
+  drawButtons(ctx, world, layout);
 }
 
 // Touch: a quick tap acts. Holding still for longPressMs inspects the tile under
@@ -92,6 +97,7 @@ canvas.addEventListener('pointerup', (e) => {
   clearTimeout(d.timer);
   if (d.longPressed || d.moved) return;
   if (e.clientY < layout.statusHeight) { toggleNoiseMap(); return; }
+  if (e.clientY >= layout.height - layout.barHeight) { onButton(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
 });
 canvas.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
@@ -111,8 +117,21 @@ function toggleNoiseMap() {
   render();
 }
 
+// Bottom bar buttons. SNEAK toggles sneaking (takes no turn, but is recorded).
+function onButton(px, py) {
+  const b = layout.buttons.find((b) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h);
+  if (!b) return;
+  if (b.id === 'sneak') {
+    const p = world.entities.get(world.playerId);
+    inspect = null;
+    playerAct(world, { type: 'sneak', on: !p.Stealth.sneaking });
+    if (navigator.vibrate) navigator.vibrate(10);
+    render();
+  }
+}
+
 function onLongPress(px, py) {
-  if (py < layout.statusHeight) return; // the top bar isn't a tile
+  if (py < layout.statusHeight || py >= layout.height - layout.barHeight) return; // bars aren't tiles
   inspect = screenToTile(px, py);
   messages.show(describeTile(world, inspect.x, inspect.y));
   if (navigator.vibrate) navigator.vibrate(15); // small buzz so you know it registered

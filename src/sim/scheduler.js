@@ -24,7 +24,7 @@ export function advance(world, act) {
   throw new Error(`Scheduler ran ${maxTicksPerTurn} ticks without the player getting a turn`);
 }
 
-export function spend(e) {
-  e.Actor.energy -= CONFIG.scheduler.actionCost;
+export function spend(e, cost = CONFIG.scheduler.actionCost) {
+  e.Actor.energy -= cost;
   e.Actor.actions++;
 }

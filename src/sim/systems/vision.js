@@ -17,6 +17,7 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, query } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
+import { isSneaking, inCover } from './stealth.js';
 
 export function installVision(world) {
   world.sightings = new Set(); // actor ids the player could see at the end of last turn
@@ -93,9 +94,21 @@ export function visibilityAt(world, viewer, x, y) {
   return (viewer.Vision && viewer.Vision.visible.get(y * world.width + x)) || 0;
 }
 
-// Can the viewer notice the target? Needs the target's tile at minLevelToSpot or better.
+// Can the viewer notice the target? Line of sight + light + distance + stealth:
+//  - the target's tile must be in the viewer's sight with light >= minLevelToSpot;
+//  - adjacent targets are always noticed;
+//  - a target in cover (bush) is only noticed from an adjacent tile;
+//  - otherwise it must be within sightRadius x noticeByLight[light] x (sneak factor).
 export function canSee(world, viewer, target) {
-  return visibilityAt(world, viewer, target.Position.x, target.Position.y) >= CONFIG.vision.minLevelToSpot;
+  const { x, y } = target.Position;
+  const lv = visibilityAt(world, viewer, x, y);
+  if (lv < CONFIG.vision.minLevelToSpot) return false;
+  const dx = x - viewer.Position.x, dy = y - viewer.Position.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) <= 1) return true;
+  if (inCover(world, x, y)) return false;
+  let range = sightRadius(viewer) * CONFIG.vision.noticeByLight[lv];
+  if (isSneaking(target)) range *= CONFIG.stealth.sneakNoticeFactor;
+  return dx * dx + dy * dy <= range * range;
 }
 
 // End of turn: emit entity_seen for actors that newly came into the player's view.

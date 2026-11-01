@@ -14,6 +14,7 @@
 //   noise_investigated { id, x, y }          a hunter reached (or got stuck going to) a noise
 //   entity_seen      { viewerId, id }        an actor came into the player's view (end of turn)
 //   vision_updated   { id }                  a viewer's visible tiles were recomputed
+//   stance_changed   { id, sneaking }        started or stopped sneaking
 //   turn_ended       { turn }                the world finished its turn
 export function createEventBus() {
   const handlers = new Map();

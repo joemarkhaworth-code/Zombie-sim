@@ -5,6 +5,7 @@ import { advance, spend } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
 import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
+import { setSneaking, moveCost } from './systems/stealth.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -14,11 +15,16 @@ function act(world, e) {
   if (brain) brain(world, e);
 }
 
-// action: { type: 'move', dx, dy } (dx, dy in -1..1) or { type: 'wait' }
+// action: { type: 'move', dx, dy } (dx, dy in -1..1), { type: 'wait' },
+//         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
   const player = world.entities.get(world.playerId);
   if (!player) return false;
+  if (action.type === 'sneak') {
+    if (setSneaking(world, player, !!action.on)) world.inputs.push({ turn: world.turn, action: { ...action } });
+    return false;
+  }
   clearNoise(world); // the heatmap shows noise made since the player's last action
   world.events.emit('action_attempted', { id: player.id, action: { ...action } });
 
@@ -33,7 +39,7 @@ export function playerAct(world, action) {
   }
 
   world.inputs.push({ turn: world.turn, action: { ...action } });
-  spend(player);
+  spend(player, action.type === 'move' ? moveCost(player) : undefined);
   world.turn++;
   advance(world, act);
   updateSightings(world);

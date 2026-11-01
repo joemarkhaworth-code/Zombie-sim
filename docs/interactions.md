@@ -16,3 +16,6 @@ Every new system must read from or affect at least one existing system. One line
 | Inspect (step 5) | player Vision, Memory, entities on tile | status bar text + outline (no turn, not recorded) |
 | Noise (step 6) | movement (Noisy), walls (opaque tiles muffle) | noise_heard for anything with Hearing; debug heatmap |
 | Shamble + hearing (step 6) | noise_heard | zombie walks to the noise source to investigate (seeing prey takes priority) |
+| Sneaking (step 7) | player toggle | footsteps (Noisy -> silent), move energy cost (scheduler), noticing distance (vision canSee) |
+| Cover / bushes (step 7) | tile cover flag | noticing (only from adjacent), for player and zombies alike |
+| Noticing (step 7) | line of sight, light level on target's tile, distance, sneaking, cover | whether zombies chase you / whether you see (and are shown) zombies |

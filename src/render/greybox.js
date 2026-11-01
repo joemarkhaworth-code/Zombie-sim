@@ -9,10 +9,20 @@ import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testgrid.js';
 import { query } from '../sim/world.js';
 import { rememberedAt } from '../sim/systems/memory.js';
+import { canSee } from '../sim/systems/vision.js';
 
 const C = CONFIG.colours;
-const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall };
-const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall };
+const TILE_COLOUR = { [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush };
+const MEMORY_COLOUR = { [TILE.FLOOR]: C.memoryFloor, [TILE.WALL]: C.memoryWall, [TILE.BUSH]: C.memoryBush };
+
+// Small mark so a bush reads as a bush, not just a green square.
+function drawBushMark(ctx, px, py, s) {
+  ctx.fillStyle = C.bushMark;
+  const d = Math.max(2, Math.floor(s / 8));
+  for (const [fx, fy] of [[0.3, 0.35], [0.6, 0.3], [0.45, 0.6], [0.72, 0.65], [0.25, 0.7]]) {
+    ctx.fillRect(px + Math.floor(fx * s), py + Math.floor(fy * s), d, d);
+  }
+}
 
 // layout: { tileSize, offsetX, offsetY, camX, camY, cols, rows }
 // camX/camY = world tile shown at the top-left of the view.
@@ -38,8 +48,10 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
       if (!onScreen(x, y)) continue;
       const px = ox + vx * s, py = oy + vy * s;
       if (levelAt(x, y)) {
-        ctx.fillStyle = TILE_COLOUR[world.tiles[y * world.width + x]];
+        const t = world.tiles[y * world.width + x];
+        ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
+        if (t === TILE.BUSH) drawBushMark(ctx, px, py, s);
         continue;
       }
       const snap = player ? rememberedAt(world, player, x, y) : null;
@@ -54,15 +66,22 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}) {
     }
   }
 
-  // 2. Entities on visible tiles
+  // 2. Entities on visible tiles. Creatures only if you've noticed them (a zombie
+  // hiding in a bush stays hidden); things like items whenever their tile is in sight.
   for (const e of query(world, 'Position', 'Glyph')) {
     const { x, y } = e.Position;
     if (!onScreen(x, y) || !levelAt(x, y)) continue;
+    if (e.Actor && player && e.id !== player.id && !canSee(world, player, e)) continue;
     const px = ox + (x - camX) * s, py = oy + (y - camY) * s;
     ctx.fillStyle = e.Glyph.bg;
     ctx.fillRect(px, py, s - 1, s - 1);
     ctx.fillStyle = e.Glyph.fg;
     ctx.fillText(e.Glyph.char, px + s / 2, py + s / 2 + 1);
+    if (e.Stealth && e.Stealth.sneaking) { // sneaking: drawn dimmer
+      ctx.fillStyle = C.sneakDim;
+      ctx.fillRect(px, py, s - 1, s - 1);
+    }
+    if (world.tiles[y * world.width + x] === TILE.BUSH) drawBushMark(ctx, px, py, s); // in cover: leaves over it
   }
 
   // 3. Darken dimly seen tiles (levels 1-2), entities included

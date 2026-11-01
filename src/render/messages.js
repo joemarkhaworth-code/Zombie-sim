@@ -3,7 +3,7 @@
 
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { rememberedAt } from '../sim/systems/memory.js';
-import { TILE_DESC } from '../sim/gen/testgrid.js';
+import { TILE_DESC, TILE_INFO } from '../sim/gen/testgrid.js';
 import { inBounds, tileAt, query } from '../sim/world.js';
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -36,6 +36,9 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
 
   const ev = world.events;
   ev.on('action_attempted', (d) => { if (isPlayer(d.id)) current = null; }); // new action clears the line
+  ev.on('stance_changed', (d) => {
+    if (isPlayer(d.id)) current = { text: d.sneaking ? 'You start sneaking.' : 'You stop sneaking.', priority: PRIORITY.info };
+  });
   ev.on('entity_waited', (d) => { if (isPlayer(d.id)) say('You wait.', PRIORITY.info); });
   ev.on('move_blocked', (d) => {
     if (!isPlayer(d.id)) return;
@@ -87,7 +90,9 @@ export function describeTile(world, x, y) {
   const player = world.entities.get(world.playerId);
   if (!player || !inBounds(world, x, y)) return 'Nothing there.';
   if (visibilityAt(world, player, x, y) > 0) {
-    if (x === player.Position.x && y === player.Position.y) return "That's you.";
+    if (x === player.Position.x && y === player.Position.y) {
+      return TILE_INFO[tileAt(world, x, y)].cover ? `You, hidden in a ${TILE_INFO[tileAt(world, x, y)].name}.` : "That's you.";
+    }
     const here = query(world, 'Position', 'Name').filter((e) => e.Position.x === x && e.Position.y === y);
     const creature = here.find((e) => e.Actor && canSee(world, player, e));
     if (creature) return `A ${creature.Name.name}.`;

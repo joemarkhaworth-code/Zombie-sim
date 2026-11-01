@@ -24,3 +24,22 @@ export function drawStatus(ctx, world, layout, message) {
     ctx.fillText(`SEED ${world.seed}`, width - 8, h / 2);
   }
 }
+
+// Bottom bar: big thumb-friendly buttons. For now just SNEAK (a toggle).
+// layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
+export function drawButtons(ctx, world, layout) {
+  const C = CONFIG.colours;
+  const player = world.entities.get(world.playerId);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, layout.height - layout.barHeight, layout.width, layout.barHeight);
+  for (const b of layout.buttons) {
+    const on = b.id === 'sneak' && player && player.Stealth && player.Stealth.sneaking;
+    ctx.fillStyle = on ? C.buttonOnBg : C.buttonBg;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = on ? C.buttonOnText : C.buttonText;
+    ctx.font = `bold ${Math.floor(b.h * 0.4)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(on ? 'SNEAKING' : 'SNEAK', b.x + b.w / 2, b.y + b.h / 2 + 1);
+  }
+}

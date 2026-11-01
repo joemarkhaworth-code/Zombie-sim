@@ -1,7 +1,11 @@
 // All tuning numbers live here.
 export const CONFIG = {
   grid: { width: 20, height: 28 },
-  testGrid: { wallChance: 0.08 },   // chance a floor tile becomes a wall block
+  testGrid: {
+    wallChance: 0.08,                // chance a floor tile becomes a wall block
+    bushClumps: 6,                   // hiding spots
+    bushClumpSize: 4,
+  },
   scheduler: {
     actionCost: 100,                 // energy spent per action
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
@@ -16,6 +20,15 @@ export const CONFIG = {
     // Eyesight 0-3 scales the light range: 3 = sees as far as the light allows.
     eyesightFactor: [0, 0.25, 0.5, 1],
     minLevelToSpot: 1,               // lowest visibility (light) level at which a creature is noticed
+    // Noticing a creature: it must be in line of sight, and within
+    //   sight radius x noticeByLight[light level on its tile] x (0.5 if it's sneaking).
+    // Adjacent creatures are always noticed if their tile has any light.
+    // In cover (bush) a creature is only noticed from an adjacent tile.
+    noticeByLight: [0, 0.34, 0.67, 1],
+  },
+  stealth: {
+    sneakMoveCost: 2,                // a sneaking step takes twice as long
+    sneakNoticeFactor: 0.5,          // sneaking halves the distance you can be noticed from
   },
   render: {
     dimAlpha: [1, 0.45, 0.25, 0],    // black overlay per visibility level 0-3 (0 is not drawn at all)
@@ -30,7 +43,8 @@ export const CONFIG = {
     speed: 100,                      // energy per tick; 100 = one action per tick
     eyesight: 3,
     hearing: 2,
-    footsteps: 1,                    // noise level when walking (sneaking will lower it, step 7)
+    footsteps: 1,                    // noise level when walking
+    sneakFootsteps: 0,               // noise level when sneaking (silent)
   },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
@@ -41,6 +55,7 @@ export const CONFIG = {
     staggerChance: 0.2,              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
   },
+  ui: { barHeight: 72 },             // bottom button bar (SNEAK) in CSS px: thumb-sized
   view: { tilesAcross: 11 },        // camera width in tiles (odd keeps the player centred)
   input: {
     longPressMs: 450,                // hold this long without moving = inspect (shorter = tap)
@@ -53,6 +68,9 @@ export const CONFIG = {
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out
     memoryWall: '#3c3c3c',
+    bush: '#2e7d32',
+    bushMark: '#1b4d1e',             // small mark so bushes read as bushes
+    memoryBush: '#2c332c',
     memoryThing: '#6a6a6a',          // remembered items/doors: grey letter on the greyed tile
     inspect: '#ffffff',              // outline on the long-pressed tile
     debugNoise: '255,96,0',          // heatmap overlay colour (r,g,b)
@@ -60,6 +78,11 @@ export const CONFIG = {
     zombie: '#40c040',
     zombieText: '#000000',
     playerText: '#000000',
+    sneakDim: 'rgba(0,0,0,0.45)',    // overlay on anything sneaking
+    buttonBg: '#202020',
+    buttonText: '#c0c0c0',
+    buttonOnBg: '#ffff00',
+    buttonOnText: '#000000',
     statusBg: '#0000aa',
     statusText: '#ffffff',
     statusTurn: '#00ffff',

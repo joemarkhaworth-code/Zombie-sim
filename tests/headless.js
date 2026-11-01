@@ -1,6 +1,6 @@
 // Headless test run: drive the sim for N turns without rendering.
 // Usage: node tests/headless.js [turns] [seed]
-import { createWorld, tileAt, inBounds, query } from '../src/sim/world.js';
+import { createWorld, tileAt, inBounds, query, isPassable } from '../src/sim/world.js';
 import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
 import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
@@ -177,7 +177,7 @@ const range = (e) => sightRadius(e);
   assert(lv(10, 14) === 1, 'levels: you always see your own tile');
   assert(lv(11, 14) === 0 && !canSee(w, p, z) && !canSee(w, z, p), 'levels: in pitch dark nobody sees anybody');
 
-  w.light.fill(CONFIG.light.ambient); w.light[20 * w.width + 10] = 1; place(w, z, 10, 20);
+  w.light.fill(CONFIG.light.ambient); w.light[17 * w.width + 10] = 1; place(w, z, 10, 17);
   const saved = CONFIG.vision.minLevelToSpot;
   CONFIG.vision.minLevelToSpot = 2;
   assert(!canSee(w, p, z), 'levels: a zombie on a dim tile should not be noticed when level 2 is needed');
@@ -356,6 +356,76 @@ const range = (e) => sightRadius(e);
   makeNoise(w, 5, 11, 3, p.id); // something loud
   assert(heard && z.Brain.goal?.why === 'heard', 'hear: a loud noise should carry through the wall');
   console.log('hear: walls and distance stop quiet noises, loud ones carry OK');
+}
+
+// 5. Stealth.
+{ // Sneak toggle: recorded, no turn; slower; silent.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 5, 5); place(w, z, 18, 26);
+  let noises = 0, stance = null;
+  w.events.on('noise_made', () => noises++);
+  w.events.on('stance_changed', (d) => { stance = d.sneaking; });
+  const turn0 = w.turn, tick0 = w.tick;
+  assert(playerAct(w, { type: 'sneak', on: true }) === false && w.turn === turn0, 'sneak: toggling takes no turn');
+  assert(stance === true && w.inputs.at(-1).action.type === 'sneak', 'sneak: toggle emits stance_changed and is recorded');
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(noises === 0, 'sneak: sneaking steps are silent');
+  assert(w.tick - tick0 === CONFIG.stealth.sneakMoveCost, `sneak: a sneaking step should take ${CONFIG.stealth.sneakMoveCost} ticks, took ${w.tick - tick0}`);
+  const t1 = w.tick;
+  playerAct(w, { type: 'wait' });
+  assert(w.tick - t1 === 1, 'sneak: waiting while sneaking is normal speed');
+  playerAct(w, { type: 'sneak', on: false });
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(noises === 1 && w.tick - t1 === 2, 'sneak: walking again is noisy and normal speed');
+  const replayed = replay(createWorld, 7, w.inputs);
+  assert(replayed.inputs.length === w.inputs.length, 'sneak: toggles replay');
+  console.log('sneak: no turn, recorded, slower, silent OK');
+}
+
+{ // Noticing depends on distance, light and sneaking.
+  const w = openWorld();
+  const p = playerOf(w), z = zombieOf(w);
+  const zr = sightRadius(z); // 7 on a clear day
+  place(w, z, 10, 5);
+  place(w, p, 10, 5 + zr - 1);
+  assert(canSee(w, z, p), 'notice: walking in daylight, seen within the zombie\'s range');
+  playerAct(w, { type: 'sneak', on: true });
+  assert(!canSee(w, z, p), 'notice: sneaking at the same distance goes unnoticed');
+  place(w, p, 10, 5 + Math.floor(zr * CONFIG.stealth.sneakNoticeFactor));
+  assert(canSee(w, z, p), 'notice: sneaking is still noticed up close');
+  place(w, p, 10, 6);
+  assert(canSee(w, z, p), 'notice: adjacent is always noticed');
+  playerAct(w, { type: 'sneak', on: false });
+  place(w, p, 10, 9); // 4 tiles away, in daylight: seen
+  assert(canSee(w, z, p), 'notice: 4 tiles in daylight is seen');
+  w.light[9 * w.width + 10] = 1; refreshAllVision(w);
+  assert(!canSee(w, z, p), 'notice: same spot in dim light is not');
+  console.log('notice: distance x light x sneaking, adjacent always OK');
+}
+
+{ // Bushes: hidden unless adjacent - for you and for zombies.
+  const w = openWorld();
+  w.tiles[10 * w.width + 10] = TILE.BUSH;
+  w.tiles[20 * w.width + 10] = TILE.BUSH;
+  const p = playerOf(w), z = zombieOf(w);
+  place(w, p, 10, 10); place(w, z, 10, 12);
+  assert(visibilityAt(w, z, 10, 10) > 0, 'bush: bushes do not block sight');
+  assert(!canSee(w, z, p), 'bush: player in a bush is hidden 2 tiles away');
+  place(w, z, 10, 11);
+  assert(canSee(w, z, p), 'bush: an adjacent zombie finds you');
+  assert(describeTile(w, 10, 10) === 'You, hidden in a bush.', `bush: inspect own tile, got ${describeTile(w, 10, 10)}`);
+  place(w, z, 10, 20); place(w, p, 10, 17);
+  assert(!canSee(w, p, z) && describeTile(w, 10, 20) === 'A bush.', 'bush: a zombie in a bush is hidden from you too');
+  console.log('bush: hidden unless adjacent, both ways OK');
+}
+
+{ // Generated maps have bushes, and they're walkable.
+  const w = createWorld(5);
+  const bushes = [...w.tiles].filter((t) => t === TILE.BUSH).length;
+  assert(bushes > 5, `gen: expected some bushes, got ${bushes}`);
+  assert(!TILE_INFO[TILE.BUSH].blocks && !TILE_INFO[TILE.BUSH].opaque && TILE_INFO[TILE.BUSH].cover, 'gen: bush is walkable, see-through cover');
+  console.log(`gen: ${bushes} bush tiles OK`);
 }
 
 console.log('PASS');
