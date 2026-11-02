@@ -173,10 +173,9 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   const player = () => world.entities.get(world.playerId);
   const near = (x, y, r) => { const p = player(); return p && p.Position && Math.max(Math.abs(p.Position.x - x), Math.abs(p.Position.y - y)) <= r; };
   ev.on('tree_fell', (d) => { if (playerSeesTile(d.x, d.y)) say('A tree comes down!', PRIORITY.danger); else if (near(d.x, d.y, 12)) say('A crash in the wind.', PRIORITY.notice); });
-  ev.on('crushed', (d) => { if (isPlayer(d.id)) say('A tree falls on you!', PRIORITY.danger); });
+  ev.on('crushed', (d) => { if (isPlayer(d.id)) say('A tree knocks you flat!', PRIORITY.danger); });
   ev.on('roof_damaged', (d) => { if (playerSeesTile(d.x, d.y) || near(d.x, d.y, 6)) say('Slates crash down.', PRIORITY.notice); });
   ev.on('pane_blown', (d) => { if (playerSeesTile(d.x, d.y)) say('Glass shatters.', PRIORITY.notice); });
-  ev.on('debris_hit', (d) => { if (isPlayer(d.id)) say('Debris hits you!', PRIORITY.danger); });
   ev.on('flood_spread', () => say('The flood spreads.', PRIORITY.notice));
   ev.on('wall_breached', (d) => { if (playerSeesTile(d.x, d.y)) say('A wall gives way.', PRIORITY.notice); });
   ev.on('vomited', (d) => { if (isPlayer(d.id)) say('You throw up.', PRIORITY.notice); });
@@ -331,8 +330,6 @@ const CAUSES = {
   smoke: () => 'Choked on smoke',
   drowned: () => 'Drowned',
   illness: () => 'Died of a fever',
-  tree: () => 'Crushed by a falling tree',
-  debris: () => 'Hit by flying debris',
 };
 export function deathText(world) {
   const g = world.gameOver;

@@ -5,17 +5,17 @@
 // (all chances in CONFIG.storm):
 //   - a tree somewhere may come down: it leaves a STUMP (you can see past it now) and lies
 //     downwind as FALLEN_TREE across the next tiles - slow to clamber over, noisy, blocks
-//     sight, hides you, burns. Whatever it lands on is crushed. A crash (noise 3) that
+//     sight, hides you, burns. Whatever it lands on is knocked flat (loses its next action,
+//     no damage). A crash (noise 3) that
 //     zombies come to.
 //   - a roof may lose slates: a 2x2 patch opens to the sky (fire.js loseRoof), so rain,
 //     cold and light get in there. Thatch goes twice as easily.
 //   - a greenhouse pane may blow in: the glass wall becomes a gap with broken glass.
-//   - anyone out in it may be hit by flying debris.
 // These are lasting: nothing grows back or gets mended unless someone does it.
 import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from '../gen/testgrid.js';
 import { makeNoise } from './noise.js';
-import { damage } from './combat.js';
+import { stagger } from './shove.js';
 import { loseRoof } from './fire.js';
 import { indoorAt } from './weather.js';
 import { refreshAllVision } from './vision.js';
@@ -55,13 +55,6 @@ export function tickStorm(world) {
   if (world.rng.chance(S.treeFall)) { const i = randomTile(world, TILE.TREE); if (i >= 0) fellTree(world, i); }
   if (world.rng.chance(S.roofLoss)) stripRoof(world);
   if (world.rng.chance(S.glassBreak)) { const i = randomTile(world, TILE.WALL_GLASS); if (i >= 0) blowPane(world, i); }
-  for (const e of [...world.entities.values()]) {
-    if (!e.Needs || !e.Position || !e.Health || indoorAt(world, e.Position.y * world.width + e.Position.x)) continue;
-    if (world.rng.chance(S.debrisChance)) {
-      world.events.emit('debris_hit', { id: e.id });
-      damage(world, e, 1, { cause: 'debris' });
-    }
-  }
 }
 
 // The tree at tile i comes down with the wind.
@@ -85,7 +78,7 @@ export function fellTree(world, i, wind = world.weather && world.weather.wind) {
   for (const p of lies) for (const e of [...world.entities.values()]) {
     if (e.Health && e.Position && e.Position.x === p.x && e.Position.y === p.y) {
       world.events.emit('crushed', { id: e.id, x: p.x, y: p.y });
-      damage(world, e, S.crushDamage, { cause: 'tree' });
+      stagger(world, e, S.knockActions); // knocked flat, not hurt
     }
   }
   refreshAllVision(world);

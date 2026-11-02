@@ -1982,18 +1982,18 @@ console.log('water: dirty water makes you ill later (thirstier, sick, fever), co
   w.weather = { kind: 'clear', until: Infinity }; setWaterLevel(w, 'beck', 1);
   assert(w.tiles[12 * w.width + 12] === TILE.STREAM && w.tiles[13 * w.width + 12] === TILE.STREAM && w.tiles[20 * w.width + 9] === TILE.FLOOR, 'storm: the torrent washes out its banks: the beck widens');
   restoreCfg();
-  // Gales: a tree comes down across the lane, leaving a stump, crushing what it lands on.
+  // Gales: a tree comes down across the lane, leaving a stump, knocking flat what it lands on.
   ({ w, p } = valley());
   w.tiles[16 * w.width + 16] = TILE.TREE;
   const z = w.entities.get(makeZombie(w, { x: 17, y: 16 })); const zhp = z.Health.hp;
   fellTree(w, 16 * w.width + 16, [1, 0]);
   assert(w.tiles[16 * w.width + 16] === TILE.STUMP && w.tiles[16 * w.width + 17] === TILE.FALLEN_TREE && w.tiles[16 * w.width + 18] === TILE.FALLEN_TREE, 'storm: a tree falls downwind, leaving a stump');
-  assert(z.Health.hp === zhp - SC.crushDamage, 'storm: it crushes what it lands on');
+  assert(z.Health.hp === zhp && z.Staggered && z.Staggered.actions >= 1, 'storm: it knocks flat what it lands on (no damage)');
   assert(TILE_INFO[TILE.FALLEN_TREE].opaque && TILE_INFO[TILE.FALLEN_TREE].moveCost >= 3 && flammability(w, 16 * w.width + 18) >= 2, 'storm: a fallen tree blocks the view, is slow to cross and burns');
-  // In a gale trees come down, roofs lose slates (rain gets in), and debris hits you outside.
+  // In a gale trees come down and roofs lose slates (rain gets in); nobody is hurt by the wind itself.
   ({ w, p } = valley());
   for (const x of [13, 15, 17]) w.tiles[9 * w.width + x] = TILE.TREE;
-  Object.assign(SC, { treeFall: 1, roofLoss: 1, debrisChance: 1 });
+  Object.assign(SC, { treeFall: 1, roofLoss: 1 });
   setWeather(w, 'gale');
   assert(w.weather.wind, 'storm: a gale has a wind direction');
   const hp0 = p.Health.hp; waits(w, 3);
@@ -2001,17 +2001,12 @@ console.log('water: dirty water makes you ill later (thirstier, sick, fever), co
   let open = 0; for (let y = 4; y <= 6; y++) for (let x = 4; x <= 7; x++) if (!indoorAt(w, y * w.width + x)) open++;
   assert(stumps >= 2, 'storm: the gale brings trees down');
   assert(open >= 4, 'storm: the gale strips slates off the roof: the room is open to the rain');
-  assert(p.Health.hp < hp0, 'storm: out in it, flying debris hits you');
-  place(w, p, 4, 4); for (let y = 3; y <= 7; y++) for (let x = 3; x <= 8; x++) w.roofless[y * w.width + x] = 0;
-  w.roofChanged = true;
-  SC.roofLoss = 0; const hp1 = p.Health.hp;
-  waits(w, 3);
-  assert(p.Health.hp >= hp1, 'storm: indoors, the debris misses you');
+  assert(p.Health.hp >= hp0, 'storm: out in it, the wind itself does not hurt you');
   restoreCfg();
   const back = deserialize(serialize(w), createWorldAny);
   assert(serialize(back) === serialize(w) && back.weather.wind, 'storm: saved');
 }
-console.log('storm: long floods spread into houses and cellars, float things off, breach walls, leave silt (slow, prints); spates widen the beck; gales fell trees (stumps, crushing, fallen trunks), strip roofs and throw debris; saved OK');
+console.log('storm: long floods spread into houses and cellars, float things off, breach walls, leave silt (slow, prints); spates widen the beck; gales fell trees (stumps, knocked flat, fallen trunks) and strip roofs; saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

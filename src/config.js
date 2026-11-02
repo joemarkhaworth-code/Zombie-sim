@@ -326,12 +326,11 @@ export const CONFIG = {
   storm: {
     treeFall: 0.12,                  // chance a tick that a tree somewhere comes down (most of a dozen in a gale)
     fallLength: 2,                   // it lies across this many tiles downwind
-    crushDamage: 2,                  // to anything it lands on
+    knockActions: 1,                 // anything it lands on is knocked flat: loses its next action (no damage)
     fallNoise: 3,
     roofLoss: 0.05,                  // chance a tick that a roof loses slates (a 2x2 patch opens to the sky; thatch twice as likely)
     roofNoise: 2,
     glassBreak: 0.03,                // chance a tick that a greenhouse pane blows in
-    debrisChance: 0.004,             // outdoors: chance a tick that flying debris hits you (1 damage; ~1 in 8 hours out in it)
   },
   // Water (step 20): src/sim/systems/water.js.
   water: {
@@ -398,7 +397,7 @@ export const CONFIG = {
     wadeWet: 2,                      // wading a beck soaks you to at least this level
     shelter: 2,                      // indoors it's this many levels less cold
     coldTiresFrom: 2,                // shivering (cold 2+): fatigue rises twice as fast
-    freezeEvery: 120,                // freezing (cold 3): lose 1 health every 4 hours, and you can't sleep
+    freezeEvery: 240,                // freezing (cold 3): lose 1 health every 8 hours, and you can't sleep
   },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
