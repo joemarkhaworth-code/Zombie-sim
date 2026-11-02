@@ -233,7 +233,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Throwing (src/sim/systems/ranged.js): any item can be thrown. BAG rows have three buttons (use, THROW, DROP); THROW closes the bag and starts aiming. Range throw.range = 6 (round), the tile must be in sight with a clear line and not solid. The item lands on the tile and clatters there (noise level throw.landNoise = 2, ~8 tiles), so throwing beans is a lure: zombies go to investigate the landing spot. If a creature is on the tile it may be hit (75%): any hit staggers it (loses its next action, throw.staggerActions = 1), and heavy items (slots >= 2: bat, guns) also do 1 damage. So a tin of beans is worth throwing at a zombie to buy a turn. Input { type: 'throw', itemId, x, y }, takes a turn.
 - Guns are items with a `ranged` property and their own ammo (Item.ammo, shown in the bag). Wield one and a FIRE button (showing ammo, e.g. "FIRE 3") joins the action bar. The noise is at the shooter. Air rifle: range 8, 1 damage, quiet (noise 1), 10 pellets. Shotgun: range 4, 4 damage (kills a zombie), very loud (noise 3, ~12 tiles), 4 shells. Both work as clubs when wielded (1 damage). An empty gun clicks ("Click. Out of ammo."), no turn. Input { type: 'fire', x, y }. A shot hits the creature on the target tile; creatures in between are ignored for now. Guns don't get sneak-attack bonuses.
 - Aiming (throw or fire): valid targets come from validTargets() (one rule for the sim and the highlight). Valid tiles get a yellow tint, ones with a creature orange. The action bar becomes one big CANCEL; tapping yourself also cancels; tapping an invalid tile says "Can't aim there." and keeps aiming. If nothing is in range it says so and doesn't enter aiming.
-- Ammo is part of the gun for now (no separate ammo items); finding ammo comes with the village (step 14).
+- Guns come with some ammo, and ammo items (box of shells, tin of pellets: ammoFor + rounds) load a carried gun of their type (USE shows LOAD; the emptiest gun; "No gun to load." otherwise). Found in the village (14d).
 - Materials table (CONFIG.materials): stone, slate, brick, wood, glass, corrugatedMetal, thatch. Each has hp (blows to break at 1 damage), flammability 0-3 (does it catch fire and spread flames), heatDamage 1-3 (how fast fire wears it down even if it never catches - nothing is fireproof: glass shatters, slate splits, metal buckles, stone and brick spall; fire is step 19), seeThrough (does sight pass while intact), hitNoise and breakNoise (0-3), and glass has shards (leaves broken glass). Everything structural reads its numbers from here; nothing hard-codes them. CONFIG.build says what things are made of for now: walls stone, doors wood, windows glass, barricades wood (planks). A structure's material decides its health, whether it blocks sight (a glass door doesn't; a metal-sheet window does) and how loud each blow and the final break are (corrugated metal clangs at 3; thatch is a soft 1). Walls stay tiles with health in world.tileHp (nothing damages walls yet; explosions later). Doors and windows are entities (Structure { material, hp, max } + Door { open, locked, broken } or Window { broken }) standing on floor tiles in wall gaps, indexed in world.structures. Barricade { material, hp, max } soaks blows first. Their Blocks/Opaque/glyph/name are recomputed from state and material by refresh(), so memory snapshots record open/shut/broken/boarded automatically.
 - Closed doors block movement and sight; open or broken doors block neither. Intact windows block movement but not sight; broken windows can be climbed through. Anything solid (closed door, window, barricade) also muffles noise like a wall and stops thrown items and shots (lineClear takes a blocking rule). A door or window changing state refreshes everyone's vision.
 - Door controls: walk into a closed, unlocked door to open it (a turn, you don't move). Tap exactly on an adjacent door tile to toggle it open/closed ({ type: 'door', x, y }, a turn); tapping further in that direction walks through. A door can't be closed with someone in the doorway.
@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (5 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (6 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -280,7 +280,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - Also leaf dots for hedges, a dark round crown for trees, ripples for water, fronds for bracken, a peak for rock, pebbles for scree.
   - Remembered tiles use a dark grey of each tile's own colour, so they keep their shapes.
 - Save version 4 (14b): the village now has buildings, so older saves start a new game. Saves stay small on the big map: tile arrays are run-length encoded and map memory saves only the remembered tiles (~65 KB, ~2.5 ms per autosave).
-- Until 14d places village loot and zombies, the single test zombie spawns 8-20 tiles from the start (zombie.spawnMaxDistance) and the test items are scattered within 20 tiles of it (testGrid.itemRadius), off slow ground; on the big map they'd otherwise never be found.
+- The test grid still gets its single test zombie (8-20 tiles away) and scattered test items; the village gets its own loot and zombies from 14d (gen/life.js).
 
 ## Decisions for step 14b (buildings) - built
 - 14a decides where every building goes: each plot has a size from CONFIG.scale, a facing and a front tile. 14b (src/sim/gen/buildings.js, buildVillage, called by createWorld after the land) builds every plot with one generic builder. Nothing is special-cased per map position.
@@ -360,6 +360,56 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - Climbing takes the ladder's time; upstairs you only see upstairs.
   - A noise upstairs is heard below as coming from the ladder, and the zombie climbs after you.
   - A pulled-up ladder stops it, you can't climb down until you lower it, and saves keep pulled ladders.
+  Checked on 150 seeds.
+
+## Decisions for step 14d (village life) - built
+- Phone box (land, gen/village.js): a red phone box on the green by the pavement near the bridge, world.phoneBox. TILE.PHONEBOX: you can step into it, glazed so you're still seen, the line is dead ("A red phone box. The line is dead."). It's there for the ringing phone box later (Phase 8).
+- Allotments (land, gen/village.js), world.allotments:
+  - A hedged site (CONFIG.village.allotments: 2 x 3 plots of 5 x 5) at the far end of one street, beyond its back lane on the side away from the beck. Its gate goes through the field wall onto the back lane.
+  - Plots of dug-over beds (TILE.ALLOTMENT, walkable) between grass paths, with a central path.
+  - About half the plots have a shed (a 3x3 plot built by 14b) facing the central path.
+- Population (src/sim/gen/life.js, populateVillage, run by createWorld after the floors). All from the seed; the test zombie and test items are test grid only now.
+  - Loot by room name (CONFIG.loot.rooms: n = [min, max] items per room, weighted table), on open floor tiles (not on doors, windows or stairs). Upstairs, cellars and lofts count.
+    - kitchens: food and knives;
+    - living/front rooms: walking sticks, golf clubs;
+    - bedrooms: bandages and the odd air rifle and pellets;
+    - bathrooms: first aid;
+    - shop and stock rooms: beans, crisps, chocolate;
+    - the bar, store and beer cellar: ale, crisps, planks;
+    - the vestry: first aid;
+    - cellars: food and planks;
+    - barns and haylofts: forks, planks, shells;
+    - sheds: forks, planks, golf clubs.
+  - Per-building extras (CONFIG.loot.extras): farmhouse shotgun 60% and shells 70%; a cricket bat at the pub; sometimes a bat or air rifle in a detached cottage. About 100 items per village.
+  - New items (CONFIG.items), as data like the rest:
+    - weapons: garden fork (2 dmg), walking stick (1, accurate), golf club (2), kitchen knife (1, bleeds);
+    - food (heal 1 until hunger, step 16): bag of crisps, bar of chocolate, bottle of ale;
+    - first aid kit: stops bleeding and heals 1; refused if you're not hurt;
+    - box of shells / tin of pellets: ammo.
+    Anything can still be thrown as a lure.
+  - Keys: every building with a locked outside door gets one key (named for the building: "cottage key", "pub key", "shed key"; its lockId opens that building).
+    - If the building has a resident zombie, it usually carries the key (keyResident 0.7), in an Inventory.
+    - Else it's often left on the front tile (keyDoorstep 0.4).
+    - Else it's lost: bash or smash your way in.
+  - Anything a creature carries (Inventory, Keyring) falls where it dies (kill() in combat.js; not the player's). So killing a resident gets you its key.
+  - Zombies (CONFIG.village.zombies), made by makeZombie() in world.js:
+    - 12 residents in rooms of houses, the pub, the shop and the church (upstairs too). Often they're shut in behind locked doors, and they bash their way out when they hear you.
+    - 18 about the streets (road, pavements, lanes, ginnels, yards, green, paths) within the village rows.
+    - 5 out in the fields and on the fell.
+    - None start within 14 tiles of you (off your screen), and nothing sees you at the start.
+- Play-test (a simple bot that fights adjacent zombies, bandages, eats when low, grabs items it sees and otherwise wanders; 60 seeds x 1500 turns, about two days):
+  - With 9/11/4 zombies only 15% of runs died and the first sighting took ~440 turns, too quiet. Raised to 12/18/5.
+  - That gives ~33% deaths over two days, mostly bled out: the bot never gets into the locked houses where the bandages are. Walking down the street you meet zombies within a few dozen steps.
+  - A turn takes ~2 ms with 35 zombies. Tune further by playing: CONFIG.village.zombies and CONFIG.loot are the knobs.
+- Save version 6.
+- Tests:
+  - a phone box you can step into;
+  - allotments with beds and a gate;
+  - plenty of items, none in walls, food in a kitchen;
+  - every key fits a locked building, and carried keys are in zombies' pockets;
+  - the zombie count, none near the start, residents indoors, nothing sees you at the start;
+  - a resident's key drops where it dies and opens its building;
+  - shells load a shotgun, and pellets with no air rifle are refused.
   Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d

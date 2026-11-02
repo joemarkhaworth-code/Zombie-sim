@@ -149,7 +149,7 @@ export function generateVillage(rng, width, height) {
 
   // ---- 3-5. High street, ginnels and yards, green and church ------------------------
   const plots = [];
-  let green = null, graveyard = null;
+  let green = null, graveyard = null, phoneBox = null, allotments = null;
   const parts = {
     up: { near: br - lw - 1, dir: -1, len: upRows },
     down: { near: br + bw + lw, dir: 1, len: downRows },
@@ -186,6 +186,8 @@ export function generateVillage(rng, width, height) {
       put(Math.floor(gh / 2), 2 + Math.floor(B / 3), TILE.TREE);
       if (rng.chance(0.6)) put(Math.floor(gh / 2) + 2, 2 + Math.floor(B * 2 / 3), TILE.TREE);
       green = rect(0, gh - 1, 2, 1 + B);
+      put(1, 2, TILE.PHONEBOX); // the red phone box, on the green by the pavement near the bridge
+      phoneBox = at2(1, 2);
       t = gh; ginnel(t++);
       // The church, lying along the street in its walled graveyard: graves all round it,
       // a lychgate on the pavement with a path to the door, a back gate onto the back lane.
@@ -275,6 +277,54 @@ export function generateVillage(rng, width, height) {
         if (avail >= 3) { fill(t + 1, P.len - 2, 3, B, TILE.GRASS); put(t + 1, 2, TILE.GATE); }
         t = P.len;
       }
+    }
+  }
+
+  // ---- Allotments (14d): a hedged site at the far end of a street, beyond the back lane on
+  // the side away from the beck. Plots of dug-over beds between grass paths, a central path,
+  // some plots with a shed (a 3x3 plot, built by 14b) facing the central path. The gate
+  // opens onto the back lane through the field wall.
+  {
+    const A = V.allotments;
+    const iw = A.cols * A.plotW + A.cols + 1, ih = A.rows * A.plotH + A.rows + 1; // interior incl. paths
+    const sw = iw + 2, sh = ih + 2;
+    for (const pName of ['down', 'up']) {
+      if (allotments) break;
+      const P = parts[pName], s = pName === 'up' ? -bs : bs; // the side away from the beck
+      const yOf = (t) => P.near + P.dir * t;
+      const k0 = bankK + 1, t0 = P.len - sh;
+      const at2 = (t, k) => ({ x: X(s, k, yOf(t)), y: yOf(t) });
+      let ok = t0 >= 0;
+      for (let t = t0; ok && t < P.len; t++) for (let k = k0; k < k0 + sw; k++) { const { x, y } = at2(t, k); if (!free(x, y)) { ok = false; break; } }
+      if (!ok) continue;
+      const rect = (ta, tb, ka, kb) => { const a = at2(ta, ka), b = at2(tb, kb); return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x) + 1, h: Math.abs(b.y - a.y) + 1 }; };
+      const edge = A.edge === 'hedge' ? TILE.HEDGE : TILE.DRYSTONE;
+      for (let r = 0; r < sh; r++) for (let c = 0; c < sw; c++) {
+        const { x, y } = at2(t0 + r, k0 + c);
+        const wall = r === 0 || c === 0 || r === sh - 1 || c === sw - 1;
+        const ir = r - 1, ic = c - 1; // interior row/col
+        const path = ir % (A.plotH + 1) === 0 || ic % (A.plotW + 1) === 0;
+        lay(x, y, wall ? edge : path ? TILE.GRASS : TILE.ALLOTMENT);
+      }
+      // Gate: on a path row, through the site edge and the field wall onto the back lane.
+      const gr = t0 + 1 + (A.plotH + 1) * Math.floor(A.rows / 2);
+      for (const k of [bankK, k0]) { const { x, y } = at2(gr, k); lay(x, y, TILE.GATE); }
+      // Sheds: in a plot corner against the central path, facing it.
+      const central = k0 + 1 + (A.plotW + 1) * Math.floor(A.cols / 2); // col of the middle path
+      const [shw, shl] = BLD.shed;
+      for (let pr = 0; pr < A.rows; pr++) for (let pc = 0; pc < A.cols; pc++) {
+        if (!rng.chance(A.shed)) continue;
+        const pt0 = t0 + 2 + pr * (A.plotH + 1), pk0 = k0 + 2 + pc * (A.plotW + 1);
+        const nearSide = pk0 + A.plotW === central; // this plot's far edge is the central path
+        if (!nearSide && pk0 - 1 !== central) continue;
+        const ka = nearSide ? central - shl : central + 1, kb = ka + shl - 1;
+        const ta = pt0, tb = pt0 + shw - 1;
+        for (let t = ta; t <= tb; t++) for (let k = ka; k <= kb; k++) { const { x, y } = at2(t, k); lay(x, y, TILE.PLOT); }
+        const facesUp = nearSide ? s > 0 : s < 0; // front toward the central path: +k is east when s > 0
+        const mid = ta + Math.floor(shw / 2);
+        plots.push({ ...rect(ta, tb, ka, kb), kind: 'shed', building: 'shed', facing: facesUp ? 'E' : 'W', front: at2(mid, central) });
+      }
+      allotments = rect(t0, P.len - 1, k0, k0 + sw - 1);
     }
   }
 
@@ -447,7 +497,7 @@ export function generateVillage(rng, width, height) {
   makeReachable(tiles, width, height, [start.x, start.y]);
 
   return {
-    tiles, plots, green, graveyard, farms, bridgeRow: br, lakeTop, start,
+    tiles, plots, green, graveyard, farms, bridgeRow: br, lakeTop, start, phoneBox, allotments,
     widths: { road: rw, lane: lw, beck: bw, bridge: bridgeW }, // as picked for this map
   };
 }

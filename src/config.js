@@ -45,7 +45,13 @@ export const CONFIG = {
     yardShed: 0.4, gardenShed: 0.5,  // chance of a shed in a back yard / a detached cottage's back garden (greenhouse: always)
     graves: 0.75,                    // chance of a gravestone on each grave spot
     backHedge: 0.2,                  // field edge behind a back lane is sometimes a hedge (else dry stone)
-    farms: 2, farmYard: 8,           // walled farmyard (yard this deep) with a farmhouse and a barn
+    farms: 2, farmYard: 8,
+    // Allotments (14d): a hedged site off the far end of one street, beyond its back lane.
+    allotments: { plotW: 5, plotH: 5, cols: 2, rows: 3, shed: 0.5, edge: 'hedge' },
+    // Zombies (14d): residents shut in buildings (houses, pub, shop, church, upstairs too),
+    // more about the streets, yards and green, and a few out in the fields and on the fell.
+    // None start within minDistance of you.
+    zombies: { residents: 12, streets: 18, fields: 5, minDistance: 14 },           // walled farmyard (yard this deep) with a farmhouse and a barn
     fieldGate: 0.8, fellGate: 0.4,   // gates between fields / from a field onto the open fell
     screeFrom: 8,                    // scree only this far up the open fell
     beckTrees: 0.3, woodRadius: 12, woodDensity: 0.55, fieldTrees: 40,
@@ -78,6 +84,55 @@ export const CONFIG = {
       weapon: { damage: 1, hitChance: 0.7, verb: 'hit' },
       ranged: { range: 4, damage: 4, hitChance: 0.9, woundChance: 0.8, noise: 3 }, // very loud, strong, short range
     },
+    // Village loot (step 14d). Food heals 1 until hunger exists (step 16). Anything can be
+    // thrown as a lure. ammoFor: USE loads that many rounds into a carried gun of that type.
+    fork: { name: 'garden fork', char: '/', fg: '#000000', bg: '#a0a0a0', slots: 2, weapon: { damage: 2, hitChance: 0.75, verb: 'stab' } },
+    stick: { name: 'walking stick', char: '/', fg: '#000000', bg: '#8a6a40', slots: 1, weapon: { damage: 1, hitChance: 0.9, verb: 'hit' } },
+    golfClub: { name: 'golf club', char: '/', fg: '#000000', bg: '#c8c8d0', slots: 2, weapon: { damage: 2, hitChance: 0.7, verb: 'hit' } },
+    knife: { name: 'kitchen knife', char: '-', fg: '#000000', bg: '#d0d0d0', slots: 1, weapon: { damage: 1, hitChance: 0.85, verb: 'stab', woundChance: 0.6 } },
+    crisps: { name: 'bag of crisps', char: '%', fg: '#000000', bg: '#f0d040', slots: 1, heal: 1 },
+    chocolate: { name: 'bar of chocolate', char: '%', fg: '#ffffff', bg: '#6a3a1a', slots: 1, heal: 1 },
+    ale: { name: 'bottle of ale', char: '!', fg: '#000000', bg: '#c08030', slots: 1, heal: 1 },
+    firstAid: { name: 'first aid kit', char: '+', fg: '#ffffff', bg: '#20a040', slots: 1, stanch: true, heal: 1 },
+    shells: { name: 'box of shells', char: '"', fg: '#ffffff', bg: '#803000', slots: 1, ammoFor: 'shotgun', rounds: 4 },
+    pellets: { name: 'tin of pellets', char: '"', fg: '#000000', bg: '#a0a0ff', slots: 1, ammoFor: 'airRifle', rounds: 10 },
+  },
+  // Loot (step 14d), placed by src/sim/gen/life.js. rooms: by room name, n = [min, max]
+  // items per room, items = weighted table. extras: per building type, [item, chance] put in
+  // a random room (farmers keep a shotgun). Rooms not listed get nothing.
+  loot: {
+    rooms: {
+      kitchen: { n: [1, 2], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1 } },
+      scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1 } },
+      'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1 } },
+      'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1 } },
+      'sitting room': { n: [0, 1], items: { ale: 2, stick: 1 } },
+      'front bedroom': { n: [0, 1], items: { bandage: 2, airRifle: 1, pellets: 1 } },
+      'back bedroom': { n: [0, 1], items: { bandage: 2, chocolate: 1, golfClub: 1 } },
+      bedroom: { n: [0, 1], items: { bandage: 1, chocolate: 1 } },
+      bathroom: { n: [0, 1], items: { bandage: 2, firstAid: 1 } },
+      flat: { n: [0, 1], items: { beans: 1, crisps: 1 } },
+      shop: { n: [2, 4], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1 } },
+      'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2 } },
+      'stock cellar': { n: [1, 3], items: { beans: 3, crisps: 1, planks: 1 } },
+      bar: { n: [1, 3], items: { ale: 4, crisps: 3 } },
+      store: { n: [1, 2], items: { ale: 2, crisps: 2, planks: 1 } },
+      'beer cellar': { n: [1, 3], items: { ale: 4, planks: 1 } },
+      vestry: { n: [0, 1], items: { firstAid: 2, chocolate: 1 } },
+      cellar: { n: [0, 2], items: { beans: 2, planks: 2, ale: 1 } },
+      barn: { n: [0, 2], items: { fork: 2, planks: 3 } },
+      hayloft: { n: [0, 1], items: { planks: 1, shells: 1 } },
+      shed: { n: [0, 1], items: { fork: 3, planks: 2, golfClub: 1 } },
+      greenhouse: { n: [0, 1], items: { fork: 1 } },
+    },
+    extras: {
+      farmhouse: [['shotgun', 0.6], ['shells', 0.7]],
+      pub: [['bat', 0.5]],
+      detachedCottage: [['bat', 0.2], ['airRifle', 0.15]],
+    },
+    // Keys to locked buildings: a resident zombie carries it, else it's left by the door,
+    // else it's lost (bash or smash your way in).
+    keyResident: 0.7, keyDoorstep: 0.4,
   },
   // Materials: what walls, doors, windows and barricades are made of.
   //   hp           - blows to break it (at 1 damage per blow)
@@ -105,15 +160,15 @@ export const CONFIG = {
   // the outside door is locked (keys come with loot, 14d). innerDoorOpen: chance an inside
   // door starts open. Room layouts live in src/sim/gen/buildings.js.
   buildingTypes: {
-    terracedCottage: { walls: { stone: 3, brick: 1 }, roof: { slate: 4, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
-    detachedCottage: { walls: { stone: 4, brick: 1 }, roof: { slate: 3, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
-    farmhouse: { walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.5, lockBack: 0.5 },
-    cornerShop: { walls: { stone: 2, brick: 1 }, roof: { slate: 1 }, floor: 'wood', door: 'wood', lockFront: 0.9, lockBack: 0.6 },
-    pub: { walls: { stone: 3, brick: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.8, lockBack: 0.5 },
-    church: { walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.3, lockBack: 0.3 },
-    barn: { walls: { stone: 2, corrugatedMetal: 1 }, roof: { slate: 1, corrugatedMetal: 1 }, floor: 'concrete', door: 'walls', lockFront: 0.1, lockBack: 0 },
-    shed: { walls: { wood: 3, corrugatedMetal: 2 }, roof: 'walls', floor: 'concrete', door: 'walls', lockFront: 0.5, lockBack: 0 },
-    greenhouse: { walls: { glass: 1 }, roof: 'walls', floor: 'earth', door: 'walls', lockFront: 0, lockBack: 0 },
+    terracedCottage: { name: 'cottage', walls: { stone: 3, brick: 1 }, roof: { slate: 4, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
+    detachedCottage: { name: 'cottage', walls: { stone: 4, brick: 1 }, roof: { slate: 3, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
+    farmhouse: { name: 'farmhouse', walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.5, lockBack: 0.5 },
+    cornerShop: { name: 'shop', walls: { stone: 2, brick: 1 }, roof: { slate: 1 }, floor: 'wood', door: 'wood', lockFront: 0.9, lockBack: 0.6 },
+    pub: { name: 'pub', walls: { stone: 3, brick: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.8, lockBack: 0.5 },
+    church: { name: 'church', walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.3, lockBack: 0.3 },
+    barn: { name: 'barn', walls: { stone: 2, corrugatedMetal: 1 }, roof: { slate: 1, corrugatedMetal: 1 }, floor: 'concrete', door: 'walls', lockFront: 0.1, lockBack: 0 },
+    shed: { name: 'shed', walls: { wood: 3, corrugatedMetal: 2 }, roof: 'walls', floor: 'concrete', door: 'walls', lockFront: 0.5, lockBack: 0 },
+    greenhouse: { name: 'greenhouse', walls: { glass: 1 }, roof: 'walls', floor: 'earth', door: 'walls', lockFront: 0, lockBack: 0 },
   },
   innerDoorOpen: 0.7,
   // Upstairs, cellars and lofts (step 14c): each is a small separate map in a band of void
@@ -234,7 +289,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 5, key: 'zombie-sim-save' },
+  save: { version: 6, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -274,6 +329,8 @@ export const CONFIG = {
     graveStone: '#a8a8a0',
     stairs: '#e8d8a0', stairsText: '#3a2a10',            // stairs < > and ladders H (things on a tile)
     hatch: '#5a4a30', hatchText: '#a89060',              // a pulled-up ladder seen from below
+    phoneBox: '#c01818', phoneBoxMark: '#f0e0a0',        // red phone box with glazed panes
+    allotment: '#4a3626', allotmentMark: '#2e2016',      // dug-over beds in rows
     wallStone: '#8c8678', wallStoneMark: '#5e5a50',      // building walls (neat courses; dry-stone field walls are rougher)
     wallBrick: '#8e4a36', wallBrickMark: '#5e2e22',
     wallWood: '#7a5430', wallWoodMark: '#4e3418',

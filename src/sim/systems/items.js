@@ -17,13 +17,16 @@ import { addEntity, isPassable, query } from '../world.js';
 import { adjacentStructures, addBarricade } from './structures.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 
-export function makeItem(world, type, x, y) {
+// extra: { lockId, name } override the type's (a key to a particular building).
+// x === null: made straight into someone's hands (no Position).
+export function makeItem(world, type, x, y, extra = {}) {
   const def = CONFIG.items[type];
+  const lockId = extra.lockId || def.lockId;
   return addEntity(world, {
-    Position: { x, y },
-    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(def.lockId ? { lockId: def.lockId } : {}) },
+    ...(x === null ? {} : { Position: { x, y } }),
+    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(lockId ? { lockId } : {}) },
     Glyph: { char: def.char, fg: def.fg, bg: def.bg },
-    Name: { name: def.name },
+    Name: { name: extra.name || def.name },
   });
 }
 
@@ -81,6 +84,30 @@ export function useItem(world, carrier, itemId) {
   if (def.weapon) {
     inv.wielded = inv.wielded === itemId ? null : itemId;
     world.events.emit(inv.wielded ? 'item_wielded' : 'item_unwielded', { id: carrier.id, itemId });
+    return true;
+  }
+  if (def.ammoFor) {
+    // Load a carried gun of the right type (the emptiest one).
+    const guns = inv.items.map((id) => world.entities.get(id)).filter((g) => g.Item.type === def.ammoFor);
+    if (!guns.length) {
+      world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'no_gun' });
+      return false;
+    }
+    const gun = guns.reduce((a, b) => (b.Item.ammo < a.Item.ammo ? b : a));
+    gun.Item.ammo += def.rounds;
+    world.events.emit('gun_loaded', { id: carrier.id, gunId: gun.id, rounds: def.rounds, ammo: gun.Item.ammo });
+    inv.items.splice(inv.items.indexOf(itemId), 1);
+    world.entities.delete(itemId);
+    return true;
+  }
+  if (def.stanch && def.heal) { // first aid kit: stops bleeding and heals; only if it does something
+    if ((!carrier.Bleeding || carrier.Bleeding.level <= 0) && carrier.Health && carrier.Health.hp >= carrier.Health.max) {
+      world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'not_hurt' });
+      return false;
+    }
+    if (carrier.Bleeding) carrier.Bleeding.level = 0;
+    if (carrier.Health) carrier.Health.hp = Math.min(carrier.Health.max, carrier.Health.hp + def.heal);
+    consume(world, carrier, item, 'bandaged');
     return true;
   }
   if (def.heal) {

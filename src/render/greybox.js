@@ -22,6 +22,7 @@ const TILE_COLOUR = {
   [TILE.GATE]: C.gate, [TILE.PATH]: C.path, [TILE.PLOT]: C.plot, [TILE.GRAVE]: C.grass,
   [TILE.WALL_STONE]: C.wallStone, [TILE.WALL_BRICK]: C.wallBrick, [TILE.WALL_WOOD]: C.wallWood,
   [TILE.WALL_METAL]: C.wallMetal, [TILE.WALL_GLASS]: C.wallGlass,
+  [TILE.PHONEBOX]: C.phoneBox, [TILE.ALLOTMENT]: C.allotment, [TILE.VOID]: C.background,
   [TILE.FLOOR_WOOD]: C.floorWood, [TILE.FLOOR_FLAGS]: C.floorFlags, [TILE.FLOOR_CONCRETE]: C.floorConcrete, [TILE.FLOOR_EARTH]: C.floorEarth,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
@@ -84,6 +85,12 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.FLOOR_WOOD) { ctx.fillStyle = dim(C.floorWoodMark); const h = Math.max(1, Math.floor(s / 16)); for (const f of [0.33, 0.66]) ctx.fillRect(px, py + f * s, s - 1, h); return; }
   if (t === TILE.FLOOR_FLAGS) { ctx.fillStyle = dim(C.floorFlagsMark); const h = Math.max(1, Math.floor(s / 16)); ctx.fillRect(px, py + s / 2, s - 1, h); ctx.fillRect(px + s / 2, py, h, s - 1); return; }
   if (t === TILE.FLOOR_EARTH) { ctx.fillStyle = dim(C.floorEarthMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.25, 0.3], [0.65, 0.6], [0.4, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
+  if (t === TILE.PHONEBOX) { // red box, glazed panes in a grid
+    ctx.fillStyle = dim(C.phoneBoxMark); const g = s * 0.14;
+    for (const fx of [0.22, 0.56]) for (const fy of [0.22, 0.56]) ctx.fillRect(px + fx * s, py + fy * s, g * 1.6, g * 1.6);
+    return;
+  }
+  if (t === TILE.ALLOTMENT) { ctx.fillStyle = dim(C.allotmentMark); const h = Math.max(2, Math.floor(s / 10)); for (const f of [0.2, 0.5, 0.8]) ctx.fillRect(px, py + f * s - h / 2, s - 1, h); return; }
   if (t === TILE.ROAD) { // faded centre line between the two lanes of tarmac
     if (water && water.line) { ctx.fillStyle = dim(C.roadMark); ctx.fillRect(water.line === 1 ? px + s - 2 : px + s / 2 - 1, py + s * 0.2, 2, s * 0.4); }
     return;

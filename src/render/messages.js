@@ -112,7 +112,10 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('use_failed', (d) => {
     if (!isPlayer(d.id)) return;
     if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
+    if (d.reason === 'no_gun') say('No gun to load.', PRIORITY.blocked);
+    if (d.reason === 'not_hurt') say("You're not hurt.", PRIORITY.blocked);
   });
+  ev.on('gun_loaded', (d) => { if (isPlayer(d.id)) say(`Loaded. ${d.ammo} rounds.`, PRIORITY.info); });
   ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('bleeding_started', (d) => { if (isPlayer(d.id)) say('You are bleeding!', PRIORITY.notice); });

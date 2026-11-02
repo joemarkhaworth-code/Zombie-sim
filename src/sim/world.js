@@ -16,6 +16,7 @@ import { buildTestBuilding } from './gen/building.js';
 import { buildVillage } from './gen/buildings.js';
 import { buildFloors } from './gen/floors.js';
 import { rebuildLinks } from './systems/floors.js';
+import { populateVillage } from './gen/life.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -26,10 +27,10 @@ export function createWorld(seed, opts = {}) {
   const landHeight = map === 'village' ? CONFIG.village.height : CONFIG.grid.height;
   const height = map === 'village' ? landHeight + CONFIG.village.floorRows : landHeight;
   const rng = createRng(seed);
-  let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null, widths = null;
+  let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null, widths = null, phoneBox = null, allotments = null;
   if (map === 'village') {
     let land;
-    ({ tiles: land, plots, green, graveyard, farms, bridgeRow, start: villageStart, widths } = generateVillage(rng, width, landHeight));
+    ({ tiles: land, plots, green, graveyard, farms, bridgeRow, start: villageStart, widths, phoneBox, allotments } = generateVillage(rng, width, landHeight));
     tiles = new Uint8Array(width * height);
     tiles.set(land);
   } else tiles = generateTestGrid(rng, width, height);
@@ -38,7 +39,7 @@ export function createWorld(seed, opts = {}) {
     plots, // village: empty building plots { x, y, w, h, kind, front, back? } for step 14b
     // kind: cottage | detached | pub | shop | church | farmhouse | barn; building = its CONFIG.scale.buildings key;
     // facing = side the front faces (N/E/S/W); front = the tile outside the front door.
-    green, graveyard, farms, bridgeRow, widths, // village: green/graveyard rects, farmyards, bridge row, way widths picked
+    green, graveyard, farms, bridgeRow, widths, phoneBox, allotments, // village: green/graveyard rects, farmyards, bridge row, way widths picked
     tiles,
     light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
@@ -84,9 +85,24 @@ export function createWorld(seed, opts = {}) {
   });
 
   world.start = { x: start.x, y: start.y };
-  const zpos = spawnTile(world, start, CONFIG.zombie.spawnMinDistance, CONFIG.zombie.spawnMaxDistance);
-  addEntity(world, {
-    Position: zpos,
+  world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
+  if (map === 'village') populateVillage(world); // step 14d: loot, keys and zombies
+  else {
+    makeZombie(world, spawnTile(world, start, CONFIG.zombie.spawnMinDistance, CONFIG.zombie.spawnMaxDistance));
+    scatterTestItems(world);
+  }
+  installVision(world);
+  installMemory(world);
+  installNoise(world);
+  installShamble(world);
+  refreshAllVision(world);
+  return world;
+}
+
+// A zombie at pos. Every zombie is made here (the test grid's one, the village's crowd).
+export function makeZombie(world, pos) {
+  return addEntity(world, {
+    Position: { x: pos.x, y: pos.y },
     Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
     Actor: { speed: CONFIG.zombie.speed, energy: 0, actions: 0 },
     Vision: { eyesight: CONFIG.zombie.eyesight, visible: new Map() },
@@ -98,15 +114,6 @@ export function createWorld(seed, opts = {}) {
     Blocks: {},
     Name: { name: 'zombie' },
   });
-
-  world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
-  scatterTestItems(world);
-  installVision(world);
-  installMemory(world);
-  installNoise(world);
-  installShamble(world);
-  refreshAllVision(world);
-  return world;
 }
 
 export function addEntity(world, components) {

@@ -59,6 +59,11 @@ export function kill(world, e, { killerId = null, cause = 'unknown' } = {}) {
   if (world.stats && killerId === world.playerId && e.id !== world.playerId && e.Brain) world.stats.kills++;
   world.entities.delete(e.id);
   addBlood(world, x, y, 1);
+  // Whatever it carried falls where it died (a zombie's house key, a survivor's bag).
+  for (const id of [...(e.Inventory ? e.Inventory.items : []), ...(e.Keyring ? e.Keyring.keys : [])]) {
+    const it = world.entities.get(id);
+    if (it && e.id !== world.playerId) { it.Position = { x, y }; world.events.emit('item_dropped', { id: e.id, itemId: id, x, y }); }
+  }
   addEntity(world, {
     Position: { x, y },
     Glyph: { char: '%', fg: CONFIG.colours.corpseText, bg: CONFIG.colours.corpse },

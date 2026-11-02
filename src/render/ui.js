@@ -125,7 +125,7 @@ export function bagLayout(world, layout, ui = {}) {
       const item = world.entities.get(id);
       const def = CONFIG.items[item.Item.type];
       const y = top + pad * 2 + 44 + i * (rowH + pad);
-      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.heal ? 'EAT' : 'USE';
+      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.ammoFor ? 'LOAD' : def.stanch ? 'USE' : def.heal ? 'EAT' : 'USE';
       const bw = Math.floor((w - pad * 5) / 3), by = y + 44, bh = rowH - 52;
       rows.push({
         itemId: id, item, y, h: rowH, wielded: p.Inventory.wielded === id,

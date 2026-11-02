@@ -10,7 +10,8 @@ import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { wound } from '../src/sim/systems/bleeding.js';
 import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/items.js';
 import { validTargets } from '../src/sim/systems/ranged.js';
-import { makeDoor, makeWindow, structureAt } from '../src/sim/systems/structures.js';
+import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems/structures.js';
+import { kill } from '../src/sim/systems/combat.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -1416,6 +1417,61 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   CONFIG.zombie.staggerChance = 0.2;
 }
 console.log('floors: upstairs/cellars/lofts ringed by void, linked; climbing, sight per floor, sound through links, zombies follow, pulled-up ladders stop them, saved OK');
+
+// 19. Village life (step 14d): phone box, allotments, loot by room, keys, zombies.
+for (const seed of [1, 5, 11, 42, 2024]) {
+  const w = createWorld(seed, { map: 'village' });
+  assert(w.phoneBox && tileAt(w, w.phoneBox.x, w.phoneBox.y) === TILE.PHONEBOX && isPassable(w, w.phoneBox.x, w.phoneBox.y), `life ${seed}: a phone box you can step into`);
+  const a = w.allotments;
+  assert(a, `life ${seed}: has allotments`);
+  let beds = 0, gates = 0;
+  for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+    const t = tileAt(w, x, y);
+    if (t === TILE.ALLOTMENT) beds++;
+    if ((x === a.x || x === a.x + a.w - 1 || y === a.y || y === a.y + a.h - 1) && t === TILE.GATE) gates++;
+  }
+  assert(beds > 40 && gates >= 1, `life ${seed}: allotment beds (${beds}) and a gate`);
+  // Loot: items only on open floor inside buildings or by front doors; kitchens have food.
+  const items = query(w, 'Item', 'Position');
+  assert(items.length > 40, `life ${seed}: ${items.length} items`);
+  for (const it of items) assert(!TILE_INFO[tileAt(w, it.Position.x, it.Position.y)].blocks, `life ${seed}: item in a wall`);
+  const inRoom = (p, name) => w.buildings.some((b) => [...b.rooms, ...(b.floors || []).flatMap((f) => f.rooms)].some((r) => r.name === name && p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h));
+  assert(items.some((it) => CONFIG.items[it.Item.type].heal && inRoom(it.Position, 'kitchen')), `life ${seed}: food in a kitchen`);
+  // Keys: each opens a locked building; carried ones are in a zombie's pocket.
+  const lockIds = new Set(query(w, 'Door').filter((d) => d.Door.locked).map((d) => d.Door.lockId));
+  const keys = query(w, 'Item').filter((i) => i.Item.type === 'key');
+  assert(keys.length > 0 && keys.every((k) => lockIds.has(k.Item.lockId)), `life ${seed}: keys fit locked buildings`);
+  const zombies = query(w, 'Brain', 'Position');
+  const carried = keys.filter((k) => !k.Position);
+  assert(carried.every((k) => zombies.some((z) => z.Inventory && z.Inventory.items.includes(k.id))), `life ${seed}: carried keys are in zombies' pockets`);
+  // Zombies: the configured number, none near the start, some indoors.
+  const Z = CONFIG.village.zombies;
+  assert(zombies.length >= Z.residents + Z.streets && zombies.length <= Z.residents + Z.streets + Z.fields, `life ${seed}: ${zombies.length} zombies`);
+  assert(zombies.every((z) => Math.max(Math.abs(z.Position.x - w.start.x), Math.abs(z.Position.y - w.start.y)) >= Z.minDistance), `life ${seed}: a zombie starts too close`);
+  assert(zombies.filter((z) => w.buildings.some((b) => z.Position.x >= b.x && z.Position.y >= b.y && z.Position.x < b.x + b.w && z.Position.y < b.y + b.h) || z.Position.y >= w.landHeight).length >= Z.residents - 2, `life ${seed}: residents indoors`);
+  assert(!zombies.some((z) => z.Vision && canSee(w, z, playerOf(w))), `life ${seed}: nothing sees you at the start`);
+}
+{ // A resident's key drops when it dies, and opens its door; ammo loads a gun.
+  let w, z, key;
+  for (let seed = 1; seed < 40 && !key; seed++) {
+    w = createWorld(seed, { map: 'village' });
+    z = query(w, 'Brain').find((e) => e.Inventory && e.Inventory.items.length);
+    key = z && w.entities.get(z.Inventory.items[0]);
+  }
+  const p = playerOf(w);
+  kill(w, z, { killerId: p.id, cause: 'hit' });
+  assert(key.Position && key.Position.x === z.Position.x && key.Position.y === z.Position.y, 'life: the key drops where the zombie dies');
+  const door = query(w, 'Door').find((d) => d.Door.lockId === key.Item.lockId && d.Door.locked);
+  p.Keyring.keys.push(key.id); delete key.Position;
+  assert(hasKeyFor(w, p, door), 'life: the dropped key opens its building');
+  const gun = w.entities.get(makeItem(w, 'shotgun', p.Position.x, p.Position.y)), box = w.entities.get(makeItem(w, 'shells', p.Position.x, p.Position.y));
+  delete gun.Position; delete box.Position; p.Inventory.items.push(gun.id, box.id);
+  const before = gun.Item.ammo;
+  assert(playerAct(w, { type: 'use', itemId: box.id }) && gun.Item.ammo === before + CONFIG.items.shells.rounds && !p.Inventory.items.includes(box.id), 'life: a box of shells loads the shotgun');
+  const pel = w.entities.get(makeItem(w, 'pellets', p.Position.x, p.Position.y)); delete pel.Position; p.Inventory.items.push(pel.id);
+  assert(!playerAct(w, { type: 'use', itemId: pel.id }), 'life: no air rifle, nothing to load');
+}
+console.log('life: phone box, allotments, loot by room, keys in pockets or by doors, zombies placed away from the start; keys drop, ammo loads OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);
