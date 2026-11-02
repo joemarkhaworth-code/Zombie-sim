@@ -18,7 +18,7 @@ Look: simple 8-bit, inspired by old RPGs and UK Teletext. Until the art pass, ev
 - Offline, single player only. No servers or accounts.
 - Built entirely from a phone with Claude Code. Play-tested in a mobile browser.
 - Stack: plain JavaScript (ES modules), HTML canvas, rot.js (scheduler, FOV, pathfinding, noise, map gen). No build step unless needed.
-- Deploys to GitHub Pages on every push to main.
+- Deploys to GitHub Pages on every push to main. Play it at https://joemarkhaworth-code.github.io/Zombie-sim/ - when a change is done and live, always give the user this link.
 - Touch-first controls: tap anywhere to step one tile in that direction (8-way), tap on yourself to wait, long-press any tile to inspect it. Big tiles with the camera following the player. Portrait orientation.
 - One system per session. Before finishing, the game must load and be playable, the headless test run must pass, and the change must be committed.
 
