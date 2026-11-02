@@ -21,8 +21,8 @@ function drawHealth(ctx, world, x, h, blink) {
   return x + p.Health.max * (size + gap);
 }
 
-// Needs (step 16): H (hunger), T (thirst), Z (tired), only when level >= 1, coloured by
-// level (yellow, orange, red); level 3 blinks. Returns the x after them.
+// Needs (step 16): H (hunger), T (thirst), Z (tired), always shown: dim when fine, then
+// yellow, orange, red by level; level 3 blinks. Returns the x after them.
 function drawNeeds(ctx, world, x, h, blink) {
   const p = world.entities.get(world.playerId);
   if (!p || !p.Needs) return x;
@@ -32,7 +32,6 @@ function drawNeeds(ctx, world, x, h, blink) {
   ctx.textAlign = 'left';
   for (const [need, ch] of [['hunger', 'H'], ['thirst', 'T'], ['fatigue', 'Z']]) {
     const lv = needLevel(p, need);
-    if (!lv) continue;
     if (!(lv === 3 && blink)) { ctx.fillStyle = C.needLevel[lv]; ctx.fillText(ch, x, h / 2); }
     x += ctx.measureText(ch).width + 3;
   }

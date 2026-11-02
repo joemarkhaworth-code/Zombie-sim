@@ -473,7 +473,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
     - or after 12 h at most.
   - Zombies shuffle silently, so one can walk up and bite you in your sleep. Sleep somewhere safe: a pulled-up loft, a locked house.
   - Replays exactly (tested).
-- Top bar: H (hunger), T (thirst), Z (tired) after the health blocks, only at level 1+, coloured yellow / orange / red; level 3 blinks.
+- Top bar: H (hunger), T (thirst), Z (tired) after the health blocks, always shown: dim blue-grey when fine, then yellow / orange / red by level; level 3 blinks. (They used to appear only at level 1+, so for the first hours of a run you couldn't see them at all.)
   - Messages when a level gets worse: "You're getting hungry." / "You're hungry." / "You're starving!", "You're thirsty." / "You're very thirsty." / "You're parched!", "You're tired." / "You're very tired." / "You're exhausted!".
   - Waking: "You wake, rested.", "A noise wakes you!", "You wake in pain!", "Hunger wakes you."
   - Inspecting yourself lists how you are ("You: hungry, very tired.").

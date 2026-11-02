@@ -408,7 +408,7 @@ export const CONFIG = {
     memoryBlood: '#4a2a2a',
     healthFull: '#ff2020',
     healthEmpty: '#400000',
-    needLevel: ['#000000', '#f0e040', '#ff9020', '#ff3030'], // H/T/Z marks in the top bar by level (0 not shown)
+    needLevel: ['#6a7aa8', '#f0e040', '#ff9020', '#ff3030'], // H/T/Z marks in the top bar by level (0 = fine, dim)
     inspect: '#ffffff',              // outline on the long-pressed tile
     debugNoise: '255,96,0',          // heatmap overlay colour (r,g,b)
     player: '#ffff00',
