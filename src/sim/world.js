@@ -19,14 +19,15 @@ export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
   const { width, height } = map === 'village' ? CONFIG.village : CONFIG.grid;
   const rng = createRng(seed);
-  let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null;
-  if (map === 'village') ({ tiles, plots, green, graveyard, farms, bridgeRow, start: villageStart } = generateVillage(rng, width, height));
+  let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null, widths = null;
+  if (map === 'village') ({ tiles, plots, green, graveyard, farms, bridgeRow, start: villageStart, widths } = generateVillage(rng, width, height));
   else tiles = generateTestGrid(rng, width, height);
   const world = {
     seed, rng, width, height, map,
     plots, // village: empty building plots { x, y, w, h, kind, front, back? } for step 14b
-    // kind: cottage | pub | shop | church | farmhouse | barn. front = the tile outside the front door.
-    green, graveyard, farms, bridgeRow, // village: the green and graveyard { x, y, w, h }, farmyards, the bridge row
+    // kind: cottage | detached | pub | shop | church | farmhouse | barn; building = its CONFIG.scale.buildings key;
+    // facing = side the front faces (N/E/S/W); front = the tile outside the front door.
+    green, graveyard, farms, bridgeRow, widths, // village: green/graveyard rects, farmyards, bridge row, way widths picked
     tiles,
     light: new Uint8Array(width * height).fill(CONFIG.light.ambient), // light level 0-3 per tile
     entities: new Map(),
@@ -66,7 +67,8 @@ export function createWorld(seed, opts = {}) {
     Name: { name: 'you' },
   });
 
-  const zpos = spawnTile(world, start, CONFIG.zombie.spawnMinDistance);
+  world.start = { x: start.x, y: start.y };
+  const zpos = spawnTile(world, start, CONFIG.zombie.spawnMinDistance, CONFIG.zombie.spawnMaxDistance);
   addEntity(world, {
     Position: zpos,
     Glyph: { char: 'Z', fg: CONFIG.colours.zombieText, bg: CONFIG.colours.zombie },
@@ -145,11 +147,12 @@ export function tryMove(world, e, dx, dy) {
 }
 
 // A random open tile at least minDist (Chebyshev) from `from`; farthest open tile if none.
-function spawnTile(world, from, minDist) {
+function spawnTile(world, from, minDist, maxDist = Infinity) {
   const open = [];
   for (let y = 0; y < world.height; y++) {
     for (let x = 0; x < world.width; x++) {
-      if (isPassable(world, x, y)) open.push({ x, y, d: Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) });
+      const d = Math.max(Math.abs(x - from.x), Math.abs(y - from.y));
+      if (d <= maxDist && isPassable(world, x, y)) open.push({ x, y, d });
     }
   }
   const far = open.filter((t) => t.d >= minDist);

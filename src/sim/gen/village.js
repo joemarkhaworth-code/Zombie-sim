@@ -1,25 +1,29 @@
 // Village land (step 14a): a small Lake District village, generated in layers the way
-// real Lakeland villages grew. Top of the map = valley head. Each layer claims ("lays")
-// its tiles; later layers only build on tiles nobody has claimed yet.
+// real Lakeland villages grew, at true scale (CONFIG.scale: 1 tile ~ 1.5 m). Top of the
+// map = valley head. Each layer claims ("lays") its tiles; later layers only build on
+// tiles nobody has claimed yet.
 //   1. Valley: a valley floor with a beck winding down it, rising fellside on both sides
 //      (slow going), side gills tumbling off the fells, a lake at the foot of the dale.
-//   2. Main road: down the valley floor, crossing the beck once on a stone bridge.
+//   2. Main road: down the valley floor, crossing the beck once on a narrow stone bridge.
 //      The village centres on this crossing; through the village the road runs straight.
 //   3. High street: pavements both sides, and continuous rows of building plots
-//      (terraced cottages, a pub by the bridge, a shop) fronting straight onto them.
-//   4. Ginnels: narrow 1-tile passages between the terrace rows, through to a back lane
-//      behind small walled yards (one yard per plot, gate onto the back lane).
-//   5. A small green by the bridge, and a church plot in a walled graveyard just off it.
-//   6. Outskirts: side lanes to a farm or two, dry-stone-walled fields off the lanes
-//      with gates, footpaths up the fellside through gates in the fell wall, rough fell
-//      (bracken, rock, scree), trees along the beck and a wood.
+//      (terraced cottages, a pub by the bridge, a corner shop) fronting straight onto them.
+//      Detached cottages in their own gardens towards the ends of the street.
+//   4. Ginnels: 1-tile passages between the terrace rows, through to a back lane behind
+//      the walled yards (one yard per plot, gate onto the back lane).
+//   5. A green by the bridge, and the church in a walled graveyard just off it.
+//   6. Outskirts: side lanes to a farm or two, dry-stone-walled fields (10-20 tiles
+//      across) with gates, footpaths up the fellside through gates in the fell wall, rough
+//      fell (bracken, rock, scree), trees along the beck and a wood.
 // Finally every walkable tile is made reachable (a gate is knocked in a wall if needed).
-// Buildings are left as empty plots (TILE.PLOT) for step 14b.
+// Buildings are left as empty plots (TILE.PLOT) of their true size for step 14b.
 import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from './testgrid.js';
 
+const pick = (rng, v) => (Array.isArray(v) ? v[0] + rng.int(v[1] - v[0] + 1) : v);
+
 export function generateVillage(rng, width, height) {
-  const V = CONFIG.village;
+  const V = CONFIG.village, BLD = CONFIG.scale.buildings, WAY = CONFIG.scale.ways;
   const tiles = new Uint8Array(width * height);
   const locked = new Uint8Array(width * height); // claimed by a layer
   const idx = (x, y) => y * width + x;
@@ -30,38 +34,45 @@ export function generateVillage(rng, width, height) {
   const free = (x, y) => inMap(x, y) && !locked[idx(x, y)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  const noise = valueNoise(rng, width, height, 6);
+  const noise = valueNoise(rng, width, height, 9);
 
-  // Village rows. The bridge is 2 rows (br, br+1). Above it the "up" street, below it
-  // the "down" street; each has a connecting lane row at both ends.
-  const D = V.plotDepth, Y = V.yardDepth;
-  const backK = 2 + D + Y;         // depth of the back lane from the road (pavement = 1)
-  const beckK = backK + 2;         // the beck runs behind the back lane and its bank
+  // Widths for this map, from the scale table.
+  const rw = pick(rng, WAY.mainRoad), lw = pick(rng, WAY.lane), bw = pick(rng, WAY.beck), bridgeW = WAY.bridge;
+  // Street block: pavement (depth 1), then the block from the pavement to the back lane,
+  // deep enough for the deepest street building (the pub) and a yard behind it.
+  const B = BLD.pub[1] + V.yardMin;
+  const backK0 = 2 + B, backK1 = 1 + B + lw; // the back lane
+  const bankK = backK1 + 1, beckK = bankK + 1; // the beck's bank and the beck behind it
+
+  // Village rows. The beck crosses the road on rows br..br+bw-1 (the bridge). Each street
+  // has a lane at both ends (lw rows) and its plots in between (streetRows).
   const br = Math.round(height * V.bridgeAt) + rng.int(5) - 2;
   const [upRows, downRows] = V.streetRows;
-  const uTop = br - 1 - upRows, lBot = br + 2 + downRows;
-  const vTop = uTop - 1, vBot = lBot + 1;
+  const vTop = br - 2 * lw - upRows, vBot = br + bw + 2 * lw + downRows - 1;
   const lakeTop = height - V.lakeRows;
   const inVillage = (y) => y >= vTop && y <= vBot;
 
   // ---- 1. Valley ----------------------------------------------------------------
-  // rc[y]: the road's right-hand column (road = rc-1, rc); the valley follows it.
-  const rc = new Array(height);
-  const rc0 = (width >> 1) + rng.int(3) - 1;
-  const wander = (p) => clamp(rng.chance(V.roadDrift) ? p + (rng.chance(0.5) ? 1 : -1) : p, rc0 - 6, rc0 + 6);
-  for (let y = vTop - 2; y <= vBot + 2; y++) rc[y] = rc0;
-  for (let y = vTop - 3; y >= 0; y--) rc[y] = wander(rc[y + 1]);
-  for (let y = vBot + 3; y < height; y++) rc[y] = wander(rc[y - 1]);
-  // X(s, k, y): the column k tiles out from the road on side s (+1 east, -1 west).
-  const X = (s, k, y) => (s > 0 ? rc[y] + k : rc[y] - 1 - k);
-  const depth = (x, y) => (x >= rc[y] ? x - rc[y] : rc[y] - 1 - x); // road tiles: 0 / -1
-  // Floor half-width: narrow at the valley head, wider toward the lake, widest round the village.
+  // rl[y]: the road's left column (road = rl..rl+rw-1); the valley follows the road.
+  const rl = new Array(height);
+  const rl0 = ((width - rw) >> 1) + rng.int(3) - 1;
+  const wander = (p) => clamp(rng.chance(V.roadDrift) ? p + (rng.chance(0.5) ? 1 : -1) : p, rl0 - 10, rl0 + 10);
+  for (let y = vTop - 2; y <= vBot + 2; y++) rl[y] = rl0;
+  for (let y = vTop - 3; y >= 0; y--) rl[y] = wander(rl[y + 1]);
+  for (let y = vBot + 3; y < height; y++) rl[y] = wander(rl[y - 1]);
+  // X(s, k, y): the column k tiles out from the road's edge on side s (+1 east, -1 west).
+  const X = (s, k, y) => (s > 0 ? rl[y] + rw - 1 + k : rl[y] - k);
+  const depth = (x, y) => (x >= rl[y] + rw ? x - (rl[y] + rw - 1) : x < rl[y] ? rl[y] - x : 0);
+  const sideOf = (x, y) => (x >= rl[y] + rw ? 1 : x < rl[y] ? -1 : 0);
+  // Floor half-width: narrow at the valley head, wider toward the lake, widest round the
+  // village (room for the street, back lanes and the beck).
+  const villageHalf = beckK + bw + 6;
   const half = [];
   for (let y = 0; y < height; y++) {
-    const base = V.floorHalf[0] + (V.floorHalf[1] - V.floorHalf[0]) * (y / height) + noise(0, y) * 2 - 1;
+    const base = V.floorHalf[0] + (V.floorHalf[1] - V.floorHalf[0]) * (y / height) + noise(0, y) * 4 - 2;
     const away = y < vTop ? vTop - y : y > vBot ? y - vBot : 0;
-    const t = clamp(1 - away / 6, 0, 1);
-    half.push(base + (Math.max(base, V.villageHalf) - base) * t);
+    const t = clamp(1 - away / 12, 0, 1);
+    half.push(base + (Math.max(base, villageHalf) - base) * t);
   }
   const zone = (x, y) => { // 0 valley floor, 1 lower fellside (intake fields), 2 open fell
     const d = depth(x, y);
@@ -74,170 +85,191 @@ export function generateVillage(rng, width, height) {
   const beckSide = (y) => (y < br ? bs : -bs);
   // The lake fills the foot of the dale on the beck's side, clear of the road.
   for (let y = lakeTop; y < height; y++) for (let x = 0; x < width; x++) {
-    if (Math.sign(x - rc[y] + 0.5) !== -bs) continue;
-    const edge = 4 + Math.max(0, lakeTop + 3 - y) * 2 + Math.round(noise(x, y) * 2);
+    if (sideOf(x, y) !== -bs) continue;
+    const edge = 5 + Math.max(0, lakeTop + 5 - y) * 2 + Math.round(noise(x, y) * 3);
     if (depth(x, y) >= edge) lay(x, y, TILE.LAKE);
   }
-  // The beck: depth from the road per row; behind the back lanes through the village,
-  // wandering over the floor outside it; a straight run across the valley at the bridge.
-  const bd = new Array(height);
+  // The beck (bw wide): behind the back lanes through the village, wandering over the floor
+  // outside it, and straight across the valley at the bridge.
+  const bd = new Array(height); // inner depth of the beck per row
   for (let y = vTop - 1; y <= vBot + 1; y++) bd[y] = beckK;
   const beckStep = (prev, y) => {
-    const maxD = Math.max(3, Math.floor(half[y]) - 1);
-    const target = 3 + (maxD - 3) * noise(5, y * 1.5);
-    return clamp(prev + (rng.chance(0.6) ? Math.sign(Math.round(target - prev)) : 0), 3, maxD);
+    const maxD = Math.max(4, Math.floor(half[y]) - bw);
+    const target = 4 + (maxD - 4) * noise(5, y * 0.8);
+    return clamp(prev + (rng.chance(0.5) ? Math.sign(Math.round(target - prev)) : 0), 4, maxD);
   };
   for (let y = vTop - 2; y >= 0; y--) bd[y] = beckStep(bd[y + 1], y);
   for (let y = vBot + 2; y < height; y++) bd[y] = y >= lakeTop ? bd[y - 1] + 1 : beckStep(bd[y - 1], y);
-  let prevX = null;
+  let prev = null; // [x0, x1] of the beck on the row above
   for (let y = 0; y < height; y++) {
-    if (y === br || y === br + 1) {
-      const a = X(bs, beckK, y), b = X(-bs, beckK, y);
-      for (let x = Math.min(a, b); x <= Math.max(a, b); x++) lay(x, y, TILE.STREAM);
-      prevX = X(-bs, beckK, y);
-      continue;
+    let x0, x1;
+    if (y >= br && y < br + bw) {
+      x0 = Math.min(X(bs, beckK + bw - 1, y), X(-bs, beckK + bw - 1, y));
+      x1 = Math.max(X(bs, beckK + bw - 1, y), X(-bs, beckK + bw - 1, y));
+    } else {
+      const s = beckSide(y), a = X(s, bd[y], y), b = X(s, bd[y] + bw - 1, y);
+      x0 = clamp(Math.min(a, b), 1, width - 2); x1 = clamp(Math.max(a, b), 1, width - 2);
+      if (prev && x0 > prev[1]) x0 = prev[1]; // stay joined to the row above (4-connected)
+      if (prev && x1 < prev[0]) x1 = prev[0];
     }
-    const x = clamp(X(beckSide(y), bd[y], y), 1, width - 2);
-    if (inMap(x, y) && at(x, y) === TILE.LAKE) break; // reached the lake
-    const from = prevX === null ? x : prevX;
-    for (let xx = Math.min(from, x); xx <= Math.max(from, x); xx++) {
-      if (at(xx, y) === TILE.LAKE) break;
-      lay(xx, y, TILE.STREAM);
-    }
-    prevX = x;
+    let water = 0;
+    for (let x = x0; x <= x1; x++) if (at(x, y) !== TILE.LAKE) { lay(x, y, TILE.STREAM); water++; }
+    if (!water) break; // reached the lake
+    prev = [x0, x1];
   }
   // Shingle shore round the lake.
   for (let y = lakeTop - 1; y < height; y++) for (let x = 0; x < width; x++) {
     if (!free(x, y) || depth(x, y) < 3) continue;
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && at(x + dx, y + dy) === TILE.LAKE)) lay(x, y, TILE.SHORE);
   }
-  // Gills: side streams off the fell on the beck's side, one above the village, one below.
-  const gillRows = [[2, vTop - 4], [vBot + 3, lakeTop - 4]];
+  // Gills: 1-tile side streams off the fell on the beck's side, above and below the village.
+  const gillRows = [[4, vTop - 8], [vBot + 4, lakeTop - 8]];
   for (let g = 0; g < Math.min(V.gills, gillRows.length); g++) {
     const [y0, y1] = gillRows[g];
     if (y1 <= y0) continue;
     let y = y0 + rng.int(y1 - y0);
     const s = beckSide(y);
     let x = s > 0 ? width - 1 : 0;
-    for (let steps = 0; steps < width * 2 && inMap(x, y); steps++) {
+    for (let steps = 0; steps < width * 3 && inMap(x, y); steps++) {
       if (at(x, y) === TILE.STREAM && locked[idx(x, y)] && steps > 0) break; // joined the beck
       if (!free(x, y)) break;
       lay(x, y, TILE.STREAM);
-      if (rng.chance(0.25) && y + 1 < y1 + 2) y++; else x -= s;
+      if (rng.chance(0.25) && y + 1 < y1 + 4) y++; else x -= s;
     }
   }
 
   // ---- 2. Main road and the bridge ---------------------------------------------------
   const road = [];
-  for (let y = 0; y < height; y++) for (const x of [rc[y] - 1, rc[y]]) { lay(x, y, TILE.ROAD); road.push([x, y]); }
-  for (const y of [br, br + 1]) for (let x = X(-1, 1, y); x <= X(1, 1, y); x++) lay(x, y, TILE.BRIDGE); // road + pavements
+  for (let y = 0; y < height; y++) for (let x = rl[y]; x < rl[y] + rw; x++) {
+    if (y >= br && y < br + bw) continue; // the beck: only the bridge crosses it
+    lay(x, y, TILE.ROAD); road.push([x, y]);
+  }
+  const bx0 = rl0 + Math.floor((rw - bridgeW) / 2); // the bridge: narrower than the road
+  for (let y = br; y < br + bw; y++) for (let x = bx0; x < bx0 + bridgeW; x++) { lay(x, y, TILE.BRIDGE); road.push([x, y]); }
 
   // ---- 3-5. High street, ginnels and yards, green and church ------------------------
   const plots = [];
   let green = null, graveyard = null;
   const parts = {
-    up: { near: br - 2, dir: -1, len: upRows, conNear: br - 1, conFar: uTop - 1 },
-    down: { near: br + 3, dir: 1, len: downRows, conNear: br + 2, conFar: lBot + 1 },
+    up: { near: br - lw - 1, dir: -1, len: upRows },
+    down: { near: br + bw + lw, dir: 1, len: downRows },
   };
   const gp = rng.chance(0.5) ? 'up' : 'down', gs = rng.chance(0.5) ? 1 : -1; // where the green + church go
-  const rect = (s, k0, k1, y0, y1, xRow = y0) => {
-    const xa = X(s, k0, xRow), xb = X(s, k1, xRow);
-    return { x: Math.min(xa, xb), y: Math.min(y0, y1), w: Math.abs(xb - xa) + 1, h: Math.abs(y1 - y0) + 1 };
-  };
-  // Pavements both sides through the village (the bridge carries them over the beck).
-  for (let y = vTop; y <= vBot; y++) if (y !== br && y !== br + 1) for (const s of [1, -1]) lay(X(s, 1, y), y, TILE.PAVEMENT);
+  const shopSide = rng.chance(0.5) ? 1 : -1; // the shop: on the other street from the pub
+  const facing = (s) => (s > 0 ? 'W' : 'E'); // street plots face the road
+  // Pavements both sides through the village (they stop at the beck; the bridge is narrow).
+  for (let y = vTop; y <= vBot; y++) if (y < br || y >= br + bw) for (const s of [1, -1]) lay(X(s, 1, y), y, TILE.PAVEMENT);
 
   for (const [pName, P] of Object.entries(parts)) for (const s of [1, -1]) {
     const yOf = (t) => P.near + P.dir * t;
+    const put = (t, k, tile) => lay(X(s, k, yOf(t)), yOf(t), tile);
+    const fill = (t0, t1, k0, k1, tile) => { for (let t = t0; t <= t1; t++) for (let k = k0; k <= k1; k++) put(t, k, tile); };
+    const rect = (t0, t1, k0, k1) => {
+      const xa = X(s, k0, yOf(t0)), xb = X(s, k1, yOf(t0)), ya = yOf(t0), yb = yOf(t1);
+      return { x: Math.min(xa, xb), y: Math.min(ya, yb), w: Math.abs(xb - xa) + 1, h: Math.abs(yb - ya) + 1 };
+    };
+    const at2 = (t, k) => ({ x: X(s, k, yOf(t)), y: yOf(t) });
     const beckHere = s === (pName === 'up' ? bs : -bs);
-    // Lanes: a lane at each end from the pavement to the back lane; the back lane behind.
-    for (const y of [P.conNear, P.conFar]) for (let k = 2; k <= backK; k++) lay(X(s, k, y), y, TILE.LANE);
-    for (let t = -1; t <= P.len; t++) lay(X(s, backK, yOf(t)), yOf(t), TILE.LANE);
+    // Lanes: one at each end of the street (lw wide) from the pavement to the back lane,
+    // and the back lane behind the block. The lane by the bridge runs along the beck.
+    fill(-lw, -1, 2, backK1, TILE.LANE);
+    fill(P.len, P.len + lw - 1, 2, backK1, TILE.LANE);
+    fill(0, P.len - 1, backK0, backK1, TILE.LANE);
     // Beyond the back lane: the beck's bank, or a field wall (sometimes a hedge).
-    if (!beckHere) {
-      const edge = rng.chance(V.backHedge) ? TILE.HEDGE : TILE.DRYSTONE;
-      for (let t = 0; t < P.len; t++) lay(X(s, backK + 1, yOf(t)), yOf(t), edge);
-    }
-    const ginnel = (t) => { for (let k = 2; k < backK; k++) lay(X(s, k, yOf(t)), yOf(t), TILE.GINNEL); };
+    if (!beckHere) fill(0, P.len - 1, bankK, bankK, rng.chance(V.backHedge) ? TILE.HEDGE : TILE.DRYSTONE);
+    const ginnel = (t) => fill(t, t, 2, 1 + B, TILE.GINNEL);
     let t = 0;
     if (pName === gp && s === gs) {
-      // The green: open grass by the bridge with a big tree.
-      const rem = P.len - (V.greenRows + 1 + V.churchRows);
-      const gh = V.greenRows + (rem > 0 && rem < 5 ? rem : 0); // rows too few for a terrace: a bigger green
-      for (let tt = 0; tt < gh; tt++) for (let k = 2; k < backK; k++) lay(X(s, k, yOf(tt)), yOf(tt), TILE.GRASS);
-      lay(X(s, 2 + Math.floor((backK - 3) / 2), yOf(Math.floor(gh / 2))), yOf(Math.floor(gh / 2)), TILE.TREE);
-      green = rect(s, 2, backK - 1, yOf(0), yOf(gh - 1));
+      // The green: open grass by the bridge with a couple of big trees.
+      const gh = pick(rng, V.greenRows);
+      fill(0, gh - 1, 2, 1 + B, TILE.GRASS);
+      put(Math.floor(gh / 2), 2 + Math.floor(B / 3), TILE.TREE);
+      if (rng.chance(0.6)) put(Math.floor(gh / 2) + 2, 2 + Math.floor(B * 2 / 3), TILE.TREE);
+      green = rect(0, gh - 1, 2, 1 + B);
       t = gh; ginnel(t++);
-      // The church in its walled graveyard: lychgate on the pavement, back gate on the back lane.
-      const ch = V.churchRows, t0 = t, mid = t0 + Math.floor(ch / 2);
-      const cK0 = 5, cK1 = backK - 3; // church plot depth range
-      for (let tt = t0; tt < t0 + ch; tt++) for (let k = 2; k < backK; k++) {
-        const y = yOf(tt), wall = tt === t0 || tt === t0 + ch - 1 || k === 2 || k === backK - 1;
-        const church = k >= cK0 && k <= cK1 && tt >= t0 + 2 && tt <= t0 + ch - 3;
-        lay(X(s, k, y), y, wall ? TILE.DRYSTONE : church ? TILE.PLOT : TILE.GRASS);
-      }
-      lay(X(s, 2, yOf(mid)), yOf(mid), TILE.GATE);
-      lay(X(s, backK - 1, yOf(t0 + ch - 2)), yOf(t0 + ch - 2), TILE.GATE);
-      for (let k = 3; k < cK0; k++) lay(X(s, k, yOf(mid)), yOf(mid), TILE.PATH);
-      for (let tt = t0 + 1; tt < t0 + ch - 1; tt++) for (let k = 3; k < backK - 1; k++) {
-        const y = yOf(tt), x = X(s, k, y);
-        if (at(x, y) !== TILE.GRASS || (tt - t0) % 2 !== 1 || k % 2 !== 1) continue;
+      // The church, lying along the street in its walled graveyard: graves all round it,
+      // a lychgate on the pavement with a path to the door, a back gate onto the back lane.
+      const [cw, cl] = BLD.church, g = V.graveRows;
+      const cs = cl + 2 * g + 2, t0 = t, t1 = t0 + cs - 1, mid = t0 + Math.floor(cs / 2);
+      const ck0 = 3 + g, ck1 = ck0 + cw - 1; // church depth range
+      fill(t0, t1, 2, 1 + B, TILE.DRYSTONE);
+      fill(t0 + 1, t1 - 1, 3, B, TILE.GRASS);
+      fill(t0 + 1 + g, t1 - 1 - g, ck0, ck1, TILE.PLOT);
+      put(mid, 2, TILE.GATE);
+      put(t1 - 1, 1 + B, TILE.GATE);
+      for (let k = 3; k < ck0; k++) put(mid, k, TILE.PATH);
+      for (let tt = t0 + 1; tt < t1; tt++) for (let k = 3; k <= B; k++) {
+        const { x, y } = at2(tt, k);
+        if (at(x, y) !== TILE.GRASS || (tt - t0) % 2 !== 1 || (k - 3) % 2 !== 0) continue; // rows of graves, walkways between
         if (N4.some(([dx, dy]) => [TILE.PATH, TILE.GATE].includes(at(x + dx, y + dy)))) continue;
         if (rng.chance(V.graves)) lay(x, y, TILE.GRAVE);
       }
-      graveyard = rect(s, 2, backK - 1, yOf(t0), yOf(t0 + ch - 1));
-      plots.push({ ...rect(s, cK0, cK1, yOf(t0 + 2), yOf(t0 + ch - 3)), kind: 'church', front: { x: X(s, cK0 - 1, yOf(mid)), y: yOf(mid) } });
-      t += ch;
+      graveyard = rect(t0, t1, 2, 1 + B);
+      plots.push({ ...rect(t0 + 1 + g, t1 - 1 - g, ck0, ck1), kind: 'church', building: 'church', facing: facing(s), turned: true, front: at2(mid, ck0 - 1) });
+      t = t1 + 1;
       if (t < P.len) ginnel(t++);
     }
-    // Terrace rows: plots fronting the pavement, a walled yard behind each, ginnels between rows.
-    let wantPub = pName === gp && s === -gs;
-    while (P.len - t >= 4) {
-      const avail = P.len - t, units = [];
-      const limit = avail >= 9 ? avail - 5 : avail; // leave room for a ginnel and another row
-      let sum = 0;
-      const n = V.unitsPerRow[0] + rng.int(V.unitsPerRow[1] - V.unitsPerRow[0] + 1);
-      for (let i = 0; i < n; i++) {
-        const pub = wantPub && i === 0;
-        const h = pub ? V.pubRows : V.unitRows[0] + rng.int(V.unitRows[1] - V.unitRows[0] + 1);
-        if (sum + h > limit) break;
-        units.push({ h, kind: pub ? 'pub' : 'cottage' }); sum += h;
+    // A street plot (terraced cottage, pub, shop) fronting the pavement, with a walled yard
+    // behind it and a gate onto the back lane. lastInRow: the yard also needs its far wall.
+    const streetPlot = (a, building, kind, lastInRow) => {
+      const [f, d] = BLD[building];
+      fill(a, a + f - 1, 2, 1 + d, TILE.PLOT);
+      fill(a, a + f - 1, 2 + d, B, TILE.YARD);
+      fill(a, a, 2 + d, B, TILE.DRYSTONE); // party wall between yards
+      if (lastInRow) fill(a + f - 1, a + f - 1, 2 + d, B, TILE.DRYSTONE);
+      fill(a, a + f - 1, 1 + B, 1 + B, TILE.DRYSTONE); // back wall
+      const m = a + Math.floor(f / 2);
+      put(m, 1 + B, TILE.GATE);
+      plots.push({ ...rect(a, a + f - 1, 2, 1 + d), kind, building, facing: facing(s), front: at2(m, 1), back: at2(m, 2 + d) });
+      return f;
+    };
+    // A detached cottage in its own walled garden: front gate and path from the pavement.
+    const [dw, dd] = BLD.detachedCottage, gsd = V.detachedGarden;
+    const detachedSpan = dw + 2 * gsd + 2;
+    const detached = (a) => {
+      const a1 = a + detachedSpan - 1, m = a + 1 + gsd + Math.floor(dw / 2);
+      fill(a, a1, 2, 1 + B, TILE.DRYSTONE);
+      fill(a + 1, a1 - 1, 3, B, TILE.GRASS);
+      fill(a + 1 + gsd, a + gsd + dw, 4, 3 + dd, TILE.PLOT);
+      put(m, 2, TILE.GATE); put(m, 3, TILE.PATH);
+      put(a + 2, 1 + B, TILE.GATE);
+      plots.push({ ...rect(a + 1 + gsd, a + gsd + dw, 4, 3 + dd), kind: 'detached', building: 'detachedCottage', facing: facing(s), front: at2(m, 3), back: at2(m, 4 + dd) });
+    };
+    let special = pName === gp && s === -gs ? 'pub' : pName !== gp && s === shopSide ? 'shop' : null;
+    const cottageW = BLD.terracedCottage[0];
+    while (t < P.len) {
+      const avail = P.len - t;
+      const specialW = special ? BLD[special === 'pub' ? 'pub' : 'cornerShop'][0] : 0;
+      // Terraces near the middle; the end of the street is kept for a detached cottage.
+      const room = avail - detachedSpan - 1; // rows left for terraces (and a ginnel)
+      if (room >= specialW + 2 * cottageW) {
+        // A terrace row: [pub or shop first, by the bridge or the corner] + 3-5 cottages.
+        const units = special ? [special] : [];
+        let sum = specialW;
+        const n = pick(rng, V.terraceUnits);
+        for (let i = 0; i < n && sum + cottageW <= room; i++) { units.push('cottage'); sum += cottageW; }
+        let a = t;
+        units.forEach((u, i) => {
+          const building = u === 'pub' ? 'pub' : u === 'shop' ? 'cornerShop' : 'terracedCottage';
+          a += streetPlot(a, building, u, i === units.length - 1);
+        });
+        special = null;
+        t += sum;
+        if (t < P.len) ginnel(t++);
+      } else if (avail >= detachedSpan) {
+        detached(t); t += detachedSpan;
+      } else { // the last few rows: a walled garden with a gate
+        fill(t, P.len - 1, 2, 1 + B, avail >= 3 ? TILE.DRYSTONE : TILE.GRASS);
+        if (avail >= 3) { fill(t + 1, P.len - 2, 3, B, TILE.GRASS); put(t + 1, 2, TILE.GATE); }
+        t = P.len;
       }
-      if (units.length && units[units.length - 1].h < 4) { // the last yard needs a wall on both ends
-        if (sum + 1 <= limit) { units[units.length - 1].h++; sum++; } else sum -= units.pop().h;
-      }
-      if (!units.length) break;
-      const rest = avail - sum;
-      if (rest > 0 && rest < 5) { units[units.length - 1].h += rest; sum += rest; } // too short for another row
-      if (units[0].kind === 'pub') wantPub = false;
-      let a = t;
-      units.forEach((u, i) => {
-        const last = i === units.length - 1;
-        for (let tt = a; tt < a + u.h; tt++) {
-          const y = yOf(tt), wallRow = tt === a || (last && tt === a + u.h - 1);
-          for (let k = 2; k <= 1 + D; k++) lay(X(s, k, y), y, TILE.PLOT);
-          for (let k = 2 + D; k < backK - 1; k++) lay(X(s, k, y), y, wallRow ? TILE.DRYSTONE : TILE.YARD);
-          lay(X(s, backK - 1, y), y, tt === a + 1 ? TILE.GATE : TILE.DRYSTONE);
-        }
-        const fy = yOf(a + Math.floor(u.h / 2));
-        plots.push({ ...rect(s, 2, 1 + D, yOf(a), yOf(a + u.h - 1)), kind: u.kind, front: { x: X(s, 1, fy), y: fy }, back: { x: X(s, 2 + D, yOf(a + 1)), y: yOf(a + 1) } });
-        a += u.h;
-      });
-      t += sum;
-      if (t < P.len) ginnel(t++);
     }
-    for (; t < P.len; t++) for (let k = 2; k < backK; k++) lay(X(s, k, yOf(t)), yOf(t), TILE.GRASS); // odd leftover row: a strip of garden
   }
-  // The shop: the cottage nearest the bridge on the other street from the pub.
-  const cottages = plots.filter((p) => p.kind === 'cottage');
-  const other = cottages.filter((p) => (p.y < br) !== (gp === 'up'));
-  const pool = other.length ? other : cottages;
-  if (pool.length) pool.reduce((a, b) => (Math.abs(b.y + b.h / 2 - br) < Math.abs(a.y + a.h / 2 - br) ? b : a)).kind = 'shop';
 
   // ---- 6. Outskirts ----------------------------------------------------------------
   const farms = [];
   const footpath = (x, y, dx, dy) => { // up the fellside to the map edge; gates through walls
-    for (let i = 0; i < width * 3 && inMap(x, y); i++) {
+    for (let i = 0; i < width * 4 && inMap(x, y); i++) {
       const t = at(x, y);
       if (t === TILE.LAKE || t === TILE.SHORE) break;
       if (t === TILE.STREAM) lay(x, y, TILE.BRIDGE); // a footbridge
@@ -248,83 +280,82 @@ export function generateVillage(rng, width, height) {
       if (rng.chance(0.3) && ny >= 1 && ny < lakeTop - 2 && !inVillage(ny)) y = ny; else x += dx;
     }
   };
-  // Farms: a side lane off the main road to a walled farmyard with a farmhouse and barn
-  // at the foot of the fell, on the side away from the beck. A footpath leads on uphill.
-  const farmRows = [[5, vTop - 5, -bs, -1], [vBot + 5, lakeTop - 5, bs, 1]];
+  // Farms: a side lane off the main road to a walled farmyard at the foot of the fell, on
+  // the side away from the beck. The farmhouse and barn stand along the far wall, facing
+  // the yard and the gate. A footpath leads on uphill from the back.
+  const [fhW, fhL] = BLD.farmhouse, [bnW, bnL] = BLD.barn;
+  const Wc = 1 + V.farmYard + Math.max(fhL, bnL) + 1, Hc = 1 + 1 + fhW + 1 + bnW + 1 + 1;
+  const farmRows = [[3, vTop - Hc - 4, -bs, -1], [vBot + 4, lakeTop - Hc - 3, bs, 1]];
   for (let f = 0; f < Math.min(V.farms, farmRows.length); f++) {
     const [r0, r1, s, dy] = farmRows[f];
-    const W = V.farmW, H = V.farmH;
-    for (let tries = 0; tries < 20 && r1 >= r0; tries++) {
-      const yL = r0 + rng.int(r1 - r0 + 1), y0 = yL - Math.floor(H / 2);
-      const maxDepth = s > 0 ? width - 2 - rc[yL] : rc[yL] - 2;
-      const kF = clamp(Math.round(half[yL]) - 1 + rng.int(3), 4, maxDepth - W + 1);
+    for (let tries = 0; tries < 30 && r1 >= r0; tries++) {
+      const y0 = r0 + rng.int(r1 - r0 + 1), yL = y0 + Math.floor(Hc / 2) - Math.floor(lw / 2);
       const Xf = (k) => X(s, k, yL); // the farm is laid square to the road at its lane
-      const xs = Array.from({ length: W }, (_, i) => Xf(kF + i));
-      const x0 = Math.min(...xs);
-      let ok = y0 >= 1 && y0 + H < height && x0 >= 1 && x0 + W < width;
-      for (let y = y0 - 1; ok && y <= y0 + H; y++) for (let x = x0 - 1; x <= x0 + W; x++) if (!free(x, y)) { ok = false; break; }
-      for (let k = 1; ok && k < kF; k++) for (const yy of [yL - 1, yL, yL + 1]) if (k > 1 && !free(Xf(k), yy)) { ok = false; break; }
+      const maxDepth = s > 0 ? width - 2 - (rl[yL] + rw - 1) : rl[yL] - 1;
+      const kF = clamp(Math.round(half[yL]) - 6 + rng.int(6), 4, maxDepth - Wc + 1);
+      const x0 = Math.min(Xf(kF), Xf(kF + Wc - 1));
+      let ok = y0 >= 1 && y0 + Hc < height && x0 >= 1 && x0 + Wc < width;
+      for (let y = y0 - 1; ok && y <= y0 + Hc; y++) for (let x = x0 - 1; x <= x0 + Wc; x++) if (!free(x, y)) { ok = false; break; }
+      // Each lane row runs from that row's own road edge (the road may bend) to the gate.
+      const gateX = Xf(kF);
+      const span = (yy, k0) => { const xs = []; for (let x = X(s, k0, yy); x !== gateX; x += s) xs.push(x); return xs; };
+      for (let yy = yL - 1; ok && yy <= yL + lw; yy++) if (span(yy, 2).some((x) => !free(x, yy))) ok = false;
       if (!ok) continue;
-      for (let y = y0; y < y0 + H; y++) for (let x = x0; x < x0 + W; x++) {
-        const wall = y === y0 || y === y0 + H - 1 || x === x0 || x === x0 + W - 1;
+      for (let y = y0; y < y0 + Hc; y++) for (let x = x0; x < x0 + Wc; x++) {
+        const wall = y === y0 || y === y0 + Hc - 1 || x === x0 || x === x0 + Wc - 1;
         lay(x, y, wall ? TILE.DRYSTONE : TILE.YARD);
       }
-      // Farmhouse and barn along the far wall, the yard in front by the gate.
-      const farK0 = kF + W - 1 - 4, farK1 = kF + W - 2;
-      const half1 = Math.floor((H - 2) / 2);
-      const house = { ...rect(s, farK0, farK1, y0 + 1, y0 + half1, yL), kind: 'farmhouse' };
-      const barn = { ...rect(s, farK0, farK1, y0 + half1 + 1, y0 + H - 2, yL), kind: 'barn' };
-      for (const p of [house, barn]) {
+      const farK = kF + Wc - 2; // the inside of the far wall
+      const building = (key, kind, w, l, yTop) => {
+        const xa = Xf(farK - l + 1), xb = Xf(farK);
+        const p = { x: Math.min(xa, xb), y: yTop, w: l, h: w, kind, building: key, facing: s > 0 ? 'W' : 'E' };
         for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) lay(x, y, TILE.PLOT);
-        const fy = p.y + Math.floor(p.h / 2);
-        p.front = { x: Xf(farK0 - 1), y: fy };
+        p.front = { x: Xf(farK - l), y: yTop + Math.floor(w / 2) };
         plots.push(p);
-      }
+      };
+      building('farmhouse', 'farmhouse', fhW, fhL, y0 + 2);
+      building('barn', 'barn', bnW, bnL, y0 + 2 + fhW + 1);
       // The side lane (walled both sides) and the gate into the yard.
-      for (let k = 1; k < kF; k++) {
-        lay(Xf(k), yL, TILE.LANE);
-        if (k > 1) for (const yy of [yL - 1, yL + 1]) lay(Xf(k), yy, TILE.DRYSTONE);
-      }
-      lay(Xf(kF), yL, TILE.GATE);
+      for (let yy = yL; yy < yL + lw; yy++) for (const x of span(yy, 1)) lay(x, yy, TILE.LANE);
+      for (const yy of [yL - 1, yL + lw]) for (const x of span(yy, 2)) lay(x, yy, TILE.DRYSTONE);
+      for (let yy = yL; yy < yL + lw; yy++) lay(Xf(kF), yy, TILE.GATE);
       // A footpath from the back of the farm up the fell.
-      const py = y0 + (dy < 0 ? 1 : H - 2);
-      lay(Xf(kF + W - 1), py, TILE.GATE);
-      footpath(Xf(kF + W), py, s, dy);
-      farms.push({ x: x0, y: y0, w: W, h: H, gate: { x: Xf(kF), y: yL } });
+      const py = dy < 0 ? y0 + 1 : y0 + Hc - 2;
+      lay(Xf(kF + Wc - 1), py, TILE.GATE);
+      footpath(Xf(kF + Wc), py, s, dy);
+      farms.push({ x: x0, y: y0, w: Wc, h: Hc, gate: { x: Xf(kF), y: yL } });
       break;
     }
   }
   // Footpaths from the far ends of the beck-side back lanes: over the beck and up the fell.
-  footpath(X(bs, backK + 1, uTop - 1), uTop - 1, bs, -1);
-  footpath(X(-bs, backK + 1, lBot + 1), lBot + 1, -bs, 1);
+  footpath(X(bs, bankK, vTop), vTop, bs, -1);
+  footpath(X(-bs, bankK, vBot), vBot, -bs, 1);
   // The main road is walled outside the village.
   for (let y = 0; y < height; y++) {
     if (inVillage(y)) continue;
     for (const s of [1, -1]) if (free(X(s, 1, y), y)) lay(X(s, 1, y), y, TILE.DRYSTONE);
   }
 
-  // Fields: walled enclosures on the floor and lower fellside. Seeds sit a few tiles off
-  // the road and lanes so fields front onto them; walls wander (jittered nearest seed).
+  // Fields: walled enclosures 10-20 tiles across on the floor and lower fellside (jittered
+  // grid of seeds, nearest seed wins, with a wobble so the walls wander).
+  const [fMin, fMax] = CONFIG.scale.countryside.field;
+  const spacing = (fMin + fMax) / 2;
   const seeds = [];
-  const ways = road.filter(([, y]) => !inVillage(y));
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (at(x, y) === TILE.LANE && !inVillage(y)) ways.push([x, y]);
-  for (let i = 0, tries = 0; i < V.fields && tries < V.fields * 30; tries++) {
-    const [wx, wy] = ways[rng.int(ways.length)];
-    const horizontalLane = at(wx, wy) === TILE.LANE;
-    const off = (rng.chance(0.5) ? 1 : -1) * (3 + rng.int(6));
-    const sx = horizontalLane ? wx : wx + off, sy = horizontalLane ? wy + off : wy;
-    if (free(sx, sy) && zone(sx, sy) < 2) { seeds.push([sx, sy]); i++; }
-  }
-  for (let i = 0; i < V.fields / 2; i++) {
-    const x = rng.int(width), y = rng.int(lakeTop);
-    if (free(x, y) && zone(x, y) < 2) seeds.push([x, y]);
+  for (let gy = spacing / 2; gy < height; gy += spacing) for (let gx = spacing / 2; gx < width; gx += spacing) {
+    const x = Math.round(gx + (rng.next() - 0.5) * spacing * 0.6), y = Math.round(gy + (rng.next() - 0.5) * spacing * 0.6);
+    if (inMap(x, y)) seeds.push([x, y]);
   }
   const region = new Int16Array(width * height).fill(-1);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     if (!free(x, y) || zone(x, y) === 2 || at(x, y) === TILE.STREAM) continue;
     let best = -1, bdist = Infinity;
-    const jx = x + (noise(x, y) - 0.5) * 4, jy = y + (noise(y, x) - 0.5) * 4;
-    seeds.forEach(([sx, sy], i) => { const d = (jx - sx) ** 2 + (jy - sy) ** 2; if (d < bdist) { bdist = d; best = i; } });
+    const jx = x + (noise(x, y) - 0.5) * 6, jy = y + (noise(y, x) - 0.5) * 6;
+    for (let i = 0; i < seeds.length; i++) {
+      const dx = jx - seeds[i][0], dy = jy - seeds[i][1];
+      if (Math.abs(dx) > spacing * 2 || Math.abs(dy) > spacing * 2) continue;
+      const d = dx * dx + dy * dy;
+      if (d < bdist) { bdist = d; best = i; }
+    }
     region[idx(x, y)] = best;
   }
   const wallAt = (x, y) => { if (free(x, y) && at(x, y) !== TILE.STREAM) set(x, y, TILE.DRYSTONE); };
@@ -356,7 +387,7 @@ export function generateVillage(rng, width, height) {
     for (const [dx, dy] of [[1, 0], [0, 1]]) {
       const a = label(x - dx, y - dy), b = label(x + dx, y + dy);
       if (!a || !b || a === b || (a[0] !== 'f' && b[0] !== 'f')) continue;
-      const key = [a, b].sort().join('|');
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push([x, y]);
     }
@@ -395,11 +426,14 @@ export function generateVillage(rng, width, height) {
     if (free(x, y) && at(x, y) === TILE.GRASS) set(x, y, rng.chance(0.6) ? TILE.TREE : TILE.BUSH);
   }
 
-  // Reachability from the bridge.
-  const start = { x: rc0, y: br };
+  // Reachability from the middle of the bridge.
+  const start = { x: bx0 + Math.floor(bridgeW / 2), y: br + Math.floor(bw / 2) };
   makeReachable(tiles, width, height, [start.x, start.y]);
 
-  return { tiles, plots, green, graveyard, farms, bridgeRow: br, lakeTop, start };
+  return {
+    tiles, plots, green, graveyard, farms, bridgeRow: br, lakeTop, start,
+    widths: { road: rw, lane: lw, beck: bw, bridge: bridgeW }, // as picked for this map
+  };
 }
 
 // Smooth random field 0..1 (bilinear value noise on a coarse grid), seeded.
@@ -422,26 +456,30 @@ const OPENED = { [TILE.DRYSTONE]: TILE.GATE, [TILE.ROCK]: TILE.FELL, [TILE.GRAVE
 function makeReachable(tiles, width, height, [sx, sy]) {
   const N = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   const inside = (x, y) => x >= 0 && y >= 0 && x < width && y < height;
-  for (let pass = 0; pass < 400; pass++) {
-    const seen = new Uint8Array(width * height);
-    const queue = [[sx, sy]]; seen[sy * width + sx] = 1;
+  const seen = new Uint8Array(width * height);
+  const flood = (from) => { // grow the reached area from these tiles
+    const queue = [...from];
     while (queue.length) {
-      const [x, y] = queue.pop();
+      const i = queue.pop(), x = i % width, y = (i - x) / width;
       for (const [dx, dy] of N) {
-        const nx = x + dx, ny = y + dy, i = ny * width + nx;
-        if (!inside(nx, ny) || seen[i] || !passable(tiles[i])) continue;
-        seen[i] = 1; queue.push([nx, ny]);
+        const nx = x + dx, ny = y + dy, j = ny * width + nx;
+        if (!inside(nx, ny) || seen[j] || !passable(tiles[j])) continue;
+        seen[j] = 1; queue.push(j);
       }
     }
-    let start = -1;
-    for (let i = 0; i < tiles.length && start < 0; i++) if (passable(tiles[i]) && !seen[i]) start = i;
-    if (start < 0) return;
+  };
+  seen[sy * width + sx] = 1; flood([sy * width + sx]);
+  let scan = 0;
+  for (let pass = 0; pass < 2000; pass++) {
+    while (scan < tiles.length && !(passable(tiles[scan]) && !seen[scan])) scan++;
+    if (scan >= tiles.length) return;
+    const start = scan;
     // Knock the shortest way out of the pocket (never through the lake).
     const prev = new Int32Array(width * height).fill(-1);
     const bfs = [start]; prev[start] = start;
     let goal = -1;
     for (let h = 0; h < bfs.length && goal < 0; h++) {
-      const i = bfs[h], x = i % width, y = Math.floor(i / width);
+      const i = bfs[h], x = i % width, y = (i - x) / width;
       for (const [dx, dy] of N) {
         const nx = x + dx, ny = y + dy, j = ny * width + nx;
         if (!inside(nx, ny) || prev[j] >= 0 || tiles[j] === TILE.LAKE || tiles[j] === TILE.POND) continue;
@@ -451,6 +489,10 @@ function makeReachable(tiles, width, height, [sx, sy]) {
       }
     }
     if (goal < 0) { tiles[start] = TILE.ROCK; continue; } // an island cut off by the lake: make it rock
-    for (let j = goal; j !== start; j = prev[j]) if (!passable(tiles[j])) tiles[j] = OPENED[tiles[j]] ?? TILE.GRASS;
+    const opened = [];
+    for (let j = goal; j !== start; j = prev[j]) { if (!passable(tiles[j])) tiles[j] = OPENED[tiles[j]] ?? TILE.GRASS; opened.push(j); }
+    opened.push(start);
+    for (const j of opened) seen[j] = 1;
+    flood(opened);
   }
 }

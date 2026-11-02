@@ -15,6 +15,10 @@ import { refreshAllVision } from './systems/vision.js';
 import { buildingInfo } from './gen/building.js';
 
 const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp'];
+// Tile arrays are mostly long runs (village maps are tens of thousands of tiles), so they
+// are saved run-length encoded: [value, count, value, count, ...].
+const rle = (arr) => { const out = []; for (let i = 0; i < arr.length;) { let j = i; while (j < arr.length && arr[j] === arr[i]) j++; out.push(arr[i], j - i); i = j; } return out; };
+const unrle = (runs, n) => { const out = new Array(n); let p = 0; for (let i = 0; i < runs.length; i += 2) for (let c = 0; c < runs[i + 1]; c++) out[p++] = runs[i]; if (p !== n) throw new SaveError('tile data size'); return out; };
 
 export class SaveError extends Error {}
 
@@ -23,6 +27,11 @@ export function serialize(world) {
   for (const e of world.entities.values()) {
     const copy = { ...e };
     if (copy.Vision) { copy.Vision = { ...copy.Vision }; delete copy.Vision.visible; } // recomputed on load
+    if (copy.Memory) { // only the remembered tiles: [[index, snapshot], ...]
+      const seen = [];
+      copy.Memory.tiles.forEach((snap, i) => { if (snap) seen.push([i, snap]); });
+      copy.Memory = { seen };
+    }
     entities.push(copy);
   }
   const tb = world.testBuilding;
@@ -38,7 +47,7 @@ export function serialize(world) {
     inputs: world.inputs,
     sightings: [...world.sightings],
     stats: world.stats,
-    tilesArrays: Object.fromEntries(TILE_ARRAYS.map((k) => [k, Array.from(world[k])])),
+    tilesArrays: Object.fromEntries(TILE_ARRAYS.map((k) => [k, rle(world[k])])),
     testBuilding: tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : null,
     entities,
   });
@@ -51,11 +60,12 @@ export function deserialize(json, createWorld) {
   try { data = JSON.parse(json); } catch (err) { throw new SaveError('save is not valid JSON'); }
   if (!data || data.version !== CONFIG.save.version) throw new SaveError(`save version ${data && data.version} != ${CONFIG.save.version}`);
   const world = createWorld(data.seed, { map: data.map || 'testgrid' }); // older saves were all test grid
-  if (world.width * world.height !== data.tilesArrays.tiles.length) throw new SaveError('map size changed');
-  for (const k of TILE_ARRAYS) world[k].set(data.tilesArrays[k]);
+  const n = world.width * world.height;
+  for (const k of TILE_ARRAYS) world[k].set(unrle(data.tilesArrays[k], n));
   world.entities = new Map();
   for (const e of data.entities) {
     if (e.Vision) e.Vision.visible = new Map();
+    if (e.Memory) { const tiles = new Array(n).fill(null); for (const [i, snap] of e.Memory.seen) tiles[i] = snap; e.Memory = { tiles }; }
     world.entities.set(e.id, e);
   }
   // Older saves: keys were carried in the bag. Move them onto the keyring.

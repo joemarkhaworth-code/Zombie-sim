@@ -1221,17 +1221,30 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   assert(TILE_INFO[TILE.FELL].moveCost > TILE_INFO[TILE.GRASS].moveCost && TILE_INFO[TILE.PATH].moveCost === 1, 'village: fellside is slow going; footpaths are not');
   // 2. The road runs the length of the valley and never meets water except on a bridge.
   for (let y = 0; y < w.height; y++) {
-    let row = 0; for (let x = 0; x < w.width; x++) if ([TILE.ROAD, TILE.BRIDGE].includes(T(x, y))) row++;
-    assert(row >= 2, `village ${seed}: road broken at row ${y}`);
+    let road = 0, bridge = 0; for (let x = 0; x < w.width; x++) { if (T(x, y) === TILE.ROAD) road++; if (T(x, y) === TILE.BRIDGE) bridge++; }
+    assert(road === w.widths.road || (y >= w.bridgeRow && y < w.bridgeRow + w.widths.beck && bridge >= CONFIG.scale.ways.bridge), `village ${seed}: road ${road} wide at row ${y}`);
   }
-  each(TILE.STREAM, (x, y) => assert(!n4(x, y).includes(TILE.ROAD), `village ${seed}: beck touches the road at ${x},${y} without a bridge`));
+  each(TILE.STREAM, (x, y) => assert(!n4(x, y).includes(TILE.ROAD) || (y >= w.bridgeRow && y < w.bridgeRow + w.widths.beck), `village ${seed}: beck touches the road at ${x},${y} away from the bridge`));
   assert([TILE.BRIDGE, TILE.ROAD].includes(T(playerOf(w).Position.x, playerOf(w).Position.y)), `village ${seed}: you start at the bridge`);
+  // Scale: ways are as wide as the scale table says.
+  const WAY = CONFIG.scale.ways, within = (v, r) => (Array.isArray(r) ? v >= r[0] && v <= r[1] : v === r);
+  assert(within(w.widths.road, WAY.mainRoad) && within(w.widths.lane, WAY.lane) && within(w.widths.beck, WAY.beck) && w.widths.bridge === WAY.bridge, `village ${seed}: way widths ${JSON.stringify(w.widths)}`);
+  let bridgeRow = 0; for (let x = 0; x < w.width; x++) if (T(x, w.bridgeRow) === TILE.BRIDGE) bridgeRow++;
+  assert(bridgeRow === WAY.bridge, `village ${seed}: bridge ${bridgeRow} wide`);
+  let beckRun = 0; for (let y = w.bridgeRow; T(Math.floor(w.width / 2), y) !== -1 && [TILE.BRIDGE].includes(T(playerOf(w).Position.x, y)); y++) beckRun++;
+  assert(within(beckRun, WAY.beck), `village ${seed}: the bridge spans ${beckRun} rows of beck`);
+  each(TILE.GINNEL, (x, y) => assert(T(x, y - 1) !== TILE.GINNEL && T(x, y + 1) !== TILE.GINNEL, `village ${seed}: ginnel wider than 1 at ${x},${y}`));
+  // Buildings are true size (either way round).
+  for (const pl of w.plots) {
+    const [a, b] = CONFIG.scale.buildings[pl.building];
+    assert((pl.w === a && pl.h === b) || (pl.w === b && pl.h === a), `village ${seed}: ${pl.building} is ${pl.w}x${pl.h}, not ${a}x${b}`);
+  }
   // Road, pavement and lane are different tiles; pavements line the road.
   assert(new Set([TILE.ROAD, TILE.PAVEMENT, TILE.LANE]).size === 3, 'village: road, pavement and lane are different tiles');
   each(TILE.PAVEMENT, (x, y) => assert(n4(x, y).includes(TILE.ROAD) || n4(x, y).includes(TILE.BRIDGE) || n4(x, y).includes(TILE.PAVEMENT), `village ${seed}: pavement off the street at ${x},${y}`));
   // 3. High street: plots of every kind; terraced plots front straight onto the pavement.
   const kinds = {}; for (const pl of w.plots) kinds[pl.kind] = (kinds[pl.kind] || 0) + 1;
-  for (const k of ['cottage', 'pub', 'shop', 'church', 'farmhouse', 'barn']) assert(kinds[k] >= 1, `village ${seed}: has a ${k} plot`);
+  for (const k of ['cottage', 'detached', 'pub', 'shop', 'church', 'farmhouse', 'barn']) assert(kinds[k] >= 1, `village ${seed}: has a ${k} plot`);
   assert(kinds.cottage >= 6, `village ${seed}: ${kinds.cottage} cottages`);
   for (const pl of w.plots) {
     for (let y = pl.y; y < pl.y + pl.h; y++) for (let x = pl.x; x < pl.x + pl.w; x++) assert(T(x, y) === TILE.PLOT, `village ${seed}: ${pl.kind} plot not clear at ${x},${y}`);
@@ -1245,13 +1258,13 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const street = w.plots.filter((p) => ['cottage', 'pub', 'shop'].includes(p.kind));
   assert(street.some((a) => street.some((b) => a !== b && a.x === b.x && a.y + a.h === b.y)), `village ${seed}: no terraced rows`);
   const pub = w.plots.find((p) => p.kind === 'pub');
-  assert(Math.abs(pub.y + pub.h / 2 - w.bridgeRow) <= 7, `village ${seed}: the pub is by the bridge`);
+  assert(Math.abs(pub.y + pub.h / 2 - w.bridgeRow) <= 12, `village ${seed}: the pub is by the bridge`);
   // 4. Ginnels run from the pavement through to a back lane.
   let through = 0;
   each(TILE.GINNEL, (x, y) => { if (n4(x, y).includes(TILE.PAVEMENT) && [x - 1, x + 1].some((gx) => T(gx, y) === TILE.GINNEL)) { let gx = x; const d = T(x + 1, y) === TILE.GINNEL ? 1 : -1; while (T(gx, y) === TILE.GINNEL) gx += d; if (T(gx, y) === TILE.LANE) through++; } });
   assert(through >= 2, `village ${seed}: ${through} ginnels reach a back lane`);
   // 5. The green and the church in its walled graveyard, near the bridge.
-  assert(w.green && w.graveyard && Math.abs(w.green.y + w.green.h / 2 - w.bridgeRow) <= 10, `village ${seed}: green by the bridge`);
+  assert(w.green && w.graveyard && Math.abs(w.green.y + w.green.h / 2 - w.bridgeRow) <= 14, `village ${seed}: green by the bridge`);
   const church = w.plots.find((p) => p.kind === 'church'), g = w.graveyard;
   assert(church.x > g.x && church.y > g.y && church.x + church.w < g.x + g.w && church.y + church.h < g.y + g.h, `village ${seed}: church inside its graveyard`);
   for (let x = g.x; x < g.x + g.w; x++) for (const y of [g.y, g.y + g.h - 1]) assert([TILE.DRYSTONE, TILE.GATE].includes(T(x, y)), `village ${seed}: graveyard wall gap at ${x},${y}`);

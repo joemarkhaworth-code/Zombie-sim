@@ -131,7 +131,11 @@ export function scatterTestItems(world) {
   for (const [type, count] of Object.entries(CONFIG.testGrid.items)) {
     for (let n = 0; n < count; n++) {
       for (let tries = 0; tries < 200; tries++) {
-        const x = 1 + world.rng.int(world.width - 2), y = 1 + world.rng.int(world.height - 2);
+        const near = world.map === 'village' && world.start; // big map: keep them near the start
+        const R = CONFIG.testGrid.itemRadius;
+        const x = near ? world.start.x - R + world.rng.int(2 * R + 1) : 1 + world.rng.int(world.width - 2);
+        const y = near ? world.start.y - R + world.rng.int(2 * R + 1) : 1 + world.rng.int(world.height - 2);
+        if (x < 1 || y < 1 || x >= world.width - 1 || y >= world.height - 1) continue;
         const indoors = world.testBuilding && world.testBuilding.inside(x, y);
         const rough = TILE_INFO[world.tiles[y * world.width + x]].moveCost > 1; // not in streams or hedges
         if (!indoors && !rough && isPassable(world, x, y) && !itemsAt(world, x, y).length) { makeItem(world, type, x, y); break; }

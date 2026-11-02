@@ -4,36 +4,56 @@ export const CONFIG = {
   // -> MAP switches; ?map=testgrid in the URL too. Saves remember their map.
   world: { map: 'village' },
   grid: { width: 20, height: 28 },   // test grid size
+  // Scale (see CLAUDE.md "Scale"): 1 tile is about 1.5 m, about one person. Walls take
+  // whole tiles. Objects and buildings are true scale; the countryside is compressed.
+  // Sizes are [width, length] in tiles. A building's size is its outside, walls included:
+  // width is the frontage (the side facing the street or yard), length runs back from it.
+  // The generator may turn a building to fit (the church lies along the street).
+  scale: {
+    metresPerTile: 1.5,
+    objects: {
+      bed: [1, 2], sofa: [1, 2], table: [1, 1], longTable: [2, 1],
+      car: [3, 2], van: [4, 2], tractor: [3, 2], caravan: [4, 2],
+    },
+    buildings: {
+      shed: [3, 3], greenhouse: [3, 4],
+      terracedCottage: [5, 7], detachedCottage: [7, 9], farmhouse: [7, 9],
+      cornerShop: [6, 8], pub: [10, 12], church: [9, 18], barn: [8, 12],
+    },
+    ways: { // widths in tiles; [min, max] picked per map from the seed
+      ginnel: 1, pavement: 1, lane: [2, 3], mainRoad: [4, 5], bridge: 3, beck: [2, 3], wall: 1, hedge: 1,
+    },
+    countryside: { field: [10, 20], villageSpacing: [60, 120] }, // field across; between villages (region, step 37)
+  },
   village: {
-    // Generated in layers (see src/sim/gen/village.js): valley, road + bridge, high street,
-    // ginnels + yards, green + church, outskirts.
-    width: 56, height: 76,
-    floorHalf: [6, 10],              // valley floor half-width outside the village (head / foot)
-    villageHalf: 16,                 // the floor widens round the village to fit the street
-    intake: 5,                       // lower fellside walled into intake fields, below the fell wall
-    lakeRows: 8,                     // the lake at the foot of the dale
-    gills: 2,                        // side streams off the fell
-    roadDrift: 0.15,                 // chance per row the road bends a tile outside the village
-    bridgeAt: 0.44,                  // the bridge (village centre) this far down the map
-    streetRows: [15, 17],            // high street rows above / below the bridge
-    plotDepth: 5, yardDepth: 4,      // building plots front the pavement; walled yards behind (incl. back wall)
-    unitRows: [3, 4],                // frontage of a terraced plot along the street
-    unitsPerRow: [2, 3],             // plots per terrace row (a ginnel between rows)
-    pubRows: 5,                      // the pub: a wider plot by the bridge
-    greenRows: 4, churchRows: 9,     // the green, then the walled graveyard with the church plot
+    // Generated in layers (src/sim/gen/village.js) at CONFIG.scale: valley, road + bridge,
+    // high street, ginnels + yards, green + church, outskirts.
+    width: 112, height: 200,
+    floorHalf: [12, 20],             // valley floor half-width outside the village (head / foot)
+    intake: 12,                      // lower fellside walled into intake fields, below the fell wall
+    lakeRows: 14,                    // the lake at the foot of the dale
+    gills: 2,                        // side streams off the fell (1 tile wide)
+    roadDrift: 0.12,                 // chance per row the road bends a tile outside the village
+    bridgeAt: 0.45,                  // the bridge (village centre) this far down the map
+    streetRows: [44, 48],            // high street length above / below the bridge
+    yardMin: 3,                      // yard behind the deepest street building (the pub), back wall included
+    terraceUnits: [3, 5],            // cottages per terrace row (a ginnel between rows)
+    greenRows: [10, 12],             // the green by the bridge
+    graveRows: 2,                    // rows of graves between the church and the graveyard wall
+    detachedGarden: 1,               // garden tiles each side of a detached cottage
     graves: 0.75,                    // chance of a gravestone on each grave spot
     backHedge: 0.2,                  // field edge behind a back lane is sometimes a hedge (else dry stone)
-    farms: 2, farmW: 9, farmH: 8,    // walled farmyard with a farmhouse and a barn, at the end of a side lane
-    fields: 18,                      // walled fields off the road and lanes
+    farms: 2, farmYard: 8,           // walled farmyard (yard this deep) with a farmhouse and a barn
     fieldGate: 0.8, fellGate: 0.4,   // gates between fields / from a field onto the open fell
-    screeFrom: 5,                    // scree only this far up the open fell
-    beckTrees: 0.3, woodRadius: 6, woodDensity: 0.55, fieldTrees: 12,
+    screeFrom: 8,                    // scree only this far up the open fell
+    beckTrees: 0.3, woodRadius: 12, woodDensity: 0.55, fieldTrees: 40,
   },
 
   testGrid: {
     wallChance: 0.08,                // chance a floor tile becomes a wall block
     bushClumps: 6,                   // hiding spots
     bushClumpSize: 4,
+    itemRadius: 20,                  // village: test items scattered within this many tiles of the start
     items: { beans: 3, bandage: 2, bat: 1, airRifle: 1, shotgun: 1, planks: 2, key: 1 }, // test items scattered on the map
     building: { x: 2, y: 2, w: 8, h: 6 },  // test building (walls, locked door, windows)
   },
@@ -169,13 +189,14 @@ export const CONFIG = {
     searchActions: 12,               // after reaching a last-seen spot or noise, search this many moves (~24 of your turns)
     searchRadius: 3,                 // ...within this many tiles of it. Any new noise heard restarts the hunt there.              // chance a step lurches in a random direction
     spawnMinDistance: 8,             // tiles from the player at start
+    spawnMaxDistance: 20,            // ...and no further (the village map is big; until 14d places zombies)
   },
   // Time: the clock runs on scheduler ticks (a normal step or wait = 1 tick, a sneaking
   // step = 2). 2 minutes per tick = 720 ticks a day; a run starts at 08:00 on day 1.
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 2, key: 'zombie-sim-save' },
+  save: { version: 3, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,

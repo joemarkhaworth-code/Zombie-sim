@@ -29,10 +29,15 @@ const greyOf = (hex) => {
 const MEMORY_COLOUR = Object.fromEntries(Object.entries(TILE_COLOUR).map(([k, v]) => [k, greyOf(v)]));
 MEMORY_COLOUR[TILE.FLOOR] = C.memoryFloor; MEMORY_COLOUR[TILE.WALL] = C.memoryWall; MEMORY_COLOUR[TILE.BUSH] = C.memoryBush;
 
-// Road centre line: which side of this road tile has the other lane (+1 east, -1 west, 0 none).
+// Road centre line: one faded line down the middle of the tarmac, however wide the road.
+// line: 1 = on this tile's east edge (even width), 0.5 = through its middle (odd width), 0 = none.
 function roadLine(world, x, y) {
-  const r = (dx) => x + dx >= 0 && x + dx < world.width && world.tiles[y * world.width + x + dx] === TILE.ROAD;
-  return { line: r(1) && !r(-1) ? 1 : r(-1) && !r(1) ? -1 : 0 };
+  const road = (xx) => xx >= 0 && xx < world.width && world.tiles[y * world.width + xx] === TILE.ROAD;
+  let l = 0, r = 0;
+  while (road(x - l - 1)) l++;
+  while (road(x + r + 1)) r++;
+  const n = l + r + 1;
+  return { line: n < 2 ? 0 : n % 2 === 0 ? (l === n / 2 - 1 ? 1 : 0) : (l === (n - 1) / 2 ? 0.5 : 0) };
 }
 const markInfo = (world, t, x, y) => (t === TILE.BRIDGE ? waterSides(world, x, y) : t === TILE.ROAD ? roadLine(world, x, y) : null);
 
@@ -60,7 +65,7 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
   if (t === TILE.ROAD) { // faded centre line between the two lanes of tarmac
-    if (water && water.line) { ctx.fillStyle = dim(C.roadMark); ctx.fillRect(water.line > 0 ? px + s - 2 : px - 1, py + s * 0.2, 2, s * 0.4); }
+    if (water && water.line) { ctx.fillStyle = dim(C.roadMark); ctx.fillRect(water.line === 1 ? px + s - 2 : px + s / 2 - 1, py + s * 0.2, 2, s * 0.4); }
     return;
   }
   if (t === TILE.PAVEMENT || t === TILE.GINNEL) { // flagstones: big square slabs
