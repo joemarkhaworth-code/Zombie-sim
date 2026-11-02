@@ -22,6 +22,7 @@ import { installNeeds } from './systems/needs.js';
 import { installWeather } from './systems/weather.js';
 import { installScent } from './systems/scent.js';
 import { installTracks } from './systems/tracks.js';
+import { installFire } from './systems/fire.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -67,6 +68,7 @@ export function createWorld(seed, opts = {}) {
     buildFloors(world, plots, landHeight); // step 14c: upstairs, cellars, lofts in the void band
   }
   rebuildLinks(world); // world.links / world.stairsAt (none on the test grid)
+  installFire(world); // world.fire / smoke / fuel / petrol, thatched roofs (step 19)
   initTileHp(world, (t) => (TILE_INFO[t].blocks && TILE_INFO[t].material) || null);
 
   // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.

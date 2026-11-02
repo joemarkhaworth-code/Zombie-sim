@@ -234,7 +234,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Guns are items with a `ranged` property and their own ammo (Item.ammo, shown in the bag). Wield one and a FIRE button (showing ammo, e.g. "FIRE 3") joins the action bar. The noise is at the shooter. Air rifle: range 8, 1 damage, quiet (noise 1), 10 pellets. Shotgun: range 4, 4 damage (kills a zombie), very loud (noise 3, ~12 tiles), 4 shells. Both work as clubs when wielded (1 damage). An empty gun clicks ("Click. Out of ammo."), no turn. Input { type: 'fire', x, y }. A shot hits the creature on the target tile; creatures in between are ignored for now. Guns don't get sneak-attack bonuses.
 - Aiming (throw or fire): valid targets come from validTargets() (one rule for the sim and the highlight). Valid tiles get a yellow tint, ones with a creature orange. The action bar becomes one big CANCEL; tapping yourself also cancels; tapping an invalid tile says "Can't aim there." and keeps aiming. If nothing is in range it says so and doesn't enter aiming.
 - Guns come with some ammo, and ammo items (box of shells, tin of pellets: ammoFor + rounds) load a carried gun of their type (USE shows LOAD; the emptiest gun; "No gun to load." otherwise). Found in the village (14d).
-- Materials table (CONFIG.materials): stone, slate, brick, wood, glass, corrugatedMetal, thatch. Each has hp (blows to break at 1 damage), flammability 0-3 (does it catch fire and spread flames), heatDamage 1-3 (how fast fire wears it down even if it never catches - nothing is fireproof: glass shatters, slate splits, metal buckles, stone and brick spall; fire is step 19), seeThrough (does sight pass while intact), hitNoise and breakNoise (0-3), and glass has shards (leaves broken glass). Everything structural reads its numbers from here; nothing hard-codes them. CONFIG.build says what things are made of for now: walls stone, doors wood, windows glass, barricades wood (planks). A structure's material decides its health, whether it blocks sight (a glass door doesn't; a metal-sheet window does) and how loud each blow and the final break are (corrugated metal clangs at 3; thatch is a soft 1). Walls stay tiles with health in world.tileHp (nothing damages walls yet; explosions later). Doors and windows are entities (Structure { material, hp, max } + Door { open, locked, broken } or Window { broken }) standing on floor tiles in wall gaps, indexed in world.structures. Barricade { material, hp, max } soaks blows first. Their Blocks/Opaque/glyph/name are recomputed from state and material by refresh(), so memory snapshots record open/shut/broken/boarded automatically.
+- Materials table (CONFIG.materials): stone, slate, brick, wood, glass, corrugatedMetal, thatch. Each has hp (blows to break at 1 damage), flammability 0-3 (does it catch fire and spread flames), heatDamage 1-3 (how fast fire wears it down even if it never catches - nothing is fireproof: glass shatters, slate splits, metal buckles, stone and brick spall; fire is step 19), seeThrough (does sight pass while intact), hitNoise and breakNoise (0-3), and glass has shards (leaves broken glass). Everything structural reads its numbers from here; nothing hard-codes them. CONFIG.build says what things are made of for now: walls stone, doors wood, windows glass, barricades wood (planks). A structure's material decides its health, whether it blocks sight (a glass door doesn't; a metal-sheet window does) and how loud each blow and the final break are (corrugated metal clangs at 3; thatch is a soft 1). Walls stay tiles with health in world.tileHp (explosions damage them, step 19). Doors and windows are entities (Structure { material, hp, max } + Door { open, locked, broken } or Window { broken }) standing on floor tiles in wall gaps, indexed in world.structures. Barricade { material, hp, max } soaks blows first. Their Blocks/Opaque/glyph/name are recomputed from state and material by refresh(), so memory snapshots record open/shut/broken/boarded automatically.
 - Closed doors block movement and sight; open or broken doors block neither. Intact windows block movement but not sight; broken windows can be climbed through. Anything solid (closed door, window, barricade) also muffles noise like a wall and stops thrown items and shots (lineClear takes a blocking rule). A door or window changing state refreshes everyone's vision.
 - Door controls: walk into a closed, unlocked door to open it (a turn, you don't move). Tap exactly on an adjacent door tile to toggle it open/closed ({ type: 'door', x, y }, a turn); tapping further in that direction walks through. A door can't be closed with someone in the doorway.
 - Bashing is deliberate: tap exactly on an adjacent window, locked door or barricade ({ type: 'bash', x, y }, a turn) to bash it with your melee damage. Walking (tap-anywhere) into one never breaks it: no turn, just a hint ("Tap the window to smash it.", "Locked. Tap it to bash it.", "Boarded up. Tap it to bash."). This stops stray taps smashing windows. Each blow makes the material's hitNoise; the final blow its breakNoise (glass 3, wood 2). Blows hit a barricade before the thing behind it. A destroyed door becomes a broken door (always open); a smashed window scatters broken glass on its tile and maybe beside it.
@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (10 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (11 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -576,6 +576,72 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - inspect words; prints remembered; falling snow fills them in;
   - rain makes mud; no prints on tarmac, prints on grass;
   - saves keep it all.
+  Checked on 150 seeds.
+
+## Decisions for step 19 (fire, smoke, explosions) - built
+- src/sim/systems/fire.js. Tile state (saved with the tile arrays):
+  - world.fire 0-3 (intensity);
+  - world.fuel (ticks left);
+  - world.smoke 0-3;
+  - world.petrol 0-3 (spilled).
+  Only burning or smoky tiles are worked on each tick (world.fireActive, rebuilt on load).
+- Flammability is data: TILE_INFO flammable 0-3.
+  - Floorboards 2 (with furniture); flagstone and concrete floors 1 (the contents burn, the floor stays).
+  - Wooden walls, hedges, trees, bracken, bushes 2; grass, fell, gates 1.
+  - Stone, brick, metal, glass, tarmac, pavements and earth 0.
+  - +1 under a thatched roof (a building's roof from 14b, mapped per tile in world.thatch). Spilled petrol adds +2.
+  - Weather: settled snow stops ground fires; mud at level fire.wetGround (2) stops grass, fell, bracken and bushes.
+- Burning:
+  - A fire grows a level every growEvery ticks, up to flammability + 1, and burns intensity fuel a tick (fuel = flammability x fuelPerLevel, + petrolFuel).
+  - It spreads to each flammable neighbour with chance spread[flam] x intensity/3 a tick, so stone walls stop it.
+  - Outdoors, the weather's fireDamp knocks it down (dampChance per level a tick): a downpour all but stops it.
+  - Burnt out, a tile turns to TILE_INFO burnsTo:
+    - floorboards: CHARRED (still indoors);
+    - wooden walls, hedges, trees, vegetation: ASH (a wooden wall burns into a gap);
+    - flagstones and concrete: stay as they are.
+- What fire does:
+  - creatures on a burning tile lose 1 health every burnEvery[intensity] ticks (zombies walk into it and burn);
+  - doors and barricades on it burn through, and windows crack in the heat (material flammability / heatDamage);
+  - fires are light sources (light.js: radius = intensity, level 3, through smoke but not walls);
+  - they crackle (noise 1, 2 when roaring);
+  - an explosive item on a burning tile goes off.
+- Smoke:
+  - a fire fills its tile to its intensity; smoke 2+ drifts to open neighbours a level thinner (closed doors and windows keep it out);
+  - it thins a level every 8 ticks indoors, every 2 outdoors;
+  - thick smoke (2+) blocks sight (vision opaqueAt; light still passes);
+  - the living (anything with Needs) cough in it (noise 1); choking smoke (3) costs 1 health every 4 ticks.
+- Explosions (explode(x, y, power)), from items with explodes: gas bottle 3, petrol can 2. They go off in a fire or when shot (shot_fired at their tile).
+  - Damage = power - distance + 1 to everything in range.
+  - Doors and windows take that x blastStructure.
+  - Walls take x blastWall (8): a gas bottle next to a stone wall brings it down to RUBBLE (walkable, slow, noisy). A wall's health is its material's until hurt.
+  - Flammable tiles nearer than the edge catch; smoke; noise 3. A petrol can's blast splashes petrol too.
+- New items (CONFIG.items):
+  - lighter (12 uses) and box of matches (6): USE = LIGHT, sets fire to the most flammable tile next to you (a neighbour before your own; "Nothing here will burn."). The bag shows uses left.
+  - petrol can: USE = POUR round you; thrown, it splashes where it lands.
+  - gas bottle.
+  - Loot: matches and lighters in kitchens, the vestry and the bar; petrol cans and gas bottles in sheds and barns.
+  - A lit candle left on something that burns may set it alight (candleIgnite).
+- Messages:
+  - "You start a fire.", "Fire!" (one you can see starting that you didn't light);
+  - "You're burning!", "You choke on the smoke.";
+  - "BOOM!" / "An explosion!" (out of sight), "Petrol splashes about.";
+  - deaths: "Burned to death", "Blown up", "Choked on smoke".
+- Drawn:
+  - fire: an orange-red glow by intensity with flames that flicker each turn;
+  - grey smoke over tiles in sight; a purple sheen of petrol;
+  - ashes, a charred floor, rubble.
+- TUNE panel: a third world row, Give (- next, + give): - picks the next item type, + puts one in your bag (or at your feet). For testing fire, lights, weapons, anything.
+- Speed: with ~90 tiles burning, ~5 ms a turn. Tile changes from fire don't refresh everyone's sight; the end-of-turn light update refreshes those near fires.
+- Save version 11.
+- Tests:
+  - flammability from data (floorboards yes, stone/bare ground no; dry grass yes, sodden or snowy no);
+  - a lighter fire spreads through a wooden-floored room, leaves charred floor, is stopped by stone walls and burns a wooden wall into a gap;
+  - fire burns you; a zombie walking in the flames dies;
+  - fire lights the room at night; thick smoke blocks sight; you cough and choke;
+  - a downpour damps an outdoor bracken fire;
+  - a gas bottle in the fire explodes, hurts you, blows the door in and brings the wall down;
+  - a shot sets off a gas bottle; poured petrol makes bare ground burn;
+  - saves keep a fire burning.
   Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d

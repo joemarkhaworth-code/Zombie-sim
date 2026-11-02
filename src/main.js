@@ -13,6 +13,7 @@ import { stairsAt } from './sim/systems/floors.js';
 import { setWeather, WEATHER_KINDS } from './sim/systems/weather.js';
 import { updateLight } from './sim/systems/light.js';
 import { clockOf } from './sim/time.js';
+import { makeItem, usedSlots } from './sim/systems/items.js';
 import { canDrinkHere, canSleep } from './sim/turn.js';
 
 const canvas = document.getElementById('game');
@@ -232,11 +233,13 @@ const inRect = (b, px, py) => px >= b.x && px < b.x + b.w && py >= b.y && py < b
 // Tuning panel rows: label, current value (as text), and whether it differs from default.
 // The first rows change the world rather than CONFIG (debug only: the run won't replay):
 // Weather (cycle the kinds; holds 24 h) and Time (an hour back or on).
-const WORLD_ROWS = 2;
+const WORLD_ROWS = 3;
+let giveType = 'lighter'; // TUNE: the item the Give row hands you
 function tuneRows() {
   return [
     { label: 'Weather', value: world.weather ? ({ overcast: 'cloudy', heavyRain: 'pour' }[world.weather.kind] || world.weather.kind) : '-', changed: true },
     { label: 'Time', value: clockOf(world.tick), changed: true },
+    { label: 'Give (- next, + give)', value: giveType, changed: true },
     ...TUNABLES.map((t) => {
       const v = getPath(t.path);
       return { label: t.label, value: t.pct ? `${Math.round(v * 100)}%` : String(v), changed: v !== defaultOf(t.path) };
@@ -258,6 +261,15 @@ function onTuneTap(px, py) {
       const kinds = WEATHER_KINDS(), at = kinds.indexOf(world.weather.kind);
       setWeather(world, kinds[(at + dir + kinds.length) % kinds.length]);
       updateLight(world, true);
+      persist(); render(); return;
+    }
+    if (i === 2) { // give: '-' picks the next item type, '+' puts one in your bag (or at your feet)
+      const types = Object.keys(CONFIG.items).filter((k) => k !== 'key');
+      if (dir < 0) { giveType = types[(types.indexOf(giveType) + 1) % types.length]; render(); return; }
+      const p = world.entities.get(world.playerId);
+      const id = makeItem(world, giveType, p.Position.x, p.Position.y);
+      if (usedSlots(world, p) + CONFIG.items[giveType].slots <= p.Inventory.capacity) { delete world.entities.get(id).Position; p.Inventory.items.push(id); messages.show(`Given: ${CONFIG.items[giveType].name}.`); }
+      else messages.show('Bag full: left at your feet.');
       persist(); render(); return;
     }
     if (i === 1) { // time: an hour on or back

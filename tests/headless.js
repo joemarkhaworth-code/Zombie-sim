@@ -17,6 +17,7 @@ import { needLevel } from '../src/sim/systems/needs.js';
 import { tickWeather } from '../src/sim/systems/weather.js';
 import { scentLevel } from '../src/sim/systems/scent.js';
 import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
+import { flammability, ignite } from '../src/sim/systems/fire.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -1739,6 +1740,95 @@ console.log('weather: seeded chain (fog mornings), cloud hides the moon, downpou
   assert(serialize(back) === serialize(v) && back.tracks.size === v.tracks.size && back.groundWet === v.groundWet, 'scent/tracks: saved');
 }
 console.log('scent: fades, rain washes it outdoors, the beck holds none, zombies follow it to you; tracks: snow settles, boots and drag prints with direction, remembered, covered by fresh snow, mud on grass not tarmac, saved OK');
+
+// 24. Fire, smoke and explosions (step 19).
+{
+  const F = CONFIG.fire;
+  const room = () => { // a wooden-floored room: stone walls x 3..12, y 3..10; a wooden wall on the right at x 12
+    const w = openWorld(); const p = playerOf(w); w.entities.delete(zombieOf(w).id);
+    for (let y = 3; y <= 10; y++) for (let x = 3; x <= 12; x++) {
+      const edge = x === 3 || y === 3 || x === 12 || y === 10;
+      w.tiles[y * w.width + x] = edge ? (x === 12 && y > 3 && y < 10 ? TILE.WALL_WOOD : TILE.WALL_STONE) : TILE.FLOOR_WOOD;
+    }
+    place(w, p, 5, 5); return { w, p };
+  };
+  const give = (w, p, type) => { const id = makeItem(w, type, null, null); p.Inventory.items.push(id); return id; };
+  const burnFor = (w, n) => { for (let i = 0; i < n; i++) playerAct(w, { type: 'wait' }); };
+  // What burns is data: floorboards yes, stone and tarmac no; snow and mud stop ground fires.
+  let { w, p } = room();
+  assert(flammability(w, 6 * w.width + 6) === 2 && flammability(w, 3 * w.width + 6) === 0 && flammability(w, 20 * w.width + 6) === 0, 'fire: floorboards burn, stone walls and bare ground do not');
+  w.tiles[20 * w.width + 6] = TILE.GRASS;
+  assert(flammability(w, 20 * w.width + 6) === 1, 'fire: dry grass burns');
+  w.groundWet = CONFIG.tracks.mudPerLevel * F.wetGround; assert(flammability(w, 20 * w.width + 6) === 0, 'fire: sodden grass does not'); w.groundWet = 0;
+  w.snowCover = CONFIG.tracks.snowPerLevel; assert(flammability(w, 20 * w.width + 6) === 0, 'fire: nor under snow'); w.snowCover = 0;
+  // A lighter sets the floorboards alight; it spreads through the room, not through stone, and leaves charred floor.
+  const lighter = give(w, p, 'lighter');
+  assert(playerAct(w, { type: 'use', itemId: lighter }) && w.fireActive.size > 0, 'fire: the lighter starts a fire next to you');
+  place(w, p, 2, 20); // step outside
+  burnFor(w, 120);
+  let charred = 0; for (let y = 4; y <= 9; y++) for (let x = 4; x <= 11; x++) if (w.tiles[y * w.width + x] === TILE.CHARRED) charred++;
+  assert(charred > 30, `fire: it spread through the room and burnt the floor (${charred} tiles charred)`);
+  assert(w.tiles[3 * w.width + 6] === TILE.WALL_STONE && w.tiles[2 * w.width + 6] === TILE.FLOOR, 'fire: the stone wall stopped it');
+  let gap = 0; for (let y = 4; y <= 9; y++) if (w.tiles[y * w.width + 12] === TILE.ASH) gap++;
+  assert(gap > 0, 'fire: the wooden wall burnt away to a gap');
+  // Standing in fire hurts and can kill; a zombie walks into it and burns.
+  ({ w, p } = room());
+  ignite(w, 5, 5); w.fire[5 * w.width + 5] = 3;
+  const hp0 = p.Health.hp; burnFor(w, 3);
+  assert(p.Health.hp < hp0, "fire: standing in it, you're burnt");
+  ({ w, p } = room());
+  const z = w.entities.get(makeZombie(w, { x: 8, y: 8 })); z.Smell.level = 0;
+  for (let x = 6; x <= 10; x++) for (let y = 6; y <= 9; y++) { ignite(w, x, y); w.fire[y * w.width + x] = 3; }
+  place(w, p, 2, 20);
+  for (let i = 0; i < 20 && w.entities.has(z.id); i++) { for (let x = 7; x <= 9; x++) for (let y = 7; y <= 9; y++) if (!w.fire[y * w.width + x]) { ignite(w, x, y); w.fire[y * w.width + x] = 3; } playerAct(w, { type: 'wait' }); }
+  assert(!w.entities.has(z.id), 'fire: a zombie in the flames burns to death');
+  // Fire lights the dark; thick smoke blocks sight, you cough in it, choking smoke hurts.
+  ({ w, p } = room());
+  w.tick = 13 * 30; updateLight(w, true);
+  ignite(w, 9, 8); w.fire[8 * w.width + 9] = 3; place(w, p, 5, 5); playerAct(w, { type: 'wait' });
+  assert(w.light[8 * w.width + 9] === 3 && w.light[6 * w.width + 7] >= 2, 'fire: it lights the room at night');
+  w.smoke.fill(0); w.smoke[5 * w.width + 7] = 3; w.fireActive.add(5 * w.width + 7); refreshAllVision(w);
+  assert(visibilityAt(w, p, 9, 5) === 0, 'fire: you cannot see through thick smoke');
+  let coughs = 0; w.events.on('coughed', (d) => { if (d.id === p.id) coughs++; });
+  place(w, p, 7, 5); const hp1 = p.Health.hp;
+  for (let i = 0; i < 6; i++) { w.smoke[5 * w.width + 7] = 3; w.fireActive.add(5 * w.width + 7); playerAct(w, { type: 'wait' }); }
+  assert(coughs > 0 && p.Health.hp < hp1, 'fire: you cough and choke in thick smoke');
+  // Rain damps fires outdoors.
+  const outFires = (kind) => {
+    const v = openWorld(); v.entities.delete(zombieOf(v).id); v.weather = { kind, until: Infinity };
+    for (let y = 12; y <= 18; y++) for (let x = 3; x <= 16; x++) v.tiles[y * v.width + x] = TILE.BRACKEN;
+    ignite(v, 9, 15); place(v, playerOf(v), 2, 3);
+    for (let i = 0; i < 60; i++) playerAct(v, { type: 'wait' });
+    let n = 0; for (let i = 0; i < v.tiles.length; i++) if (v.tiles[i] === TILE.ASH || v.fire[i]) n++;
+    return n;
+  };
+  const dryBurn = outFires('clear'), wetBurn = outFires('heavyRain');
+  assert(dryBurn > wetBurn * 2, `fire: a downpour damps it (${dryBurn} tiles burnt dry, ${wetBurn} in the rain)`);
+  // Explosions: a gas bottle in a fire goes off: blast damage, a door blown in, a wall brought down.
+  ({ w, p } = room());
+  const door = makeDoor(w, 3, 7); w.tiles[7 * w.width + 3] = TILE.FLOOR_WOOD;
+  const bottle = makeItem(w, 'gasBottle', 4, 6);
+  place(w, p, 6, 6); const hp2 = p.Health.hp;
+  let booms = 0; w.events.on('explosion', () => booms++);
+  ignite(w, 4, 6); playerAct(w, { type: 'wait' });
+  assert(booms === 1 && !w.entities.has(bottle) && p.Health.hp < hp2, 'fire: the gas bottle explodes in the fire and hurts you');
+  assert(w.entities.get(door).Door.broken, 'fire: the blast blows the door in');
+  assert(w.tiles[6 * w.width + 3] === TILE.RUBBLE || w.tiles[5 * w.width + 3] === TILE.RUBBLE, 'fire: the blast brings the wall down to rubble');
+  // A shot sets off a gas bottle; petrol makes tarmac burn.
+  w = openWorld(); p = playerOf(w); w.entities.delete(zombieOf(w).id); place(w, p, 5, 5);
+  const gun = give(w, p, 'shotgun'); playerAct(w, { type: 'use', itemId: gun });
+  makeItem(w, 'gasBottle', 5, 8); booms = 0; w.events.on('explosion', () => booms++);
+  playerAct(w, { type: 'fire', x: 5, y: 8 });
+  assert(booms === 1, 'fire: shooting a gas bottle sets it off');
+  w = openWorld(); p = playerOf(w); w.entities.delete(zombieOf(w).id); place(w, p, 5, 5);
+  const can = give(w, p, 'petrolCan'); playerAct(w, { type: 'use', itemId: can });
+  assert(w.petrol[5 * w.width + 5] && flammability(w, 5 * w.width + 6) >= 2, 'fire: poured petrol makes bare ground burn');
+  // Saves keep a fire burning.
+  ignite(w, 5, 6);
+  const back = deserialize(serialize(w), createWorldAny);
+  assert(serialize(back) === serialize(w) && back.fireActive.size === w.fireActive.size, 'fire: saved');
+}
+console.log('fire: flammability from data and weather, lighter starts it, spreads through floorboards not stone, charred floors, wooden walls burn to gaps, burns you and zombies, lights the dark, smoke blinds/chokes, rain damps it, gas bottles explode (fire or shot) blowing doors and walls, petrol, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

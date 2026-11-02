@@ -18,7 +18,8 @@ import { CONFIG } from '../../config.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 import { minutesAt } from '../time.js';
 import { ambientFor } from './weather.js';
-import { lineClear, refreshAllVision, updateVision } from './vision.js';
+import { fireLights } from './fire.js';
+import { lineClear, refreshAllVision, updateVision, solidAt } from './vision.js';
 
 export function ambientAt(tick) {
   const hour = Math.floor(minutesAt(tick) / 60) % 24;
@@ -38,6 +39,7 @@ export function lightSources(world) {
     const at = e.Position || (holder.get(e.id) && holder.get(e.id).Position);
     if (def && at) out.push({ x: at.x, y: at.y, radius: def.radius, level: def.level, falloff: CONFIG.light.falloff });
   }
+  if (world.fire) for (const f of fireLights(world)) out.push({ ...f, falloff: CONFIG.light.falloff }); // fires light up (step 19)
   return out;
 }
 
@@ -64,7 +66,7 @@ export function updateLight(world, force = false) {
       const d2 = (x - s.x) ** 2 + (y - s.y) ** 2;
       const lv = d2 <= s.radius * s.radius + s.radius ? s.level : d2 <= R * R + R ? s.level - 1 : 0;
       const i = y * world.width + x;
-      if (lv <= world.light[i] || !lineClear(world, s.x, s.y, x, y)) continue;
+      if (lv <= world.light[i] || !lineClear(world, s.x, s.y, x, y, solidAt)) continue;
       world.light[i] = lv;
     }
   }

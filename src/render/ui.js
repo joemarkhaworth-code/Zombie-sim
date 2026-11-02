@@ -146,7 +146,7 @@ export function bagLayout(world, layout, ui = {}) {
       const item = world.entities.get(id);
       const def = CONFIG.items[item.Item.type];
       const y = top + pad * 2 + 44 + i * (rowH + pad);
-      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.light ? (item.Item.lit ? 'OFF' : 'ON') : def.ammoFor ? 'LOAD' : def.stanch ? 'USE' : def.food ? 'EAT' : def.drink ? 'DRINK' : def.heal ? 'EAT' : 'USE';
+      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.light ? (item.Item.lit ? 'OFF' : 'ON') : def.ignite ? 'LIGHT' : def.spill ? 'POUR' : def.ammoFor ? 'LOAD' : def.stanch ? 'USE' : def.food ? 'EAT' : def.drink ? 'DRINK' : def.heal ? 'EAT' : 'USE';
       const bw = Math.floor((w - pad * 5) / 3), by = y + 44, bh = rowH - 52;
       rows.push({
         itemId: id, item, y, h: rowH, wielded: p.Inventory.wielded === id,
@@ -244,6 +244,7 @@ export function drawBag(ctx, world, layout, ui = {}) {
     ctx.font = '13px monospace';
     const info = [`${r.item.Item.slots} slot${r.item.Item.slots > 1 ? 's' : ''}`];
     if (r.item.Item.ammo !== undefined) info.push(`ammo ${r.item.Item.ammo}`);
+    if (r.item.Item.uses !== undefined) info.push(`${r.item.Item.uses} left`);
     if (r.item.Item.charge !== undefined) info.push(r.item.Item.lit ? 'on' : r.item.Item.charge > 0 ? 'off' : 'spent');
     if (r.wielded) info.push('in hand');
     ctx.fillText(info.join(', '), pad * 3 + icon, r.y + 33);

@@ -18,6 +18,7 @@ import { addEntity, isPassable, query } from '../world.js';
 import { adjacentStructures, addBarricade } from './structures.js';
 import { toggleLight } from './light.js';
 import { consumeFood } from './needs.js';
+import { lightFire, spillPetrol } from './fire.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 
 // extra: { lockId, name } override the type's (a key to a particular building).
@@ -27,7 +28,7 @@ export function makeItem(world, type, x, y, extra = {}) {
   const lockId = extra.lockId || def.lockId;
   return addEntity(world, {
     ...(x === null ? {} : { Position: { x, y } }),
-    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(lockId ? { lockId } : {}), ...(def.light ? { lit: false, charge: def.charge } : {}) },
+    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(lockId ? { lockId } : {}), ...(def.light ? { lit: false, charge: def.charge } : {}), ...(def.uses ? { uses: def.uses } : {}) },
     Glyph: { char: def.char, fg: def.fg, bg: def.bg },
     Name: { name: extra.name || def.name },
   });
@@ -90,6 +91,20 @@ export function useItem(world, carrier, itemId) {
     return true;
   }
   if (def.light) return toggleLight(world, carrier, item); // torch, candle: on / off
+  if (def.ignite) { // lighter, matches: set fire to the most flammable tile next to you
+    if (!lightFire(world, carrier)) { world.events.emit('use_failed', { id: carrier.id, itemId, reason: 'nothing_burns' }); return false; }
+    item.Item.uses = (item.Item.uses || 1) - 1;
+    world.events.emit('fire_lit', { id: carrier.id, itemId });
+    if (item.Item.uses <= 0) { inv.items.splice(inv.items.indexOf(itemId), 1); world.entities.delete(itemId); world.events.emit('item_used_up', { id: carrier.id, name: item.Name.name }); }
+    return true;
+  }
+  if (def.spill) { // petrol can: pour it round where you stand
+    spillPetrol(world, carrier.Position.x, carrier.Position.y, 1);
+    inv.items.splice(inv.items.indexOf(itemId), 1);
+    if (inv.wielded === itemId) inv.wielded = null;
+    world.entities.delete(itemId);
+    return true;
+  }
   if (def.ammoFor) {
     // Load a carried gun of the right type (the emptiest one).
     const guns = inv.items.map((id) => world.entities.get(id)).filter((g) => g.Item.type === def.ammoFor);

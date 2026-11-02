@@ -34,6 +34,11 @@ export function installVision(world) {
 
 // Opaque: walls (tile) or a closed door / barricade (structure entity with Opaque).
 export const opaqueAt = (world, x, y) => {
+  if (world.smoke && inBounds(world, x, y) && world.smoke[y * world.width + x] >= 2) return true; // thick smoke (step 19)
+  return solidAt(world, x, y);
+};
+// Walls and closed doors only (light passes through smoke: a fire glows through its own).
+export const solidAt = (world, x, y) => {
   if (!inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].opaque) return true;
   const sid = world.structures && world.structures.get(y * world.width + x);
   return sid !== undefined && !!world.entities.get(sid)?.Opaque;

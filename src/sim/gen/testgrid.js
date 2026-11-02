@@ -12,6 +12,7 @@ export const TILE = {
   FLOOR_WOOD: 30, FLOOR_FLAGS: 31, FLOOR_CONCRETE: 32, FLOOR_EARTH: 33,
   VOID: 34, // between floors (14c): blocks movement, sight and sound completely
   PHONEBOX: 35, ALLOTMENT: 36, // village life (14d)
+  ASH: 37, CHARRED: 38, RUBBLE: 39, // what fire and explosions leave (step 19)
 };
 // Building walls by material, and floors by kind (see CONFIG.buildingTypes).
 export const WALL_OF = { stone: TILE.WALL_STONE, brick: TILE.WALL_BRICK, wood: TILE.WALL_WOOD, corrugatedMetal: TILE.WALL_METAL, glass: TILE.WALL_GLASS };
@@ -25,17 +26,17 @@ const T = (name, o = {}) => ({ name, blocks: false, opaque: false, cover: false,
 export const TILE_INFO = {
   [TILE.FLOOR]: T('floor'),
   [TILE.WALL]: T('wall', { blocks: true, opaque: true, material: 'stone' }),
-  [TILE.BUSH]: T('bush', { cover: true }),
-  [TILE.GRASS]: T('grass'),
+  [TILE.BUSH]: T('bush', { cover: true, flammable: 2, ground: true }),
+  [TILE.GRASS]: T('grass', { flammable: 1, ground: true }),
   [TILE.LANE]: T('lane'),                                               // back lanes, side lanes, farm tracks
   [TILE.STREAM]: T('beck', { moveCost: 2, stepNoise: 2 }),              // shallow beck/gill: wade it, slowly and noisily
   [TILE.BRIDGE]: T('bridge', { material: 'stone' }),
   [TILE.DRYSTONE]: T('dry-stone wall', { blocks: true, opaque: true, material: 'stone' }),
-  [TILE.HEDGE]: T('hedge', { opaque: true, moveCost: 3, stepNoise: 1, material: 'wood' }), // push through slowly
-  [TILE.TREE]: T('tree', { blocks: true, opaque: true, material: 'wood' }),
+  [TILE.HEDGE]: T('hedge', { opaque: true, moveCost: 3, stepNoise: 1, material: 'wood', flammable: 2 }), // push through slowly
+  [TILE.TREE]: T('tree', { blocks: true, opaque: true, material: 'wood', flammable: 2 }),
   [TILE.POND]: T('pond', { blocks: true }),                             // too deep to wade (swimming: step 20)
-  [TILE.FELL]: T('fell', { moveCost: 2 }),                              // rising fellside: slow going
-  [TILE.BRACKEN]: T('bracken', { cover: true, moveCost: 2, stepNoise: 1 }), // tall, on the fellside: hides you; rustles
+  [TILE.FELL]: T('fell', { moveCost: 2, flammable: 1, ground: true }),                              // rising fellside: slow going
+  [TILE.BRACKEN]: T('bracken', { cover: true, moveCost: 2, stepNoise: 1, flammable: 2, ground: true }), // tall, on the fellside: hides you; rustles
   [TILE.ROCK]: T('rock', { blocks: true, opaque: true, material: 'stone' }), // outcrop / crag
   [TILE.SCREE]: T('scree', { moveCost: 3, stepNoise: 2 }),              // loose stones high on the fell: very slow, clattering
   [TILE.LAKE]: T('lake', { blocks: true }),                             // too deep to wade
@@ -44,7 +45,7 @@ export const TILE_INFO = {
   [TILE.PAVEMENT]: T('pavement'),                                       // flagstones along the high street
   [TILE.GINNEL]: T('ginnel'),                                           // narrow passage between terraces
   [TILE.YARD]: T('yard'),                                               // cobbled back yard / farmyard
-  [TILE.GATE]: T('gate', { stepNoise: 1 }),                             // field/yard gate: creaks
+  [TILE.GATE]: T('gate', { stepNoise: 1, flammable: 1 }),                             // field/yard gate: creaks
   [TILE.PATH]: T('footpath'),                                           // worn path: easy going, even on the fell
   [TILE.PLOT]: T('building plot'),                                      // empty until buildings (step 14b)
   [TILE.GRAVE]: T('gravestone', { blocks: true, material: 'stone' }),   // see over it, can't walk through
@@ -52,11 +53,14 @@ export const TILE_INFO = {
   ...Object.fromEntries(Object.entries({ stone: 'stone wall', brick: 'brick wall', wood: 'wooden wall', corrugatedMetal: 'metal wall', glass: 'glass wall' })
     .map(([m, name]) => [WALL_OF[m], T(name, { blocks: true, opaque: !CONFIG.materials[m].seeThrough, material: m })])),
   // indoor: under a roof, so darker than outside (light.js).
-  [TILE.FLOOR_WOOD]: T('floorboards', { indoor: true }),
-  [TILE.FLOOR_FLAGS]: T('flagstone floor', { indoor: true }),
-  [TILE.FLOOR_CONCRETE]: T('concrete floor', { indoor: true }),
+  [TILE.FLOOR_WOOD]: T('floorboards', { indoor: true, flammable: 2, burnsTo: 38 }), // floorboards and furniture; burn to charred
+  [TILE.FLOOR_FLAGS]: T('flagstone floor', { indoor: true, flammable: 1, burnsTo: null }), // the furniture burns; the flags stay
+  [TILE.FLOOR_CONCRETE]: T('concrete floor', { indoor: true, flammable: 1, burnsTo: null }),
   [TILE.FLOOR_EARTH]: T('earth floor'),
   [TILE.VOID]: T('void', { blocks: true, opaque: true, silent: true }),
+  [TILE.ASH]: T('ashes'),                                               // burnt ground, or a burnt-out wall/tree/hedge
+  [TILE.CHARRED]: T('charred floor', { indoor: true }),                 // burnt floorboards: still under a roof
+  [TILE.RUBBLE]: T('rubble', { moveCost: 2, stepNoise: 1 }),            // a wall brought down by a blast
   [TILE.PHONEBOX]: T('phone box'),                                     // you can stand in it; glazed, so you're seen
   [TILE.ALLOTMENT]: T('allotment bed'),                                 // dug over for winter
 };
@@ -97,6 +101,9 @@ export const TILE_DESC = {
   [TILE.FLOOR_CONCRETE]: 'A concrete floor.',
   [TILE.FLOOR_EARTH]: 'Bare earth.',
   [TILE.VOID]: 'Nothing there.',
+  [TILE.ASH]: 'Ashes.',
+  [TILE.CHARRED]: 'A charred floor.',
+  [TILE.RUBBLE]: 'Rubble.',
   [TILE.PHONEBOX]: 'A red phone box. The line is dead.',
   [TILE.ALLOTMENT]: 'Allotment beds, dug over.',
 };
@@ -121,3 +128,6 @@ export function generateTestGrid(rng, width, height) {
   }
   return tiles;
 }
+
+// Wooden walls burn away, leaving a gap of ashes (step 19).
+TILE_INFO[TILE.WALL_WOOD].flammable = 2;

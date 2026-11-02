@@ -98,6 +98,12 @@ export const CONFIG = {
     pop: { name: 'can of pop', char: '!', fg: '#ffffff', bg: '#d02020', slots: 1, drink: 180, food: 45 },
     firstAid: { name: 'first aid kit', char: '+', fg: '#ffffff', bg: '#20a040', slots: 1, stanch: true, heal: 1 },
     shells: { name: 'box of shells', char: '"', fg: '#ffffff', bg: '#803000', slots: 1, ammoFor: 'shotgun', rounds: 4 },
+    // Fire (step 19): ignite (uses) lights the most flammable tile next to you; spill pours or
+    // (thrown) splashes petrol; explodes: blast power when it's in a fire or gets shot.
+    lighter: { name: 'lighter', char: '*', fg: '#000000', bg: '#ff8040', slots: 1, ignite: true, uses: 12 },
+    matches: { name: 'box of matches', char: '*', fg: '#000000', bg: '#e0c080', slots: 1, ignite: true, uses: 6 },
+    petrolCan: { name: 'petrol can', char: '&', fg: '#ffffff', bg: '#c02020', slots: 2, spill: true, explodes: 2 },
+    gasBottle: { name: 'gas bottle', char: '0', fg: '#000000', bg: '#40a0e0', slots: 2, explodes: 3 },
     brolly: { name: 'brolly', char: '/', fg: '#ffffff', bg: '#202060', slots: 1, weapon: { damage: 1, hitChance: 0.8, verb: 'hit' }, rainCover: 2 }, // wielded: keeps the rain off (2 levels)
     // Lights (step 15): USE switches them on/off. charge = ticks of light (2 min each).
     torch: { name: 'torch', char: '(', fg: '#000000', bg: '#f0f080', slots: 1, light: { radius: 6, level: 3 }, charge: 480 }, // ~16 hours of battery
@@ -109,7 +115,7 @@ export const CONFIG = {
   // a random room (farmers keep a shotgun). Rooms not listed get nothing.
   loot: {
     rooms: {
-      kitchen: { n: [1, 3], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1, water: 2, pop: 1 } },
+      kitchen: { n: [1, 3], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1, water: 2, pop: 1, matches: 2, lighter: 1 } },
       scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1, torch: 2, candle: 1 } },
       'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1, brolly: 2 } },
       'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1, brolly: 2 } },
@@ -122,15 +128,15 @@ export const CONFIG = {
       shop: { n: [2, 5], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1, water: 3, pop: 3 } },
       'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2, torch: 1, candle: 1, water: 3, pop: 2 } },
       'stock cellar': { n: [1, 3], items: { beans: 3, crisps: 1, planks: 1 } },
-      bar: { n: [1, 3], items: { ale: 4, crisps: 3, pop: 2, brolly: 1 } },
+      bar: { n: [1, 3], items: { ale: 4, crisps: 3, pop: 2, brolly: 1, lighter: 1 } },
       store: { n: [1, 2], items: { ale: 2, crisps: 2, planks: 1 } },
       'beer cellar': { n: [1, 3], items: { ale: 4, planks: 1 } },
-      vestry: { n: [1, 2], items: { firstAid: 2, chocolate: 1, candle: 4 } },
+      vestry: { n: [1, 2], items: { firstAid: 2, chocolate: 1, candle: 4, matches: 2 } },
       nave: { n: [0, 2], items: { candle: 1 } },
       cellar: { n: [0, 2], items: { beans: 2, planks: 2, ale: 1 } },
-      barn: { n: [0, 2], items: { fork: 2, planks: 3, torch: 1 } },
+      barn: { n: [0, 2], items: { fork: 2, planks: 3, torch: 1, petrolCan: 2, gasBottle: 1 } },
       hayloft: { n: [0, 1], items: { planks: 1, shells: 1 } },
-      shed: { n: [0, 1], items: { fork: 3, planks: 2, golfClub: 1, torch: 1 } },
+      shed: { n: [0, 1], items: { fork: 3, planks: 2, golfClub: 1, torch: 1, petrolCan: 1, gasBottle: 1 } },
       greenhouse: { n: [0, 1], items: { fork: 1 } },
     },
     extras: {
@@ -298,6 +304,23 @@ export const CONFIG = {
       snow:      { hours: [2, 6], next: { overcast: 3, snow: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.7,  mask: 1, wet: 1, chill: [2, 3], scentWash: 1, fireDamp: 1 },
     },
   },
+  // Fire, smoke and explosions (step 19, systems/fire.js). Flammability is tile data
+  // (TILE_INFO flammable 0-3); these are the rates.
+  fire: {
+    fuelPerLevel: 40,                // ticks of fuel per level of flammability (intensity burns that many per tick)
+    petrolFuel: 20,                  // extra fuel from spilled petrol
+    growEvery: 3,                    // a fire grows a level every 3 ticks, up to flammability + 1
+    spread: [0, 0.02, 0.06, 0.12],   // chance a tick to spread to a neighbour of flammability 1-3 (x intensity/3)
+    dampChance: 0.08,                // outdoors, chance a tick per level of the weather's fireDamp to lose a level
+    wetGround: 2,                    // grass/fell/bracken/bushes won't burn when the mud is this deep
+    heatEvery: 4,                    // doors, barricades, windows on a burning tile take heat damage this often
+    burnEvery: [Infinity, 4, 2, 1],  // a creature in fire of intensity 1-3 loses 1 health every N ticks
+    crackleEvery: 6,                 // crackle (noise 1; 2 when roaring) every N ticks
+    smokeClearIndoors: 8, smokeClearOutdoors: 2, // smoke thins a level every N ticks
+    coughEvery: 3, chokeEvery: 4,    // in thick smoke (2+) you cough (noise 1); choking smoke (3) costs 1 health
+    candleIgnite: 0.01,              // a lit candle on something that burns: chance every 5 ticks to set it alight
+    blastStructure: 3, blastWall: 8, // explosion damage to doors/windows and to walls, x force (power - distance + 1)
+  },
   // Scent (step 18, systems/scent.js): you leave a trail, zombies smell it.
   scent: {
     fadeTicks: 45,                   // a trail loses a level every 1.5 hours (3 levels: gone in 4.5 h; faster in rain outdoors)
@@ -357,7 +380,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 10, key: 'zombie-sim-save' },
+  save: { version: 11, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -399,7 +422,12 @@ export const CONFIG = {
     hatch: '#5a4a30', hatchText: '#a89060',              // a pulled-up ladder seen from below
     snow: ['rgba(255,255,255,0)', 'rgba(235,240,255,0.35)', 'rgba(235,240,255,0.55)', 'rgba(240,245,255,0.75)'], // settled snow by level (step 18)
     trackSnow: '#5a6070', trackMud: '#2a1e12',          // prints: boots (pairs of dots) and drag marks (streaks)
-    debugScent: '60,220,90',                             // debug overlay: scent trail
+    debugScent: '60,220,90',
+    fire: ['rgba(0,0,0,0)', 'rgba(255,140,30,0.45)', 'rgba(255,100,20,0.65)', 'rgba(255,60,10,0.8)'], // by intensity (step 19)
+    flame: '#ffe060',
+    smoke: ['rgba(0,0,0,0)', 'rgba(120,120,120,0.25)', 'rgba(110,110,110,0.5)', 'rgba(90,90,90,0.75)'],
+    petrol: 'rgba(200,120,255,0.5)',
+    ash: '#3a3632', ashMark: '#5a5650', charred: '#2c2420', rubble: '#6a665e', rubbleMark: '#4a4640',                             // debug overlay: scent trail
     phoneBox: '#c01818', phoneBoxMark: '#f0e0a0',        // red phone box with glazed panes
     allotment: '#4a3626', allotmentMark: '#2e2016',      // dug-over beds in rows
     wallStone: '#8c8678', wallStoneMark: '#5e5a50',      // building walls (neat courses; dry-stone field walls are rougher)

@@ -25,6 +25,7 @@ const TILE_COLOUR = {
   [TILE.WALL_STONE]: C.wallStone, [TILE.WALL_BRICK]: C.wallBrick, [TILE.WALL_WOOD]: C.wallWood,
   [TILE.WALL_METAL]: C.wallMetal, [TILE.WALL_GLASS]: C.wallGlass,
   [TILE.PHONEBOX]: C.phoneBox, [TILE.ALLOTMENT]: C.allotment, [TILE.VOID]: C.background,
+  [TILE.ASH]: C.ash, [TILE.CHARRED]: C.charred, [TILE.RUBBLE]: C.rubble,
   [TILE.FLOOR_WOOD]: C.floorWood, [TILE.FLOOR_FLAGS]: C.floorFlags, [TILE.FLOOR_CONCRETE]: C.floorConcrete, [TILE.FLOOR_EARTH]: C.floorEarth,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
@@ -87,6 +88,8 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.FLOOR_WOOD) { ctx.fillStyle = dim(C.floorWoodMark); const h = Math.max(1, Math.floor(s / 16)); for (const f of [0.33, 0.66]) ctx.fillRect(px, py + f * s, s - 1, h); return; }
   if (t === TILE.FLOOR_FLAGS) { ctx.fillStyle = dim(C.floorFlagsMark); const h = Math.max(1, Math.floor(s / 16)); ctx.fillRect(px, py + s / 2, s - 1, h); ctx.fillRect(px + s / 2, py, h, s - 1); return; }
   if (t === TILE.FLOOR_EARTH) { ctx.fillStyle = dim(C.floorEarthMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.25, 0.3], [0.65, 0.6], [0.4, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
+  if (t === TILE.ASH || t === TILE.CHARRED) { ctx.fillStyle = dim(C.ashMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.2, 0.3], [0.55, 0.2], [0.7, 0.6], [0.35, 0.7]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
+  if (t === TILE.RUBBLE) { ctx.fillStyle = dim(C.rubbleMark); for (const [fx, fy, w] of [[0.15, 0.2, 0.3], [0.55, 0.15, 0.25], [0.3, 0.55, 0.35], [0.7, 0.65, 0.2]]) ctx.fillRect(px + fx * s, py + fy * s, w * s, s * 0.18); return; }
   if (t === TILE.PHONEBOX) { // red box, glazed panes in a grid
     ctx.fillStyle = dim(C.phoneBoxMark); const g = s * 0.14;
     for (const fx of [0.22, 0.56]) for (const fy of [0.22, 0.56]) ctx.fillRect(px + fx * s, py + fy * s, g * 1.6, g * 1.6);
@@ -134,6 +137,18 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
     const h = Math.max(1, Math.floor(s / 14));
     ctx.fillRect(px, py + s * 0.33, s - 1, h); ctx.fillRect(px, py + s * 0.66, s - 1, h);
     ctx.fillRect(px + s * 0.5, py, h, s * 0.33); ctx.fillRect(px + s * 0.25, py + s * 0.33, h, s * 0.33); ctx.fillRect(px + s * 0.7, py + s * 0.66, h, s * 0.33);
+  }
+}
+
+// Fire (step 19): an orange-red glow by intensity, with flames that flicker each turn.
+function drawFire(ctx, lv, px, py, s, flick) {
+  ctx.fillStyle = C.fire[lv];
+  ctx.fillRect(px, py, s - 1, s - 1);
+  ctx.fillStyle = C.flame;
+  const tips = [[0.25, 0.35], [0.5, 0.2], [0.72, 0.4]];
+  for (let k = 0; k < lv; k++) {
+    const [fx, fy] = tips[(k + flick) % 3];
+    ctx.beginPath(); ctx.moveTo(px + (fx - 0.1) * s, py + 0.8 * s); ctx.lineTo(px + fx * s, py + fy * s); ctx.lineTo(px + (fx + 0.1) * s, py + 0.8 * s); ctx.fill();
   }
 }
 
@@ -212,6 +227,9 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         const snow = snowLevel(world);
         if (snow && holdsSnow(world, t)) { ctx.fillStyle = C.snow[snow]; ctx.fillRect(px, py, s - 1, s - 1); } // settled snow
         drawTrack(ctx, trackAt(world, x, y), px, py, s, false);
+        const fi = y * world.width + x;
+        if (world.petrol && world.petrol[fi]) { ctx.fillStyle = C.petrol; ctx.fillRect(px + s * 0.15, py + s * 0.55, s * 0.5, s * 0.25); }
+        if (world.fire && world.fire[fi]) drawFire(ctx, world.fire[fi], px, py, s, (x * 31 + y * 17 + world.turn) % 3);
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
@@ -286,6 +304,16 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         else { ctx.fillRect(px + fx * (s - 3), py + fy * (s * 0.6), 2, s * 0.35); }
       }
     }
+  }
+
+  // 3c. Smoke over tiles in sight (and the thick smoke at the edge of what you can see).
+  if (world.smoke) for (let vy = 0; vy < rows; vy++) for (let vx = 0; vx < cols; vx++) {
+    const x = camX + vx, y = camY + vy;
+    if (!onScreen(x, y)) continue;
+    const sm = world.smoke[y * world.width + x];
+    if (!sm || !levelAt(x, y)) continue;
+    ctx.fillStyle = C.smoke[sm];
+    ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
   }
 
   // 4. Debug: noise heatmap (the truth, including tiles you can't see).

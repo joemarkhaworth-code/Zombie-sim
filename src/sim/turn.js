@@ -19,6 +19,7 @@ import { tickLight, updateLight } from './systems/light.js';
 import { tickWeather } from './systems/weather.js';
 import { tickScent } from './systems/scent.js';
 import { tickTracks } from './systems/tracks.js';
+import { tickFire } from './systems/fire.js';
 import { tickNeeds, needLevel, waterNearby, adjustNeed, wake } from './systems/needs.js';
 import { makeNoise } from './systems/noise.js';
 import { TILE } from './gen/testgrid.js';
@@ -45,6 +46,7 @@ function onTick(world) {
   tickNeeds(world);
   tickScent(world);
   tickTracks(world, world.weather && world.weather.kind);
+  tickFire(world);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),

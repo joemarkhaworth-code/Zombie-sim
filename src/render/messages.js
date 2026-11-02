@@ -28,6 +28,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   };
   const name = (id) => world.entities.get(id)?.Name?.name ?? 'something';
   const isPlayer = (id) => id === world.playerId;
+  const playerSeesTile = (x, y) => { const p = world.entities.get(world.playerId); return !!(p && visibilityAt(world, p, x, y) > 0 && onScreen(x, y)); };
   const VERB_S = { bite: 'bites', hit: 'hits' };
   const verbs = (id) => VERB_S[world.entities.get(id)?.Melee?.verb] || 'hits';
   const adjacentActors = () => {
@@ -122,6 +123,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (d.reason === 'no_water') say('No water here.', PRIORITY.blocked);
     if (d.reason === 'not_safe') say('Not with them about.', PRIORITY.blocked);
     if (d.reason === 'too_cold') say('Too cold to sleep.', PRIORITY.blocked);
+    if (d.reason === 'nothing_burns') say('Nothing here will burn.', PRIORITY.blocked);
     if (d.reason === 'not_hurt') say("You're not hurt.", PRIORITY.blocked);
   });
   // Needs (step 16).
@@ -143,6 +145,14 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     const t = { rested: ['You wake, rested.', PRIORITY.info], noise: ['A noise wakes you!', PRIORITY.danger], hurt: ['You wake in pain!', PRIORITY.danger], hunger: ['Hunger wakes you.', PRIORITY.notice], thirst: ['Thirst wakes you.', PRIORITY.notice], cold: ['The cold wakes you.', PRIORITY.notice] }[d.reason] || ['You wake.', PRIORITY.info];
     say(t[0], t[1]);
   });
+  // Fire (step 19).
+  ev.on('fire_lit', (d) => { if (isPlayer(d.id)) say('You start a fire.', PRIORITY.notice); });
+  ev.on('fire_started', (d) => { if (!isPlayer(d.by) && playerSeesTile(d.x, d.y)) say('Fire!', PRIORITY.danger); });
+  ev.on('entity_burned', (d) => { if (isPlayer(d.id)) say("You're burning!", PRIORITY.danger); });
+  ev.on('coughed', (d) => { if (isPlayer(d.id)) say('You choke on the smoke.', PRIORITY.danger); });
+  ev.on('explosion', (d) => say(playerSeesTile(d.x, d.y) ? 'BOOM!' : 'An explosion!', PRIORITY.danger));
+  ev.on('petrol_spilled', () => say('Petrol splashes about.', PRIORITY.info));
+  ev.on('item_used_up', (d) => { if (isPlayer(d.id)) say(`That's the last of the ${d.name}.`, PRIORITY.info); });
   // Weather (step 17).
   ev.on('weather_changed', (d) => {
     const t = {
@@ -286,6 +296,9 @@ const CAUSES = {
   starved: () => 'Starved to death',
   thirst: () => 'Died of thirst',
   cold: () => 'Died of cold',
+  fire: () => 'Burned to death',
+  explosion: () => 'Blown up',
+  smoke: () => 'Choked on smoke',
 };
 export function deathText(world) {
   const g = world.gameOver;

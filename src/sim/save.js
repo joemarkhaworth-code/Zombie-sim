@@ -14,9 +14,10 @@ import { CONFIG } from '../config.js';
 import { refreshAllVision } from './systems/vision.js';
 import { buildingInfo } from './gen/building.js';
 import { rebuildLinks } from './systems/floors.js';
+import { rebuildFireActive } from './systems/fire.js';
 import { updateLight } from './systems/light.js';
 
-const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp', 'scentLaid'];
+const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp', 'scentLaid', 'fire', 'fuel', 'smoke', 'petrol'];
 // Tile arrays are mostly long runs (village maps are tens of thousands of tiles), so they
 // are saved run-length encoded: [value, count, value, count, ...].
 const rle = (arr) => { const out = []; for (let i = 0; i < arr.length;) { let j = i; while (j < arr.length && arr[j] === arr[i]) j++; out.push(arr[i], j - i); i = j; } return out; };
@@ -90,6 +91,7 @@ export function deserialize(json, createWorld) {
     if (e.Door && e.Door.lockId === undefined) e.Door.lockId = e.Door.locked ? CONFIG.items.key.lockId : null;
   }
   rebuildLinks(world); // stairs and ladders, from the saved Stairs entities
+  rebuildFireActive(world); // burning and smoky tiles
   world.structures = new Map();
   for (const e of world.entities.values()) {
     if (e.Structure && e.Position) world.structures.set(e.Position.y * world.width + e.Position.x, e.id);
