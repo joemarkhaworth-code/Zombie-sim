@@ -1220,7 +1220,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   assert(fellish.includes(T(1, midRow)) && fellish.includes(T(w.width - 2, midRow)), `village ${seed}: fellside on both sides`);
   assert(TILE_INFO[TILE.FELL].moveCost > TILE_INFO[TILE.GRASS].moveCost && TILE_INFO[TILE.PATH].moveCost === 1, 'village: fellside is slow going; footpaths are not');
   // 2. The road runs the length of the valley and never meets water except on a bridge.
-  for (let y = 0; y < w.height; y++) {
+  for (let y = 0; y < w.landHeight; y++) {
     let road = 0, bridge = 0; for (let x = 0; x < w.width; x++) { if (T(x, y) === TILE.ROAD) road++; if (T(x, y) === TILE.BRIDGE) bridge++; }
     assert(road === w.widths.road || (y >= w.bridgeRow && y < w.bridgeRow + w.widths.beck && bridge >= CONFIG.scale.ways.bridge), `village ${seed}: road ${road} wide at row ${y}`);
   }
@@ -1281,6 +1281,8 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const q = [[p.Position.x, p.Position.y]]; seen[p.Position.y * w.width + p.Position.x] = 1;
   while (q.length) {
     const [x, y] = q.pop();
+    const link = w.links.get(y * w.width + x); // stairs and ladders to other floors
+    if (link !== undefined && !seen[link]) { seen[link] = 1; q.push([link % w.width, Math.floor(link / w.width)]); }
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const nx = x + dx, ny = y + dy, i = ny * w.width + nx;
       if (!inBounds(w, nx, ny) || seen[i] || TILE_INFO[w.tiles[i]].blocks) continue;
@@ -1339,6 +1341,81 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   assert(w.tileHp[glass] === CONFIG.materials.glass.hp && w.tileHp[stone] === CONFIG.materials.stone.hp, `buildings ${seed}: wall health from material`);
 }
 console.log('buildings: every plot built at true size from its materials; front doors, windows onto open ground, every room reachable; some locked OK');
+
+// 18. Upstairs, cellars and lofts (step 14c): separate little maps in a void band, joined by stairs/ladders.
+for (const seed of [1, 5, 11, 42, 2024]) {
+  const w = createWorld(seed, { map: 'village' });
+  for (const b of w.buildings) {
+    const names = (b.floors || []).map((f) => f.name);
+    if (b.building === 'terracedCottage' || b.building === 'detachedCottage') assert(names.includes('upstairs'), `floors ${seed}: ${b.building} has no upstairs`);
+    if (b.building === 'pub') assert(names.includes('upstairs') && names.includes('cellar'), `floors ${seed}: pub has an upstairs and a cellar`);
+    if (b.building === 'church') assert(names.includes('loft'), `floors ${seed}: church has a bell loft`);
+  }
+  for (const f of w.floors) {
+    assert(f.y >= w.landHeight && f.y + f.h <= w.height, `floors ${seed}: ${f.name} outside the void band`);
+    for (let x = f.x - 1; x <= f.x + f.w; x++) for (const y of [f.y - 1, f.y + f.h]) assert(tileAt(w, x, y) === TILE.VOID, `floors ${seed}: ${f.name} not ringed by void`);
+    for (let y = f.y; y < f.y + f.h; y++) for (const x of [f.x - 1, f.x + f.w]) assert(tileAt(w, x, y) === TILE.VOID, `floors ${seed}: ${f.name} not ringed by void`);
+  }
+  const ends = query(w, 'Stairs');
+  assert(ends.length === 2 * w.floors.length, `floors ${seed}: one link per floor`);
+  for (const [a, b] of w.links) assert(w.links.get(b) === a, `floors ${seed}: links pair up`);
+  for (const e of ends) assert((e.Position.y >= w.landHeight) !== (w.entities.get(e.Stairs.link).Position.y >= w.landHeight), `floors ${seed}: a link joins the ground to a floor`);
+}
+{ // Climbing, sight per floor, sound up the ladder, a zombie following, a pulled-up ladder.
+  const setup = () => {
+    const w = createWorld(1, { map: 'village' });
+    const p = playerOf(w), z = zombieOf(w);
+    p.Health.hp = p.Health.max = 1e6;
+    const church = w.buildings.find((b) => b.building === 'church');
+    const inRect = (e, r) => e.Position.x >= r.x && e.Position.y >= r.y && e.Position.x < r.x + r.w && e.Position.y < r.y + r.h;
+    const bottom = query(w, 'Stairs').find((e) => e.Stairs.kind === 'ladder' && inRect(e, church));
+    const top = w.entities.get(bottom.Stairs.link);
+    // The zombie waits in the nave, a few tiles from the foot of the ladder.
+    let spot = null;
+    for (let d = 2; d <= 4 && !spot; d++) for (let dy = -d; dy <= d && !spot; dy++) for (let dx = -d; dx <= d && !spot; dx++) {
+      const x = bottom.Position.x + dx, y = bottom.Position.y + dy;
+      if (x > church.x && y > church.y && x < church.x + church.w - 1 && y < church.y + church.h - 1 && isPassable(w, x, y) && Math.max(Math.abs(dx), Math.abs(dy)) === d) spot = { x, y };
+    }
+    place(w, z, spot.x, spot.y);
+    z.Brain.goal = null;
+    return { w, p, z, bottom, top };
+  };
+  CONFIG.zombie.staggerChance = 0;
+  let { w, p, z, bottom, top } = setup();
+  place(w, p, bottom.Position.x, bottom.Position.y);
+  let t0 = w.tick;
+  assert(playerAct(w, { type: 'climb' }) && p.Position.x === top.Position.x && p.Position.y === top.Position.y, 'floors: you climb the ladder to the other floor');
+  assert(w.tick - t0 === CONFIG.floors.ladderCost, `floors: a ladder takes ${CONFIG.floors.ladderCost} ticks (${w.tick - t0})`);
+  assert([...p.Vision.visible.keys()].every((i) => Math.floor(i / w.width) >= w.landHeight), 'floors: upstairs you only see upstairs');
+  assert(!canSee(w, z, p), 'floors: the zombie below cannot see you');
+  // Step off the hatch and make a noise: it carries down the ladder, and the zombie heads for the ladder.
+  const off = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => isPassable(w, p.Position.x + dx, p.Position.y + dy));
+  playerAct(w, { type: 'move', dx: off[0], dy: off[1] });
+  z.Brain.goal = null;
+  makeNoise(w, p.Position.x, p.Position.y, 2, p.id);
+  assert(z.Brain.goal && z.Brain.goal.x === bottom.Position.x && z.Brain.goal.y === bottom.Position.y, 'floors: a noise upstairs is heard below as coming from the ladder');
+  let up = false;
+  for (let i = 0; i < 40 && !up; i++) { playerAct(w, { type: 'wait' }); up = z.Position.y >= w.landHeight; }
+  assert(up, 'floors: the zombie climbs the ladder after you');
+  // Again, but pull the ladder up first: it can't follow, and you must lower it to go down.
+  ({ w, p, z, bottom, top } = setup());
+  place(w, p, bottom.Position.x, bottom.Position.y);
+  playerAct(w, { type: 'climb' });
+  assert(playerAct(w, { type: 'ladder', up: true }) && top.Stairs.pulled && bottom.Stairs.pulled, 'floors: you pull the ladder up');
+  assert(!playerAct(w, { type: 'climb' }), 'floors: you must lower it before climbing down');
+  const off2 = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => isPassable(w, p.Position.x + dx, p.Position.y + dy));
+  playerAct(w, { type: 'move', dx: off2[0], dy: off2[1] });
+  z.Brain.goal = { x: bottom.Position.x, y: bottom.Position.y, why: 'heard' };
+  let blocked = 0; w.events.on('climb_blocked', (d) => { if (d.id === z.id && d.reason === 'pulled') blocked++; });
+  for (let i = 0; i < 40; i++) { playerAct(w, { type: 'wait' }); assert(z.Position.y < w.landHeight, 'floors: the zombie cannot climb a pulled-up ladder'); }
+  assert(blocked > 0, 'floors: the zombie tried the ladder');
+  const back = deserialize(serialize(w), createWorldAny);
+  assert(serialize(back) === serialize(w) && back.entities.get(top.id).Stairs.pulled && back.links.size === w.links.size, 'floors: saves keep links and pulled-up ladders');
+  playerAct(w, { type: 'move', dx: -off2[0], dy: -off2[1] });
+  assert(playerAct(w, { type: 'ladder', up: false }) && playerAct(w, { type: 'climb' }) && p.Position.y < w.landHeight, 'floors: lower it and climb down');
+  CONFIG.zombie.staggerChance = 0.2;
+}
+console.log('floors: upstairs/cellars/lofts ringed by void, linked; climbing, sight per floor, sound through links, zombies follow, pulled-up ladders stop them, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

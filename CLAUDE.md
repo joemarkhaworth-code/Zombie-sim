@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (4 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (5 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -322,8 +322,47 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - floors: floorboards (brown planks), flagstones (grey slabs), concrete (plain grey), earth (dark with specks).
 - Tests: one building per plot; every type appears; materials come from the type's table; the front door sits by the plot's front tile; every room is reachable from the front door; doors and windows on the outer wall open onto walkable ground; some front doors locked; glass walls see-through; wall health from material. Checked on 150 seeds.
 
+## Decisions for step 14c (upstairs, cellars, lofts) - built
+- Each extra floor is a small separate map: a walled pocket in a band of void below the valley.
+  - The village world is CONFIG.village.height (200) land rows plus floorRows (48) band rows; world.landHeight marks where the band starts. 150 seeds use at most ~31 band rows.
+  - VOID tiles (TILE.VOID) block movement and sight, and sound never enters them (TILE_INFO silent). So each floor is cut off from everything else, yet every existing system (sight, noise, memory, items, combat, doors) works there unchanged. No per-map refactor.
+  - Pockets are shelf-packed left to right with 2 tiles of void between them (gen/floors.js).
+- A pocket keeps its building's facing. Its stairs or ladder sits on the same (u, v) in the building's frame as the ground-floor end, so the two line up as if stacked.
+- Plans (PLANS in gen/floors.js, in the building frame: rect covered, link spot, partitions, inside doors, rooms). Links are placed clear of the ground floor's door approaches. Which buildings get which: CONFIG.floors.chance.
+  - terraced cottage: upstairs by stairs (front and back bedrooms).
+  - detached cottage: upstairs by stairs (front bedroom, back bedroom, bathroom).
+  - farmhouse: upstairs by stairs, plus a cellar by ladder half the time.
+  - corner shop: upstairs flat by stairs, plus a stock cellar by ladder half the time.
+  - pub: upstairs by stairs (sitting room, two bedrooms) and a beer cellar under the bar by ladder.
+  - church: a bell loft over the vestry, up a ladder.
+  - barn: a hayloft over the back half, up a ladder (80%).
+  - Upstairs floors are floorboards, cellars flagstones, walls the building's material.
+- No upstairs windows yet: they would look out over the void. A view out of an upstairs window needs sight across maps; that's a later system.
+- Links are pairs of entities, one on each floor: Stairs { kind: 'stairs' | 'ladder', top, link, pulled } (systems/floors.js).
+  - Glyphs: stairs show < going up and > going down; a ladder is H. A pulled-up ladder is = lying on the floor at the top and a ^ hatch out of reach at the bottom.
+  - world.links (tile -> linked tile) and world.stairsAt (tile -> entity) are rebuilt from the entities, after loading too.
+  - Links are things on a tile, so map memory remembers them.
+- Climbing ({ type: 'climb' }, a turn): you move to the other end (blocked if something stands there).
+  - It takes stairsCost (1x) or ladderCost (2x) time and emits entity_climbed, then entity_moved, so sight, footsteps and memory follow.
+  - Pulling up or lowering a ladder ({ type: 'ladder', up }, a turn) only works from the top end. It clatters (noise 1).
+  - A pulled-up ladder can't be climbed from below ("The ladder's pulled up."). From above you must lower it first ("Lower the ladder first.").
+- Controls: standing on stairs or a ladder adds an UP or DOWN button to the action bar, and at the top of a ladder a PULL UP / LOWER button. Stepping onto one names it in the status bar ("A staircase up.").
+- Sound goes through links: noise reaching a link tile continues on the other floor, losing floors.linkNoiseCost (3, like a wall).
+  - Whoever hears it there hears it coming from the stairs: noise_heard x, y is the stairs tile on the listener's floor, with sourceX/sourceY kept.
+  - So a zombie downstairs that hears you upstairs walks to the foot of the stairs.
+- Zombies follow: a zombie that reaches its goal and finds it's stairs or a ladder climbs it, then searches the other side.
+  - Its goal can be stairs because it heard you through them, or because it saw you there last.
+  - A pulled-up ladder stops it: it searches at the bottom instead. That makes lofts with ladders a safe spot.
+  - Stairs can't be pulled up (barricading them comes later).
+- world.floors and each building's floors: [{ building, name, via, x, y, w, h, rooms }] (rooms inside the walls). 14d puts loot and zombies in them.
+- Save version 5. The tiles (with the band), Stairs entities and pulled state are saved; links are rebuilt on load.
+- Tests: every terraced/detached cottage has an upstairs, the pub an upstairs and a cellar, the church a loft. Every pocket is ringed by void and every link pairs up, joining the ground to a floor. Everything walkable is reachable using links.
+  - Climbing takes the ladder's time; upstairs you only see upstairs.
+  - A noise upstairs is heard below as coming from the ladder, and the zombie climbs after you.
+  - A pulled-up ladder stops it, you can't climb down until you lower it, and saves keep pulled ladders.
+  Checked on 150 seeds.
+
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
-- Buildings can have an upstairs and/or a cellar. Each extra floor is a small separate map, reached by stairs or a ladder from a tile in the ground floor (and back). Creatures, items, noise and sight work per map; travelling between maps takes a turn on the stairs/ladder tile.
-- Ladders can be pulled up from the top: a pulled-up ladder can't be climbed from below, so zombies can't follow you up (you can lower it again). Stairs can't be pulled up (barricade them instead).
+- Upstairs, cellars and lofts: built in 14c (above).
 - Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.
 - Building materials are chosen per building from the materials table (built in 14b); CONFIG.build is now only the test grid's defaults.

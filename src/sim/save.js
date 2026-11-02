@@ -13,6 +13,7 @@
 import { CONFIG } from '../config.js';
 import { refreshAllVision } from './systems/vision.js';
 import { buildingInfo } from './gen/building.js';
+import { rebuildLinks } from './systems/floors.js';
 
 const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp'];
 // Tile arrays are mostly long runs (village maps are tens of thousands of tiles), so they
@@ -85,6 +86,7 @@ export function deserialize(json, createWorld) {
   for (const e of world.entities.values()) { // older saves: doors had no lockId
     if (e.Door && e.Door.lockId === undefined) e.Door.lockId = e.Door.locked ? CONFIG.items.key.lockId : null;
   }
+  rebuildLinks(world); // stairs and ladders, from the saved Stairs entities
   world.structures = new Map();
   for (const e of world.entities.values()) {
     if (e.Structure && e.Position) world.structures.set(e.Position.y * world.width + e.Position.x, e.id);

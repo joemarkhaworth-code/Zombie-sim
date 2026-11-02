@@ -16,6 +16,7 @@ import { attack } from './combat.js';
 import { structureAt, isObstacle, damageStructure } from './structures.js';
 import { meleeStats } from './items.js';
 import { makeNoise } from './noise.js';
+import { stairsAt, climb } from './floors.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -64,7 +65,13 @@ export function shamble(world, e) {
     const g = brain.goal;
     if (g.search === undefined) {
       // Head for the spot. On arrival (or if stuck), search around it for a while.
+      // At stairs or a ladder (it saw you go up, or heard you through them): follow, if it
+      // can, and search the other side. A pulled-up ladder stops it: it searches here.
       const arrived = e.Position.x === g.x && e.Position.y === g.y;
+      if (arrived && stairsAt(world, g.x, g.y) && climb(world, e)) {
+        brain.goal = { x: e.Position.x, y: e.Position.y, why: g.why, search: CONFIG.zombie.searchActions };
+        return;
+      }
       if (arrived || !stepToward(world, e, g)) g.search = CONFIG.zombie.searchActions;
       return;
     }

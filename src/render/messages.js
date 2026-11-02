@@ -121,6 +121,21 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.killerId)) say(`You kill the ${d.name}.`, PRIORITY.notice);
   });
   ev.on('entity_waited', (d) => { if (isPlayer(d.id)) say('You wait.', PRIORITY.info); });
+  // Stairs and ladders (step 14c).
+  ev.on('entity_climbed', (d) => {
+    if (!isPlayer(d.id)) return;
+    say(d.kind === 'ladder' ? (d.up ? 'You climb up the ladder.' : 'You climb down the ladder.') : d.up ? 'You go up the stairs.' : 'You go down the stairs.', PRIORITY.info);
+  });
+  ev.on('climb_blocked', (d) => {
+    if (!isPlayer(d.id)) return;
+    say({ pulled: "The ladder's pulled up.", lower: 'Lower the ladder first.', blocked: "Something's in the way." }[d.reason] || "You can't.", PRIORITY.blocked);
+  });
+  ev.on('ladder_moved', (d) => { if (isPlayer(d.id)) say(d.up ? 'You pull the ladder up.' : 'You lower the ladder.', PRIORITY.info); });
+  ev.on('entity_moved', (d) => { // stepping onto stairs: say what's here (the button appears)
+    if (!isPlayer(d.id) || !world.stairsAt) return;
+    const id = world.stairsAt.get(d.to.y * world.width + d.to.x);
+    if (id !== undefined && world.entities.get(id)) say(`A ${world.entities.get(id).Name.name}.`, PRIORITY.info);
+  });
   ev.on('move_blocked', (d) => {
     if (!isPlayer(d.id)) return;
     if (d.blockerId === null) {

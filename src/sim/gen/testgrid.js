@@ -10,6 +10,7 @@ export const TILE = {
   // Buildings (step 14b): a wall tile per material, a floor tile per floor kind.
   WALL_STONE: 25, WALL_BRICK: 26, WALL_WOOD: 27, WALL_METAL: 28, WALL_GLASS: 29,
   FLOOR_WOOD: 30, FLOOR_FLAGS: 31, FLOOR_CONCRETE: 32, FLOOR_EARTH: 33,
+  VOID: 34, // between floors (14c): blocks movement, sight and sound completely
 };
 // Building walls by material, and floors by kind (see CONFIG.buildingTypes).
 export const WALL_OF = { stone: TILE.WALL_STONE, brick: TILE.WALL_BRICK, wood: TILE.WALL_WOOD, corrugatedMetal: TILE.WALL_METAL, glass: TILE.WALL_GLASS };
@@ -53,6 +54,7 @@ export const TILE_INFO = {
   [TILE.FLOOR_FLAGS]: T('flagstone floor'),
   [TILE.FLOOR_CONCRETE]: T('concrete floor'),
   [TILE.FLOOR_EARTH]: T('earth floor'),
+  [TILE.VOID]: T('void', { blocks: true, opaque: true, silent: true }),
 };
 // Short description for long-press inspect (render side picks the wording).
 export const TILE_DESC = {
@@ -90,6 +92,7 @@ export const TILE_DESC = {
   [TILE.FLOOR_FLAGS]: 'A flagstone floor.',
   [TILE.FLOOR_CONCRETE]: 'A concrete floor.',
   [TILE.FLOOR_EARTH]: 'Bare earth.',
+  [TILE.VOID]: 'Nothing there.',
 };
 
 export function generateTestGrid(rng, width, height) {

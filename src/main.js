@@ -9,6 +9,7 @@ import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
 import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from './sim/tuning.js';
 import { refreshAllVision } from './sim/systems/vision.js';
+import { stairsAt } from './sim/systems/floors.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -112,12 +113,21 @@ function updateCamera() {
   layout.camY = clamp(p.y - (layout.rows >> 1), world.height, layout.rows);
 }
 
+// Standing on stairs or a ladder: UP / DOWN to climb, and at the top of a ladder PULL / LOWER.
+function stairButtons(p) {
+  const s = p && p.Position && stairsAt(world, p.Position.x, p.Position.y);
+  if (!s) return [];
+  const out = [s.Stairs.top ? 'down' : 'up'];
+  if (s.Stairs.kind === 'ladder' && s.Stairs.top) out.push(s.Stairs.pulled ? 'lower' : 'pull');
+  return out;
+}
+
 // Action bar buttons for the current state: while aiming, one big CANCEL; otherwise
-// SNEAK, SHOVE, BAG, plus FIRE when you're holding a gun.
+// SNEAK, SHOVE, BAG, plus FIRE when you're holding a gun, plus stairs buttons.
 function currentButtons() {
   const pad = 8, w = layout.width, h = layout.height, barH = layout.barHeight;
   const p = world.entities.get(world.playerId);
-  const ids = aim ? ['cancel'] : ['sneak', 'shove', 'bag', ...(p && wieldedGun(world, p) ? ['fire'] : [])];
+  const ids = aim ? ['cancel'] : ['sneak', 'shove', 'bag', ...(p && wieldedGun(world, p) ? ['fire'] : []), ...stairButtons(p)];
   const bw = Math.floor((w - pad * (ids.length + 1)) / ids.length);
   return ids.map((id, i) => ({ id, x: pad + i * (bw + pad), y: h - barH + pad, w: bw, h: barH - pad * 2 }));
 }
@@ -281,6 +291,8 @@ function onButton(px, py) {
     render();
     return;
   }
+  if (b.id === 'up' || b.id === 'down') { act({ type: 'climb' }); render(); return; }
+  if (b.id === 'pull' || b.id === 'lower') { act({ type: 'ladder', up: b.id === 'pull' }); render(); return; }
   if (b.id === 'fire') {
     if (gunAmmo() <= 0) { act({ type: 'fire', x: -1, y: -1 }); render(); return; } // shows "Out of ammo."
     startAim('fire');

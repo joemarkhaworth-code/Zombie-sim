@@ -29,6 +29,7 @@ export const CONFIG = {
     // Generated in layers (src/sim/gen/village.js) at CONFIG.scale: valley, road + bridge,
     // high street, ginnels + yards, green + church, outskirts.
     width: 112, height: 200,
+    floorRows: 48,                   // extra rows below the valley: the void band holding upstairs, cellars, lofts
     floorHalf: [12, 20],             // valley floor half-width outside the village (head / foot)
     intake: 12,                      // lower fellside walled into intake fields, below the fell wall
     lakeRows: 14,                    // the lake at the foot of the dale
@@ -115,6 +116,24 @@ export const CONFIG = {
     greenhouse: { walls: { glass: 1 }, roof: 'walls', floor: 'earth', door: 'walls', lockFront: 0, lockBack: 0 },
   },
   innerDoorOpen: 0.7,
+  // Upstairs, cellars and lofts (step 14c): each is a small separate map in a band of void
+  // below the valley (CONFIG.village.floorRows), reached by stairs or a ladder. chance:
+  // which buildings have which floors (plans in src/sim/gen/floors.js).
+  floors: {
+    chance: {
+      terracedCottage: { upstairs: 1 },
+      detachedCottage: { upstairs: 1 },
+      farmhouse: { upstairs: 1, cellar: 0.5 },
+      cornerShop: { upstairs: 1, cellar: 0.5 },
+      pub: { upstairs: 1, cellar: 1 },
+      church: { loft: 1 },
+      barn: { loft: 0.8 },
+    },
+    stairsCost: 1, ladderCost: 2,    // time to climb (x a normal step)
+    linkNoiseCost: 3,                // sound loses this much strength going up or down stairs (like a wall)
+    ladderNoise: 1,                  // pulling up / lowering a ladder clatters
+    gap: 2,                          // void between floors in the band
+  },
   // What things are made of on the test grid (the village picks per building, above).
   build: {
     wall: 'stone',                   // wall tiles
@@ -215,7 +234,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 4, key: 'zombie-sim-save' },
+  save: { version: 5, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -253,6 +272,8 @@ export const CONFIG = {
     plot: '#3a302a',                 // bare earth: empty building plot (14b builds here)
     plotMark: '#5a4a3e',
     graveStone: '#a8a8a0',
+    stairs: '#e8d8a0', stairsText: '#3a2a10',            // stairs < > and ladders H (things on a tile)
+    hatch: '#5a4a30', hatchText: '#a89060',              // a pulled-up ladder seen from below
     wallStone: '#8c8678', wallStoneMark: '#5e5a50',      // building walls (neat courses; dry-stone field walls are rougher)
     wallBrick: '#8e4a36', wallBrickMark: '#5e2e22',
     wallWood: '#7a5430', wallWoodMark: '#4e3418',

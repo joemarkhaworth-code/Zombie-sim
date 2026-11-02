@@ -14,6 +14,7 @@ import { throwItem, fire } from './systems/ranged.js';
 import { structureAt, toggleDoor, damageStructure, isObstacle, hasKeyFor } from './systems/structures.js';
 import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
+import { climb, setLadder } from './systems/floors.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -41,6 +42,8 @@ function onTick(world) {
 //         { type: 'throw', itemId, x, y }, { type: 'fire', x, y } (wielded gun),
 //         { type: 'door', x, y } (open/close the adjacent door at x, y),
 //         { type: 'bash', x, y } (smash/bash the adjacent window, locked door or barricade),
+//         { type: 'climb' } (take the stairs/ladder you're standing on),
+//         { type: 'ladder', up } (pull up / lower the ladder you're at the top of),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
 // Returns true if the action used up a turn.
 export function playerAct(world, action) {
@@ -96,6 +99,10 @@ export function playerAct(world, action) {
     if (!throwItem(world, player, action.itemId, action.x, action.y)) return false;
   } else if (action.type === 'fire') {
     if (!fire(world, player, action.x, action.y)) return false;
+  } else if (action.type === 'climb') {
+    if (!climb(world, player)) return false;
+  } else if (action.type === 'ladder') {
+    if (!setLadder(world, player, !!action.up)) return false;
   } else if (action.type === 'wait') {
     world.events.emit('entity_waited', { id: player.id });
   } else {
@@ -105,7 +112,7 @@ export function playerAct(world, action) {
   const { attack: _a, ...recorded } = action;
   world.inputs.push({ turn: world.turn, action: recorded });
   const tileCost = TILE_INFO[tileAt(world, player.Position.x, player.Position.y)].moveCost;
-  spend(player, action.type === 'move' && !action.attack ? moveCost(player, tileCost) : undefined);
+  spend(player, action.type === 'move' && !action.attack ? moveCost(player, tileCost) : action.type === 'climb' ? player.Actor.nextCost : undefined);
   delete player.Actor.nextCost;
   world.turn++;
   advance(world, act, onTick);

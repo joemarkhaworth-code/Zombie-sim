@@ -48,7 +48,7 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
 //   SHOVE  - one-shot: orange when armed, waiting for you to tap a creature
 // layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
 // ui: { armed } - which one-shot action (if any) is waiting for a target.
-const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'], fire: ['FIRE', 'FIRE'], cancel: ['CANCEL', 'CANCEL'] };
+const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'], fire: ['FIRE', 'FIRE'], cancel: ['CANCEL', 'CANCEL'], up: ['UP', 'UP'], down: ['DOWN', 'DOWN'], pull: ['PULL UP', 'PULL UP'], lower: ['LOWER', 'LOWER'] };
 export function drawButtons(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
   const player = world.entities.get(world.playerId);

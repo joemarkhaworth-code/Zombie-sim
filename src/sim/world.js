@@ -14,17 +14,27 @@ import { scatterTestItems } from './systems/items.js';
 import { installStructures, initTileHp } from './systems/structures.js';
 import { buildTestBuilding } from './gen/building.js';
 import { buildVillage } from './gen/buildings.js';
+import { buildFloors } from './gen/floors.js';
+import { rebuildLinks } from './systems/floors.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
-  const { width, height } = map === 'village' ? CONFIG.village : CONFIG.grid;
+  // The village map is the valley (landHeight rows) plus a void band below it holding the
+  // upstairs, cellars and lofts (step 14c).
+  const { width } = map === 'village' ? CONFIG.village : CONFIG.grid;
+  const landHeight = map === 'village' ? CONFIG.village.height : CONFIG.grid.height;
+  const height = map === 'village' ? landHeight + CONFIG.village.floorRows : landHeight;
   const rng = createRng(seed);
   let tiles, plots = [], green = null, graveyard = null, farms = [], bridgeRow = null, villageStart = null, widths = null;
-  if (map === 'village') ({ tiles, plots, green, graveyard, farms, bridgeRow, start: villageStart, widths } = generateVillage(rng, width, height));
-  else tiles = generateTestGrid(rng, width, height);
+  if (map === 'village') {
+    let land;
+    ({ tiles: land, plots, green, graveyard, farms, bridgeRow, start: villageStart, widths } = generateVillage(rng, width, landHeight));
+    tiles = new Uint8Array(width * height);
+    tiles.set(land);
+  } else tiles = generateTestGrid(rng, width, height);
   const world = {
-    seed, rng, width, height, map,
+    seed, rng, width, height, landHeight, map,
     plots, // village: empty building plots { x, y, w, h, kind, front, back? } for step 14b
     // kind: cottage | detached | pub | shop | church | farmhouse | barn; building = its CONFIG.scale.buildings key;
     // facing = side the front faces (N/E/S/W); front = the tile outside the front door.
@@ -44,7 +54,11 @@ export function createWorld(seed, opts = {}) {
   installBleeding(world); // world.blood
   installStructures(world); // world.structures, world.glass, world.tileHp
   if (map === 'testgrid') buildTestBuilding(world);
-  else buildVillage(world, plots); // step 14b: a building on every plot
+  else {
+    buildVillage(world, plots); // step 14b: a building on every plot
+    buildFloors(world, plots, landHeight); // step 14c: upstairs, cellars, lofts in the void band
+  }
+  rebuildLinks(world); // world.links / world.stairsAt (none on the test grid)
   initTileHp(world, (t) => (TILE_INFO[t].blocks && TILE_INFO[t].material) || null);
 
   // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.
