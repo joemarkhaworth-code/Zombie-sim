@@ -18,6 +18,7 @@ import { tickWeather, isIndoors } from '../src/sim/systems/weather.js';
 import { scentLevel } from '../src/sim/systems/scent.js';
 import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
 import { flammability, ignite } from '../src/sim/systems/fire.js';
+import { tickWater, beckLevel, iceLevel, findBridges } from '../src/sim/systems/water.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -1841,6 +1842,92 @@ console.log('scent: fades, rain washes it outdoors, the beck holds none, zombies
   assert(serialize(back) === serialize(w) && back.fireActive.size === w.fireActive.size, 'fire: saved');
 }
 console.log('fire: flammability from data and weather, lighter starts it, spreads through floorboards not stone, charred floors, wooden walls burn to gaps, burns you and zombies, lights the dark, smoke blinds/chokes, rain damps it, gas bottles explode (fire or shot) blowing doors, walls and roofs (rain gets in), burnt rooms open to the sky, petrol, saved OK');
+
+// 25. Water: dirty water, the beck in spate and flood, ice (step 20).
+{
+  const WC = CONFIG.water, saved = JSON.parse(JSON.stringify(WC));
+  const restoreCfg = () => Object.assign(WC, JSON.parse(JSON.stringify(saved)));
+  // A beck down column x 10 with a 1-wide footbridge at y 12, a lake bottom-right.
+  const valley = () => {
+    const w = openWorld(); const p = playerOf(w); w.entities.delete(zombieOf(w).id);
+    for (let y = 1; y < 28; y++) for (const x of [10, 11]) w.tiles[y * w.width + x] = y === 12 ? TILE.BRIDGE : TILE.STREAM;
+    for (let y = 18; y < 26; y++) for (let x = 16; x < 24; x++) w.tiles[y * w.width + x] = TILE.LAKE;
+    findBridges(w); place(w, p, 5, 5);
+    return { w, p };
+  };
+  const waits = (w, n) => { for (let i = 0; i < n && !w.gameOver; i++) playerAct(w, { type: 'wait' }); };
+  // Dirty water makes you ill hours later: thirstier, no healing; then you get better.
+  let { w, p } = valley();
+  WC.dirty.stream = 1;
+  place(w, p, 9, 5); p.Needs.thirst = CONFIG.needs.perLevel.thirst * 2;
+  assert(playerAct(w, { type: 'drink' }) && p.Needs.illAt > w.tick && needLevel(p, 'ill') === 0, 'water: beck water: not ill yet');
+  for (let i = 0; i < WC.onset[1] + 2 && p.Needs.illAt; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'ill') === WC.illDose, 'water: hours later you fall ill');
+  const t0 = p.Needs.thirst; waits(w, 10);
+  assert(p.Needs.thirst - t0 >= 18, 'water: ill, you get thirsty twice as fast');
+  waits(w, CONFIG.needs.perLevel.ill * (WC.illDose + 1) + 5);
+  assert(needLevel(p, 'ill') === 0, 'water: and you get over it');
+  // Clean luck, and a corpse fouls the water.
+  ({ w, p } = valley());
+  WC.dirty.stream = 0; WC.corpseFoul = 1;
+  place(w, p, 9, 5); p.Needs.thirst = CONFIG.needs.perLevel.thirst * 2;
+  playerAct(w, { type: 'drink' });
+  assert(!p.Needs.illAt, 'water: clean enough without a body in it');
+  kill(w, w.entities.get(makeZombie(w, { x: 10, y: 8 })));
+  playerAct(w, { type: 'drink' });
+  assert(p.Needs.illAt && p.Needs.illDose === WC.foulDose, 'water: a corpse in the beck fouls it (worse illness)');
+  // Very ill: you throw up (noise) and the fever hurts.
+  WC.vomitChance = 1; p.Needs.illAt = 0; p.Needs.ill = CONFIG.needs.perLevel.ill * 3 + 100;
+  let vomits = 0; w.events.on('vomited', () => vomits++);
+  const hp0 = p.Health.hp;
+  for (let i = 0; i < WC.feverEvery + 2; i++) { p.Needs.ill = CONFIG.needs.perLevel.ill * 4 - 1; playerAct(w, { type: 'wait' }); }
+  assert(vomits > 0 && p.Health.hp < hp0, 'water: very ill: you throw up and the fever hurts');
+  restoreCfg();
+  // Rain raises the beck; in spate it can't be waded and sweeps you out; things float off.
+  ({ w, p } = valley());
+  w.weather = { kind: 'heavyRain', until: Infinity };
+  place(w, p, 10, 5); const bean = makeItem(w, 'beans', 11, 7);
+  const hp1 = p.Health.hp;
+  waits(w, Math.ceil((WC.beckPerLevel * 2 - w.water.beck) / WC.beckRise.heavyRain) + 2);
+  assert(beckLevel(w) === 2 && w.tiles[6 * w.width + 10] === TILE.TORRENT, 'water: heavy rain puts the beck in spate');
+  assert(![10, 11].includes(p.Position.x) && p.Health.hp < hp1 && needLevel(p, 'wet') === 3, 'water: the beck sweeps you ashore, soaked and hurt');
+  assert(!w.entities.has(bean), 'water: things in the beck are washed away');
+  assert(!tryMove(w, p, p.Position.x < 10 ? 1 : -1, 0) || ![10, 11].includes(p.Position.x), 'water: you cannot wade the beck in spate');
+  assert(w.tiles[12 * w.width + 10] === TILE.BRIDGE, 'water: the bridge still stands in spate');
+  // In flood it spills over the banks; bridges can go; when it drops the beck is back, the bridge isn't.
+  WC.washout.footbridge = 1;
+  let washed = 0; w.events.on('bridge_washed_away', () => washed++);
+  waits(w, Math.ceil((WC.beckPerLevel * 3 - w.water.beck) / WC.beckRise.heavyRain) + 32);
+  assert(beckLevel(w) === 3 && w.tiles[6 * w.width + 9] === TILE.FLOODWATER && w.tiles[6 * w.width + 8] === TILE.FLOODWATER && w.tiles[6 * w.width + 7] === TILE.FLOOR, 'water: in flood the beck spills two tiles over its banks');
+  assert(washed === 1 && w.tiles[12 * w.width + 10] === TILE.TORRENT, 'water: the flood sweeps the footbridge away');
+  const json = serialize(w), back = deserialize(json, createWorldAny);
+  assert(serialize(back) === json && back.water.under.size === w.water.under.size, 'water: saved in flood');
+  w.weather = { kind: 'clear', until: Infinity };
+  waits(w, Math.ceil((w.water.beck - WC.beckPerLevel) / WC.beckFall) + 2);
+  assert(beckLevel(w) === 1 && w.tiles[6 * w.width + 9] === TILE.FLOOR && w.tiles[6 * w.width + 10] === TILE.STREAM && w.tiles[12 * w.width + 10] === TILE.STREAM, 'water: the flood goes down; the bridge is gone, the beck can be waded');
+  restoreCfg();
+  // Frost freezes the lake: walk on it. Thin ice can break: you climb out soaked and frozen; a zombie drowns.
+  ({ w, p } = valley());
+  w.weather = { kind: 'snow', until: Infinity };
+  w.water.ice = WC.icePerLevel - 1; waits(w, 2);
+  assert(iceLevel(w) === 1 && w.tiles[20 * w.width + 18] === TILE.ICE, 'water: frost freezes the lake');
+  assert(describeTile(w, 16, 18) === 'Thin ice.' || visibilityAt(w, p, 16, 18) === 0, 'water: inspect: thin ice');
+  WC.iceBreak = [0, 1, 0, 0];
+  place(w, p, 15, 19); const hp2 = p.Health.hp;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(w.tiles[19 * w.width + 16] === TILE.LAKE && p.Position.x === 15 && p.Health.hp < hp2 && needLevel(p, 'wet') === 3 && needLevel(p, 'cold') === 3, 'water: you fall through thin ice and climb out soaked and freezing');
+  const z = w.entities.get(makeZombie(w, { x: 18, y: 17 }));
+  tryMove(w, z, 0, 1);
+  assert(!w.entities.has(z.id) && query(w, 'Corpse').length, 'water: a zombie goes through the ice and drowns');
+  WC.iceBreak = saved.iceBreak;
+  w.water.ice = WC.icePerLevel * 3 - 1; waits(w, 1);
+  assert(iceLevel(w) === 3 && w.tiles[19 * w.width + 16] === TILE.ICE, 'water: thicker ice closes the holes');
+  place(w, p, 18, 20);
+  w.weather = { kind: 'rain', until: Infinity }; w.water.ice = WC.icePerLevel; waits(w, 2);
+  assert(iceLevel(w) === 0 && w.tiles[20 * w.width + 18] === TILE.LAKE && w.tiles[p.Position.y * w.width + p.Position.x] !== TILE.LAKE, 'water: rain thaws it; whoever is on it goes in and out');
+  restoreCfg();
+}
+console.log('water: dirty water makes you ill later (thirstier, sick, fever), corpses foul it; rain puts the beck in spate (swept out, washed away), flood over the banks, bridges washed out, goes down; ice freezes, breaks under you and drowns zombies, holes refreeze, thaws; saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

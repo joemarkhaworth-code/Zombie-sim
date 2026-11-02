@@ -31,7 +31,7 @@ function drawNeeds(ctx, world, x, h, blink) {
   ctx.save();
   ctx.font = `bold ${Math.floor(h * 0.5)}px monospace`;
   ctx.textAlign = 'left';
-  for (const [need, ch, always] of [['hunger', 'H', true], ['thirst', 'T', true], ['fatigue', 'Z', true], ['wet', 'W', false], ['cold', 'C', false]]) {
+  for (const [need, ch, always] of [['hunger', 'H', true], ['thirst', 'T', true], ['fatigue', 'Z', true], ['wet', 'W', false], ['cold', 'C', false], ['ill', 'I', false]]) {
     const lv = needLevel(p, need);
     if (!always && !lv) continue; // wet and cold only show when they matter
     if (!(lv === 3 && blink)) { ctx.fillStyle = C.needLevel[lv]; ctx.fillText(ch, x, h / 2); }

@@ -14,7 +14,7 @@ import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from '../gen/testgrid.js';
 import { indoorAt } from './weather.js';
 
-const NO_SNOW = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID]);
+const NO_SNOW = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID, TILE.TORRENT, TILE.FLOODWATER]);
 const MUDDY = new Set([TILE.GRASS, TILE.LANE, TILE.PATH, TILE.FELL, TILE.BRACKEN, TILE.ALLOTMENT, TILE.GATE, TILE.FLOOR]);
 
 export const snowLevel = (world) => Math.min(3, Math.floor((world.snowCover || 0) / CONFIG.tracks.snowPerLevel));

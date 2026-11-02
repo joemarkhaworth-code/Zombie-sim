@@ -650,6 +650,41 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - saves keep a fire burning.
   Checked on 150 seeds.
 
+## Decisions for step 20 (water) - built
+- src/sim/systems/water.js. Water changes by changing tiles, so movement, sight, noise, memory, scent and fire all work on it unchanged. world.water = { beck, ice, under, holes } is saved; under remembers what each changed tile was (tile -> original), so it can go back. New tiles: TORRENT (the beck in spate: blocks), FLOODWATER (wade it: moveCost 2, splash 2, soaks you), ICE (walkable, creaks: noise 1).
+- Dirty water:
+  - Every drink from the beck, the lake, a pond or floodwater may make you ill (CONFIG.water.dirty: beck 15%, lake 30%, pond 45%, floodwater 50%).
+  - A corpse in or right by the water within 6 tiles adds 50% and makes the illness worse (level 3, not 2). Drown zombies in the lake and the lake goes bad.
+  - It comes on 2-5 hours later (Needs.illAt), with no message when you drink (show, don't tell). Bottled drinks are safe.
+  - Ill is a sixth need (Needs.ill, ticks; 4 h a level), falling 1 a tick. It starts at the top of its level, so a level-2 bout lasts about 12 h.
+  - Ill 1+: thirst rises twice as fast, no healing while awake. Ill 2+: no healing asleep, fatigue rises faster, and now and then you throw up (noise 1, lose some hunger and thirst). Ill 3: a fever costs 1 health every 4 h ("Died of a fever").
+  - Top bar: I after W and C, from level 1. Messages: "You feel sick." / "You're ill." / "You're very ill!", "You throw up.", "You feel better." Inspect yourself: sick/ill/very ill.
+- The beck: world.water.beck counts ticks; level = ticks / 240, 1 = normal.
+  - It rises 1 a tick in rain, 2 in heavy rain, +2 while settled snow melts. Otherwise it falls 2 a tick, never below normal.
+  - Level 2, in spate: every beck and gill tile becomes TORRENT. You can't wade it; the bridges are the only way over. Anyone in the beck is swept to the nearest bank, soaked and hurt 1 ("The beck sweeps you away!"). Items and corpses in it are washed away.
+  - Level 3, in flood: as well, low ground (grass, lanes, paths, road, pavement, yards, ginnels, shore, allotments) within 2 tiles of the beck goes under FLOODWATER. Fells, walls, gates and buildings stay dry.
+  - Bridges: each hour in flood, each bridge may be swept away (footbridge 10%, the stone bridge 1%). Its tiles become beck; when the water drops they're a ford, so the bridge is gone for good. Heard as "A crash from the beck." if out of sight (noise 3).
+  - Measured over 30 seeds x 6 days of the weather chain: in spate 16% of the time, in flood 7%, first flood usually on day 2-4.
+  - Messages: "The beck is in spate.", "The beck floods its banks!", "The flood goes down.", "The beck goes down.", "The footbridge is swept away!"
+- Ice: world.water.ice counts ticks of frost; level = ticks / 120 (4 h).
+  - It freezes by the weather's chill (day/night): chill 3 +2 a tick, chill 2 +1. It thaws 2 a tick in rain, 1 otherwise. So a clear or foggy night skins the lake, and snow thickens it.
+  - At level 1+ every lake and pond tile becomes ICE. Inspect: "Thin ice." / "Ice." / "Thick ice."; thin ice is drawn with dark water showing through.
+  - A step onto ice breaks it with chance iceBreak by level (30% thin, 6%, 0% thick). It cracks (noise 2), and the tile is open water (a hole) until the ice thickens a level.
+  - The living climb back out where they came from: soaked, freezing (cold 3) and hurt 1 ("You fall through the ice!"). Zombies go under and drown, leaving a corpse in the water.
+  - Thawing drops anyone on the ice into the water the same way. Anything lying on the ice sinks.
+  - Lure zombies onto thin ice; don't cross it yourself.
+  - Messages: "The lake freezes over.", "The ice melts.", "The ice cracks!", "The zombie goes under."
+- Drinking: the DRINK button works from the beck (in spate too), the lake, a pond or floodwater, but not through ice.
+- Deaths: "Drowned" (swept away, or through the ice), "Died of a fever".
+- TUNE panel: two more world rows, Beck (normal / spate / flood) and Ice (none / thin / ice / thick), set the level at once. The weather carries on moving it from there (set the weather to pour or snow to hold it).
+- Play-test bot over 40 seeds: 34 of 40 runs died, against 32 before. The causes are still mostly bites and bleeding; thirst deaths rose (it drinks beck water, gets ill and dries out), and one drowned. A turn takes ~2 ms, up to ~20 ms on the turn the whole beck changes.
+- Save version 13 (world.water, Needs.ill).
+- Tests:
+  - dirty water: beck water makes you ill hours later; while ill you're thirstier; you recover; clean luck stays clean; a corpse in the beck fouls it (worse); very ill: you throw up and the fever hurts;
+  - the beck: heavy rain puts it in spate; it sweeps you ashore soaked and hurt; things in it wash away; you can't wade it; the bridge stands in spate;
+  - flood: it spills two tiles over the banks and sweeps the footbridge away; saves keep it; it goes down to a ford where the bridge was;
+  - ice: frost freezes the lake, inspected as thin ice; thin ice breaks under you, and you climb out soaked and freezing; a zombie drowns; thicker ice closes the hole; rain thaws it and you go in and out.
+
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).
 - Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.

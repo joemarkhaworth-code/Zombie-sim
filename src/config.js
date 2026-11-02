@@ -321,6 +321,32 @@ export const CONFIG = {
     candleIgnite: 0.01,              // a lit candle on something that burns: chance every 5 ticks to set it alight
     blastStructure: 3, blastWall: 8, // explosion damage to doors/windows and to walls, x force (power - distance + 1)
   },
+  // Water (step 20): src/sim/systems/water.js.
+  water: {
+    // Dirty water: drinking from the beck, the lake, a pond or floodwater may make you ill,
+    // some hours later. A corpse lying in or by the water (within corpseReach) fouls it.
+    dirty: { stream: 0.15, lake: 0.3, pond: 0.45, flood: 0.5 }, // chance each drink makes you ill
+    corpseFoul: 0.5, corpseReach: 6,  // + this chance with a corpse in or by the water
+    onset: [60, 150],                // ticks (2-5 h) before you fall ill
+    illDose: 2, foulDose: 3,         // how ill (level): dirty water / water fouled by a corpse
+    vomitEvery: 20, vomitChance: 0.35, vomitNoise: 1, // ill 2+: you throw up now and then
+    vomitLoss: 60,                   // ...losing this many ticks of hunger and thirst
+    feverEvery: 120,                 // ill 3: lose 1 health every 4 hours
+    // The beck: world.water.beck counts ticks; level 0-3 = ticks / perLevel (1 normal,
+    // 2 in spate: too strong to wade, 3 in flood: over its banks, bridges may go).
+    beckPerLevel: 240,
+    beckRise: { rain: 1, heavyRain: 2 }, snowMeltRise: 2, // per tick of rain / of snow melting
+    beckFall: 2,                     // per tick otherwise, never below normal (level 1)
+    floodReach: 2,                   // in flood, the beck spills this many tiles over low ground
+    washout: { footbridge: 0.1, bridge: 0.01 }, // chance an hour in flood that a bridge is swept away
+    // Ice: world.water.ice counts ticks of frost; level 0-3 = ticks / icePerLevel.
+    // Freezing by the weather's chill (day/night): 3 +2 a tick, 2 +1; rain or chill <= 1 thaws.
+    icePerLevel: 120,
+    iceBreak: [0, 0.3, 0.06, 0],     // chance a step on ice of this level breaks through
+    iceCrackNoise: 2,                // the ice giving way
+    fallInDamage: 1,                 // falling through the ice (zombies go under and drown)
+    sweptDamage: 1,                  // caught in the beck as it rises
+  },
   // Scent (step 18, systems/scent.js): you leave a trail, zombies smell it.
   scent: {
     fadeTicks: 45,                   // a trail loses a level every 1.5 hours (3 levels: gone in 4.5 h; faster in rain outdoors)
@@ -338,7 +364,7 @@ export const CONFIG = {
   // Needs (step 16, systems/needs.js): hunger, thirst and fatigue, counted in ticks (2 min)
   // and shown as levels 0-3 (one level every perLevel ticks).
   needs: {
-    perLevel: { hunger: 360, thirst: 240, fatigue: 180, wet: 40, cold: 90 }, // 12 h, 8 h, 6 h awake; wet/cold (step 17) per level
+    perLevel: { hunger: 360, thirst: 240, fatigue: 180, wet: 40, cold: 90, ill: 120 }, // ill (step 20): 4 h a level // 12 h, 8 h, 6 h awake; wet/cold (step 17) per level
     starveEvery: 360,                // starving (hunger 3, after 36 h): lose 1 health every 12 hours
     parchedEvery: 180,               // parched (thirst 3, after 24 h): lose 1 health every 6 hours
     exhaustedCost: 1.5,              // exhausted (fatigue 3): every action takes 1.5x as long
@@ -380,7 +406,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 12, key: 'zombie-sim-save' },
+  save: { version: 13, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -458,6 +484,9 @@ export const CONFIG = {
     scree: '#8c877c',
     screeMark: '#5f5b52',
     lake: '#1d4f8a',
+    torrent: '#5a7f9e', torrentMark: '#e8f0f6', // the beck in spate: churning, white water
+    floodwater: '#4f5f58', floodMark: '#8aa0a0', // muddy water over the fields
+    ice: '#b8d0e0', iceMark: '#ffffff', iceThin: '#7fa4c4', // ice: pale, cracks; thin ice darker
     shore: '#9a917c',
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out

@@ -17,7 +17,7 @@ import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from '../gen/testgrid.js';
 import { weatherOf, indoorAt } from './weather.js';
 
-const NO_SCENT = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID]);
+const NO_SCENT = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID, TILE.TORRENT, TILE.FLOODWATER]);
 
 export function installScent(world) {
   world.scentLaid = new Uint32Array(world.width * world.height);

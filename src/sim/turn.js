@@ -7,6 +7,7 @@ import { shamble } from './systems/shamble.js';
 import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
+import { tickWater, drinkFrom, DRINKABLE } from './systems/water.js';
 import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
@@ -47,6 +48,7 @@ function onTick(world) {
   tickScent(world);
   tickTracks(world, world.weather && world.weather.kind);
   tickFire(world);
+  tickWater(world);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),
@@ -124,6 +126,7 @@ export function playerAct(world, action) {
     adjustNeed(world, player, 'thirst', -CONFIG.needs.perLevel.thirst);
     world.events.emit('drank', { id: player.id, x: water.x, y: water.y });
     makeNoise(world, water.x, water.y, CONFIG.needs.drinkNoise, player.id);
+    drinkFrom(world, player, water.x, water.y); // dirty water may make you ill later (step 20)
   } else if (action.type === 'sleep') {
     if (!canSleep(player)) { world.events.emit('use_failed', { id: player.id, reason: 'not_tired' }); return false; }
     if (needLevel(player, 'cold') >= 3) { world.events.emit('use_failed', { id: player.id, reason: 'too_cold' }); return false; }
@@ -164,8 +167,7 @@ function endTurn(world, player, cost) {
   world.events.emit('turn_ended', { turn: world.turn });
 }
 
-const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND]);
-const isWater = (t) => WATER.has(t);
+const isWater = (t) => DRINKABLE.has(t); // the beck (even in spate), the lake, ponds, floodwater; not ice
 export const canDrinkHere = (world, e) => !!(e.Needs && e.Needs.thirst > 0 && waterNearby(world, e, isWater));
 export const canSleep = (e) => !!(e.Needs && needLevel(e, 'fatigue') >= 1);
 

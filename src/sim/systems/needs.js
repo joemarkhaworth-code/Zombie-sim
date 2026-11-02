@@ -21,7 +21,7 @@ import { weatherOf, isIndoors } from './weather.js';
 import { TILE } from '../gen/testgrid.js';
 import { minutesAt } from '../time.js';
 
-const NEEDS = ['hunger', 'thirst', 'fatigue', 'wet', 'cold'];
+const NEEDS = ['hunger', 'thirst', 'fatigue', 'wet', 'cold', 'ill'];
 
 // Wet and cold (step 17): the level each drifts toward where you are now.
 const isNight = (tick) => CONFIG.light.byHour[Math.floor(minutesAt(tick) / 60) % 24] <= 1;
@@ -47,7 +47,7 @@ export function installNeeds(world) {
   // Wading a beck soaks you.
   world.events.on('entity_moved', (d) => {
     const e = world.entities.get(d.id);
-    if (!e || !e.Needs || world.tiles[d.to.y * world.width + d.to.x] !== TILE.STREAM) return;
+    if (!e || !e.Needs || ![TILE.STREAM, TILE.FLOODWATER].includes(world.tiles[d.to.y * world.width + d.to.x])) return;
     const soaked = CONFIG.needs.wadeWet * CONFIG.needs.perLevel.wet;
     if (e.Needs.wet < soaked) adjustNeed(world, e, 'wet', soaked - e.Needs.wet);
   });
@@ -77,9 +77,10 @@ export function tickNeeds(world) {
     if (!e.Needs || !world.entities.has(e.id)) continue;
     const asleep = !!e.Asleep;
     adjustNeed(world, e, 'hunger', 1);
-    adjustNeed(world, e, 'thirst', 1);
+    const ill = needLevel(e, 'ill'); // illness (step 20): thirstier; at 2+ it wears you out
+    adjustNeed(world, e, 'thirst', ill ? 2 : 1);
     const shivering = needLevel(e, 'cold') >= N.coldTiresFrom; // cold wears you out
-    adjustNeed(world, e, 'fatigue', (asleep ? -N.sleepRecovery : 1) + (shivering ? 1 : 0));
+    adjustNeed(world, e, 'fatigue', (asleep ? -N.sleepRecovery : 1) + (shivering ? 1 : 0) + (ill >= 2 ? 1 : 0));
     // Wet and cold drift toward the weather where you are (step 17).
     if (e.Position && e.Needs.wet !== undefined) {
       const wetGoal = wetTarget(world, e) * N.perLevel.wet;
@@ -101,8 +102,8 @@ export function tickNeeds(world) {
     if (thirst === 3 && t % N.parchedEvery === 0) damage(world, e, 1, { cause: 'thirst' });
     if (!world.entities.has(e.id) || !e.Health || e.Health.hp >= e.Health.max) continue;
     const bleeding = e.Bleeding && e.Bleeding.level > 0;
-    const healEvery = asleep ? (hunger < 3 && thirst < 3 && !bleeding ? N.sleepHealEvery : 0)
-      : (hunger <= 1 && thirst <= 1 && fatigue <= 1 && !bleeding ? N.restHealEvery : 0);
+    const healEvery = asleep ? (hunger < 3 && thirst < 3 && !bleeding && ill < 2 ? N.sleepHealEvery : 0)
+      : (hunger <= 1 && thirst <= 1 && fatigue <= 1 && !bleeding && !ill ? N.restHealEvery : 0);
     if (healEvery && t % healEvery === 0) {
       e.Health.hp++;
       world.events.emit('entity_healed', { id: e.id, hp: e.Health.hp, how: asleep ? 'sleep' : 'rest' });

@@ -5,6 +5,7 @@ import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
 import { needLevel } from '../sim/systems/needs.js';
 import { trackAt } from '../sim/systems/tracks.js';
+import { iceLevel } from '../sim/systems/water.js';
 import { dayOf, daysSurvived, clockOf } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO, TILE } from '../sim/gen/testgrid.js';
@@ -109,7 +110,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
   ev.on('ground_noise', (d) => {
     if (!isPlayer(d.id)) return;
-    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.' }[d.tile];
+    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.', [TILE.ICE]: 'The ice creaks.', [TILE.FLOODWATER]: 'You wade through floodwater.', [TILE.RUBBLE]: 'Rubble shifts underfoot.' }[d.tile];
     say(t || 'Noisy ground.', PRIORITY.info);
   });
   ev.on('use_failed', (d) => {
@@ -133,8 +134,10 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     fatigue: [null, "You're tired.", "You're very tired.", "You're exhausted!"],
     wet: [null, "You're getting wet.", "You're soaked.", "You're drenched!"],
     cold: [null, 'You feel cold.', "You're shivering.", "You're freezing!"],
+    ill: [null, 'You feel sick.', "You're ill.", "You're very ill!"],
   };
   ev.on('need_changed', (d) => {
+    if (isPlayer(d.id) && d.need === 'ill' && d.level === 0 && d.from > 0) { say('You feel better.', PRIORITY.notice); return; }
     if (!isPlayer(d.id) || d.level <= d.from) return; // only say it when it gets worse
     say(NEED_WORDS[d.need][d.level], d.level >= 3 ? PRIORITY.danger : PRIORITY.notice);
   });
@@ -152,6 +155,21 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('coughed', (d) => { if (isPlayer(d.id)) say('You choke on the smoke.', PRIORITY.danger); });
   ev.on('explosion', (d) => say(playerSeesTile(d.x, d.y) ? 'BOOM!' : 'An explosion!', PRIORITY.danger));
   ev.on('petrol_spilled', () => say('Petrol splashes about.', PRIORITY.info));
+  // Water (step 20).
+  ev.on('beck_changed', (d) => {
+    const t = d.to === 3 ? ['The beck floods its banks!', PRIORITY.danger] : d.to === 2 && d.from < 2 ? ['The beck is in spate.', PRIORITY.notice]
+      : d.to === 2 ? ['The flood goes down.', PRIORITY.info] : d.from >= 2 ? ['The beck goes down.', PRIORITY.info] : null;
+    if (t) say(t[0], t[1]);
+  });
+  ev.on('bridge_washed_away', (d) => say(playerSeesTile(d.x, d.y) ? `The ${d.kind} is swept away!` : 'A crash from the beck.', PRIORITY.danger));
+  ev.on('swept', (d) => { if (isPlayer(d.id)) say('The beck sweeps you away!', PRIORITY.danger); });
+  ev.on('ice_changed', (d) => { if (d.from === 0) say('The lake freezes over.', PRIORITY.notice); else if (d.to === 0) say('The ice melts.', PRIORITY.notice); });
+  ev.on('ice_broke', (d) => { if (playerSeesTile(d.x, d.y)) say('The ice cracks!', PRIORITY.danger); });
+  ev.on('fell_through_ice', (d) => {
+    if (isPlayer(d.id)) say('You fall through the ice!', PRIORITY.danger);
+    else if (playerSeesTile(d.x, d.y)) say(`The ${world.entities.get(d.id)?.Name?.name || 'thing'} goes under.`, PRIORITY.notice);
+  });
+  ev.on('vomited', (d) => { if (isPlayer(d.id)) say('You throw up.', PRIORITY.notice); });
   ev.on('item_used_up', (d) => { if (isPlayer(d.id)) say(`That's the last of the ${d.name}.`, PRIORITY.info); });
   // Weather (step 17).
   ev.on('weather_changed', (d) => {
@@ -259,7 +277,7 @@ export function describeTile(world, x, y) {
     if (x === player.Position.x && y === player.Position.y) {
       const under = query(world, 'Item', 'Position').filter((e) => e.Position.x === x && e.Position.y === y).pop();
       if (under) return `You're on a ${under.Name.name}.`;
-      const how = [['hunger', ['', 'peckish', 'hungry', 'starving']], ['thirst', ['', 'thirsty', 'very thirsty', 'parched']], ['fatigue', ['', 'tired', 'very tired', 'exhausted']], ['wet', ['', 'damp', 'soaked', 'drenched']], ['cold', ['', 'cold', 'shivering', 'freezing']]]
+      const how = [['hunger', ['', 'peckish', 'hungry', 'starving']], ['thirst', ['', 'thirsty', 'very thirsty', 'parched']], ['fatigue', ['', 'tired', 'very tired', 'exhausted']], ['wet', ['', 'damp', 'soaked', 'drenched']], ['cold', ['', 'cold', 'shivering', 'freezing']], ['ill', ['', 'sick', 'ill', 'very ill']]]
         .map(([n, words]) => words[needLevel(player, n)]).filter(Boolean);
       if (how.length) return `You: ${how.join(', ')}.`;
       return TILE_INFO[tileAt(world, x, y)].cover ? `You, hidden in a ${TILE_INFO[tileAt(world, x, y)].name}.` : "That's you.";
@@ -273,6 +291,7 @@ export function describeTile(world, x, y) {
     if (world.glass && world.glass[y * world.width + x]) return 'Broken glass.';
     const tr = trackAt(world, x, y);
     if (tr) return trackText(tr);
+    if (tileAt(world, x, y) === TILE.ICE) return ['Ice.', 'Thin ice.', 'Ice.', 'Thick ice.'][iceLevel(world)];
     return TILE_DESC[tileAt(world, x, y)];
   }
   const snap = rememberedAt(world, player, x, y);
@@ -299,6 +318,8 @@ const CAUSES = {
   fire: () => 'Burned to death',
   explosion: () => 'Blown up',
   smoke: () => 'Choked on smoke',
+  drowned: () => 'Drowned',
+  illness: () => 'Died of a fever',
 };
 export function deathText(world) {
   const g = world.gameOver;

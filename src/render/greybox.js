@@ -13,6 +13,7 @@ import { canSee } from '../sim/systems/vision.js';
 import { trackAt, snowLevel, holdsSnow } from '../sim/systems/tracks.js';
 import { scentLevel } from '../sim/systems/scent.js';
 import { indoorAt } from '../sim/systems/weather.js';
+import { iceLevel } from '../sim/systems/water.js';
 
 const C = CONFIG.colours;
 const TILE_COLOUR = {
@@ -27,6 +28,7 @@ const TILE_COLOUR = {
   [TILE.WALL_METAL]: C.wallMetal, [TILE.WALL_GLASS]: C.wallGlass,
   [TILE.PHONEBOX]: C.phoneBox, [TILE.ALLOTMENT]: C.allotment, [TILE.VOID]: C.background,
   [TILE.ASH]: C.ash, [TILE.CHARRED]: C.charred, [TILE.RUBBLE]: C.rubble,
+  [TILE.TORRENT]: C.torrent, [TILE.FLOODWATER]: C.floodwater, [TILE.ICE]: C.ice,
   [TILE.FLOOR_WOOD]: C.floorWood, [TILE.FLOOR_FLAGS]: C.floorFlags, [TILE.FLOOR_CONCRETE]: C.floorConcrete, [TILE.FLOOR_EARTH]: C.floorEarth,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
@@ -47,10 +49,10 @@ function roadLine(world, x, y) {
   const n = l + r + 1;
   return { line: n < 2 ? 0 : n % 2 === 0 ? (l === n / 2 - 1 ? 1 : 0) : (l === (n - 1) / 2 ? 0.5 : 0) };
 }
-const markInfo = (world, t, x, y) => (t === TILE.BRIDGE ? waterSides(world, x, y) : t === TILE.ROAD ? roadLine(world, x, y) : null);
+const markInfo = (world, t, x, y) => (t === TILE.BRIDGE ? waterSides(world, x, y) : t === TILE.ROAD ? roadLine(world, x, y) : t === TILE.ICE ? { thin: iceLevel(world) <= 1 } : null);
 
 // Which sides of (x, y) touch water - a bridge draws its parapets there.
-const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND]);
+const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.TORRENT, TILE.FLOODWATER, TILE.ICE]);
 function waterSides(world, x, y) {
   const w = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < world.width && ny < world.height && WATER.has(world.tiles[ny * world.width + nx]); };
   return { n: w(0, -1), s: w(0, 1), e: w(1, 0), w: w(-1, 0) };
@@ -71,6 +73,14 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.ROCK) { ctx.fillStyle = dim(C.rockMark); ctx.beginPath(); ctx.moveTo(px + s * 0.15, py + s * 0.8); ctx.lineTo(px + s * 0.45, py + s * 0.2); ctx.lineTo(px + s * 0.85, py + s * 0.8); ctx.fill(); return; }
   if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
+  if (t === TILE.TORRENT) { ctx.fillStyle = dim(C.torrentMark); for (const [fx, fy, w] of [[0.1, 0.2, 0.35], [0.5, 0.15, 0.3], [0.25, 0.5, 0.4], [0.6, 0.55, 0.3], [0.15, 0.8, 0.3], [0.55, 0.85, 0.35]]) ctx.fillRect(px + fx * s, py + fy * s, w * s, s / 10); return; } // white water
+  if (t === TILE.FLOODWATER) { ctx.fillStyle = dim(C.floodMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
+  if (t === TILE.ICE) { // pale ice with a crack; thin ice shows the dark water through it
+    if (water && water.thin && !memory) { ctx.fillStyle = C.iceThin; ctx.fillRect(px + s * 0.2, py + s * 0.2, s * 0.6, s * 0.6); }
+    ctx.fillStyle = dim(C.iceMark); const h = Math.max(1, Math.floor(s / 16));
+    ctx.fillRect(px + s * 0.15, py + s * 0.3, s * 0.35, h); ctx.fillRect(px + s * 0.45, py + s * 0.3, h, s * 0.4); ctx.fillRect(px + s * 0.45, py + s * 0.7, s * 0.35, h);
+    return;
+  }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
   // Building walls: neat courses (stone), offset bricks, vertical boards, ridges, a glazing bar.
   if (t === TILE.WALL_STONE || t === TILE.WALL_BRICK) {
