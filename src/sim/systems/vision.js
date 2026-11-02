@@ -77,8 +77,12 @@ export function updateVision(world, e) {
   const { x: ox, y: oy } = e.Position;
   const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
   const visible = new Map();
+  // Eyes adjust: tiles within vision.darkSight are always made out (dimly, level 1), even in
+  // pitch darkness - you can see what's right next to you (and so can a zombie).
+  const dark = CONFIG.vision.darkSight || 0;
   const set = (x, y) => {
-    const lv = world.light[y * world.width + x];
+    const near = Math.max(Math.abs(x - ox), Math.abs(y - oy)) <= dark;
+    const lv = Math.max(world.light[y * world.width + x], near ? 1 : 0);
     if (lv > 0) visible.set(y * world.width + x, lv);
   };
   const walls = [];

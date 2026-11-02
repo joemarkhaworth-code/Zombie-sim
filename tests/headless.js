@@ -1604,6 +1604,22 @@ console.log('light: hourly daylight, dark interiors at night, torches light you 
 }
 console.log('needs: rise with time, food/drink, starving and parched hurt and kill, exhausted is slow, sleep (one input, wakes rested or by noise, not with zombies about), drinking from the beck, saved OK');
 
+// Eyes adjust: in pitch darkness you still make out the tiles right next to you (dimly).
+{
+  const w = openWorld(); const p = playerOf(w); w.entities.delete(zombieOf(w).id);
+  for (let y = 3; y <= 12; y++) for (let x = 3; x <= 12; x++) w.tiles[y * w.width + x] = (x === 3 || y === 3 || x === 12 || y === 12) ? TILE.WALL_STONE : TILE.FLOOR_WOOD;
+  w.tick = 14 * 30; place(w, p, 6, 6); updateLight(w, true); // a pitch-black house at night
+  makeItem(w, 'beans', 7, 6); makeItem(w, 'bandage', 9, 6); refreshAllVision(w);
+  assert(w.light[6 * w.width + 7] === 0, 'dark: the house is pitch black at night');
+  assert(visibilityAt(w, p, 7, 6) === 1 && visibilityAt(w, p, 9, 6) === 0, 'dark: you make out the tile next to you, not further');
+  assert(describeTile(w, 7, 6) === 'A tin of beans.', 'dark: and see the beans on it');
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(p.Inventory.items.length === 1, 'dark: and pick them up');
+  CONFIG.weather.kinds.rain && (w.weather = { kind: 'rain', until: Infinity }); w.tick = 14 * 30; place(w, p, 15, 20); updateLight(w, true);
+  assert(w.light[20 * w.width + 15] === 1, 'dark: a cloudy night outdoors is dim, not pitch black');
+}
+console.log('dark: eyes adjust (the next tile is always made out), cloudy nights are dim outdoors OK');
+
 // 22. Weather, wet and cold (step 17).
 {
   const W = CONFIG.weather, N = CONFIG.needs, HOUR = 60 / CONFIG.time.minutesPerTick;
@@ -1622,12 +1638,12 @@ console.log('needs: rise with time, food/drink, starving and parched hurt and ki
     if (W.kinds[k].hoursOfDay) assert(hour >= W.kinds[k].hoursOfDay[0] && hour <= W.kinds[k].hoursOfDay[1], `weather: fog formed at ${hour}:00`);
   }
   const set = (w, kind) => { w.weather = { kind, until: Infinity }; updateLight(w, true); };
-  // Light: cloud hides the moon; heavy rain dims the day.
+  // Light: cloud no longer hides the moon (cloudHidesMoon off: whole screens went black); heavy rain dims the day.
   let w = openWorld(); let p = playerOf(w);
   const at = () => w.light[p.Position.y * w.width + p.Position.x];
   w.tick = 13 * HOUR; set(w, 'clear'); const clearNight = at(); set(w, 'rain'); const rainNight = at();
   w.tick = 4 * HOUR; set(w, 'heavyRain'); const pourDay = at(); set(w, 'clear');
-  assert(clearNight === 1 && rainNight === 0 && pourDay === 2 && at() === 3, `weather: moonlit ${clearNight}, rainy night ${rainNight}, downpour day ${pourDay}`);
+  assert(clearNight === 1 && rainNight === 1 && pourDay === 2 && at() === 3, `weather: moonlit ${clearNight}, rainy night ${rainNight}, downpour day ${pourDay}`);
   // Fog: you see much less far, and so does everything else.
   let z = zombieOf(w); place(w, p, 5, 5); place(w, z, 5, 13);
   assert(canSee(w, p, z), 'weather: on a clear day you see it 8 tiles off');

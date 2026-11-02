@@ -233,12 +233,14 @@ export const CONFIG = {
     // Daylight by the hour (0-23), a November day in the Lakes: dark till 7, dawn, full light
     // 8-15, dusk at 4, then moonlight (1). Night shrinks noticing distance to a third.
     byHour: [1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 1, 1],
+    cloudHidesMoon: false,           // true: cloudy nights are pitch black outdoors (too harsh: the whole screen went black)
     indoorDim: 1,                    // indoors is this much darker: dim by day, pitch black at night
     falloff: 2,                      // a light is one level weaker for this many tiles past its radius
   },
   vision: {
     // Eyesight 0-3 scales the light range: 3 = sees as far as the light allows.
     eyesightFactor: [0, 0.25, 0.5, 1],
+    darkSight: 1,                    // tiles this close are always made out (dimly) even in pitch darkness: eyes adjust
     minLevelToSpot: 1,               // lowest visibility (light) level at which a creature is noticed
     // Noticing a creature: it must be in line of sight, and within
     //   sight radius x noticeByLight[light level on its tile] x (stealth.sneakNoticeFactor if sneaking
@@ -253,7 +255,7 @@ export const CONFIG = {
     sneakNoticeFactor: 0.67,         // sneaking cuts the distance you can be noticed from (not once tracked)
   },
   render: {
-    dimAlpha: [1, 0.45, 0.25, 0],    // black overlay per visibility level 0-3 (0 is not drawn at all)
+    dimAlpha: [1, 0.6, 0.3, 0],         // black overlay per visibility level 0-3 (0 is not drawn at all)
     weather: { rain: 'rgba(170,200,255,0.55)', snow: 'rgba(255,255,255,0.85)', fog: 'rgba(190,190,190,0.35)' }, // overlays on outdoor tiles in sight (step 17)
   },
   noise: {

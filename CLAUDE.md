@@ -426,6 +426,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - A lit tile makes a lit target: carrying a torch, zombies notice you from their full sight range (7 tiles) instead of about 2 in moonlight, and you see them too. Darkness hides you; light shows you.
   - Lit things burn down every tick (tickLight, in the scheduler's onTick). At 0 they go out ("Your torch dies." / "Your candle burns out.").
 - Loot: torches in kitchens, sculleries, stock rooms, sheds and barns; candles in kitchens, bedrooms, the nave and plenty in the vestry.
+- Eyes adjust (fix after play-testing "it all seems bugged at night"): tiles within vision.darkSight (1) are always made out at visibility 1, even at light 0, for everyone (zombies too), so in a pitch-black house you see what's on the tiles around you and can pick it up; further than that you need a torch. Night is also drawn darker (dimAlpha level 1 = 0.6).
 - Noticing in the dark: anything right next to you is noticed even at light 0 (if no wall is between), both ways. So zombies still bite in a pitch-black house, and you know they're there. Two tiles away in the dark, nothing is seen; hearing is all you have.
 - Updating:
   - updateLight runs at the end of every player turn. It only recomputes when the hour's light changed or a light moved, came on or went out (key of light positions).
@@ -501,7 +502,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - A run starts overcast. tickWeather runs at the end of each player turn; a change emits weather_changed and refreshes light and everyone's sight.
 - What weather does (all from the kind's numbers):
   - Light (light.js ambientFor):
-    - cloudy kinds hide the moon, so night outdoors is 0, not 1. A rainy night is pitch black: bring a torch.
+    - cloudy kinds used to hide the moon (night outdoors 0). Play-testing: on cloudy nights (most nights) the whole screen went black and you couldn't see or find anything, so CONFIG.light.cloudHidesMoon is now false: a cloudy night outdoors is dim (1) like moonlight, and rain/fog still shorten sight.
     - dayDrop dims the day by a level (heavy rain, snow).
     - Indoors stays one level darker than that.
   - Sight: outdoors, sight radius x sight. Fog 0.35 (about 5 tiles), heavy rain 0.6, snow 0.7, rain 0.8. It applies to everyone outdoors, zombies too (vision.js sightRadius(e, world)).

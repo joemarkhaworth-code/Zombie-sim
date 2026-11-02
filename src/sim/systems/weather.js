@@ -48,7 +48,7 @@ export function tickWeather(world) {
 // The hour's daylight (0-3) as the weather leaves it.
 export function ambientFor(world, base) {
   const k = weatherOf(world);
-  if (base <= 1) return k.cloudy ? 0 : base; // cloud hides the moon
+  if (base <= 1) return k.cloudy && CONFIG.light.cloudHidesMoon ? 0 : base; // cloud may hide the moon (off: see config)
   return Math.max(1, base - (k.dayDrop || 0));
 }
 
