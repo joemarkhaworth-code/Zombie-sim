@@ -10,6 +10,9 @@ import { serialize, deserialize } from './sim/save.js';
 import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from './sim/tuning.js';
 import { refreshAllVision } from './sim/systems/vision.js';
 import { stairsAt } from './sim/systems/floors.js';
+import { setWeather, WEATHER_KINDS } from './sim/systems/weather.js';
+import { updateLight } from './sim/systems/light.js';
+import { clockOf } from './sim/time.js';
 import { canDrinkHere, canSleep } from './sim/turn.js';
 
 const canvas = document.getElementById('game');
@@ -227,23 +230,42 @@ function screenToTile(px, py) {
 const inRect = (b, px, py) => px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h;
 
 // Tuning panel rows: label, current value (as text), and whether it differs from default.
+// The first rows change the world rather than CONFIG (debug only: the run won't replay):
+// Weather (cycle the kinds; holds 24 h) and Time (an hour back or on).
+const WORLD_ROWS = 2;
 function tuneRows() {
-  return TUNABLES.map((t) => {
-    const v = getPath(t.path);
-    return { label: t.label, value: t.pct ? `${Math.round(v * 100)}%` : String(v), changed: v !== defaultOf(t.path) };
-  });
+  return [
+    { label: 'Weather', value: world.weather ? ({ overcast: 'cloudy', heavyRain: 'pour' }[world.weather.kind] || world.weather.kind) : '-', changed: true },
+    { label: 'Time', value: clockOf(world.tick), changed: true },
+    ...TUNABLES.map((t) => {
+      const v = getPath(t.path);
+      return { label: t.label, value: t.pct ? `${Math.round(v * 100)}%` : String(v), changed: v !== defaultOf(t.path) };
+    }),
+  ];
 }
 
 // Tuning panel taps: -/+ per row, RESET, CLOSE. Changes apply at once (zombies on the map
 // are updated, sight recomputed) and are saved locally.
 function onTuneTap(px, py) {
-  const L = tuningLayout(layout, TUNABLES.length);
+  const L = tuningLayout(layout, TUNABLES.length + WORLD_ROWS);
   if (inRect(L.close, px, py)) { tuneOpen = false; render(); return; }
   if (inRect(L.reset, px, py)) resetAll();
   else {
     const i = L.rows.findIndex((r) => inRect(r.minus, px, py) || inRect(r.plus, px, py));
     if (i < 0) return;
-    nudge(TUNABLES[i], inRect(L.rows[i].plus, px, py) ? 1 : -1);
+    const dir = inRect(L.rows[i].plus, px, py) ? 1 : -1;
+    if (i === 0) { // weather: the next / previous kind, held for a day
+      const kinds = WEATHER_KINDS(), at = kinds.indexOf(world.weather.kind);
+      setWeather(world, kinds[(at + dir + kinds.length) % kinds.length]);
+      updateLight(world, true);
+      persist(); render(); return;
+    }
+    if (i === 1) { // time: an hour on or back
+      world.tick = Math.max(0, world.tick + dir * 60 / CONFIG.time.minutesPerTick);
+      updateLight(world, true);
+      persist(); render(); return;
+    }
+    nudge(TUNABLES[i - WORLD_ROWS], dir);
   }
   syncWorld(world);
   refreshAllVision(world);

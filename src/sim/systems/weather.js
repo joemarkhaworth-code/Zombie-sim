@@ -52,3 +52,11 @@ export function ambientFor(world, base) {
 // Outdoors, the weather shortens sight and drowns sound.
 export const sightFactor = (world, e) => (e.Position && !isIndoors(world, e.Position.x, e.Position.y) ? weatherOf(world).sight : 1);
 export const hearingMask = (world, e) => (e.Position && !isIndoors(world, e.Position.x, e.Position.y) ? weatherOf(world).mask : 0);
+
+// Debug (TUNE panel): force a weather for `hours` (it then carries on changing as usual).
+export function setWeather(world, kind, hours = 24) {
+  const from = world.weather ? world.weather.kind : null;
+  world.weather = { kind, until: world.tick + HOUR() * hours };
+  if (from !== kind) world.events.emit('weather_changed', { from, to: kind });
+}
+export const WEATHER_KINDS = () => Object.keys(CONFIG.weather.kinds);

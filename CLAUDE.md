@@ -535,6 +535,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - a heavy-rain night chills you to freezing and costs health; too cold to sleep; indoors you warm up;
   - wading the beck soaks you; saves keep the weather.
   The unit-test helper pins clear weather so older tests stay steady. Checked on 150 seeds.
+- Testing it by hand: the TUNE panel (debug overlay -> TUNE) starts with two world rows. Weather -/+ cycles clear / cloudy / rain / pour / fog / snow and holds it for 24 h (weather.js setWeather). Time -/+ moves the clock an hour, for night, dusk and dawn. Light and sight update at once. Like other tuning, a run changed this way no longer replays exactly.
 - Play-test bot over 40 seeds: deaths unchanged (34 of 40, against 35 before), none from cold. Weather adds pressure (wet, cold nights, black rainy nights, fog) without being a killer by itself.
 - Save version 9 (weather, wet/cold).
 
