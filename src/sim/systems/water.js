@@ -33,8 +33,12 @@ import { refreshAllVision } from './vision.js';
 import { minutesAt } from '../time.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
-const FLOODABLE = new Set([TILE.GRASS, TILE.LANE, TILE.PATH, TILE.ROAD, TILE.PAVEMENT, TILE.YARD, TILE.GINNEL, TILE.SHORE, TILE.FLOOR, TILE.ALLOTMENT, TILE.ASH]);
-const SOURCE = { [TILE.STREAM]: 'stream', [TILE.TORRENT]: 'stream', [TILE.LAKE]: 'lake', [TILE.POND]: 'pond', [TILE.FLOODWATER]: 'flood' };
+const FLOODABLE = new Set([TILE.GRASS, TILE.LANE, TILE.PATH, TILE.ROAD, TILE.PAVEMENT, TILE.YARD, TILE.GINNEL, TILE.SHORE, TILE.FLOOR, TILE.ALLOTMENT, TILE.ASH,
+  TILE.STUMP, TILE.SILT, TILE.RUBBLE, TILE.SILT_FLOOR,
+  TILE.FLOOR_WOOD, TILE.FLOOR_FLAGS, TILE.FLOOR_CONCRETE, TILE.FLOOR_EARTH, TILE.CHARRED]); // ground floors too: water gets under doors
+const ERODIBLE = new Set([TILE.GRASS, TILE.PATH, TILE.LANE, TILE.SHORE, TILE.SILT, TILE.STUMP, TILE.FELL, TILE.BRACKEN, TILE.ASH, TILE.RUBBLE]);
+const isFlood = (t) => t === TILE.FLOODWATER || t === TILE.FLOOD_IN;
+const SOURCE = { [TILE.STREAM]: 'stream', [TILE.TORRENT]: 'stream', [TILE.LAKE]: 'lake', [TILE.POND]: 'pond', [TILE.FLOODWATER]: 'flood', [TILE.FLOOD_IN]: 'flood' };
 export const DRINKABLE = new Set(Object.keys(SOURCE).map(Number));
 
 const levelOf = (ticks, per) => Math.min(3, Math.floor(ticks / per));
@@ -43,7 +47,7 @@ export const iceLevel = (world) => (world.water ? levelOf(world.water.ice, CONFI
 
 export function installWater(world) {
   const W = CONFIG.water;
-  world.water = { beck: Math.floor(W.beckPerLevel * 1.5), ice: 0, under: new Map(), holes: new Set(), snow: world.snowCover || 0 };
+  world.water = { beck: Math.floor(W.beckPerLevel * 1.5), ice: 0, under: new Map(), holes: new Set(), snow: world.snowCover || 0, floodHours: 0, reach: 0, siltUntil: 0 };
   findBridges(world);
   world.events.on('entity_moved', (d) => {
     if (world.water.moving) return; // being put back on land
@@ -88,7 +92,23 @@ export function tickWater(world) {
   w.beck = rise ? Math.min(W.beckPerLevel * 4 - 1, w.beck + rise) : Math.max(W.beckPerLevel, w.beck - W.beckFall);
   const beckNow = beckLevel(world);
   if (beckNow !== beckBefore) setBeck(world, beckBefore, beckNow);
-  if (beckNow === 3 && world.tick % 30 === 0) washOut(world);
+  if (world.tick % 30 === 0) { // hourly: floods spread and do damage; spates eat the banks
+    if (beckNow === 3) {
+      washOut(world);
+      w.floodHours++;
+      const reach = Math.min(W.floodMaxReach, W.floodReach + Math.floor(w.floodHours / W.floodGrowHours));
+      if (reach > w.reach) { w.reach = reach; flood(world, reach); world.events.emit('flood_spread', { reach }); refreshAllVision(world); }
+      drift(world);
+      breach(world);
+    }
+    if (beckNow >= 2) erode(world);
+  }
+  if (w.siltUntil && world.tick >= w.siltUntil && beckNow < 3) { // the silt dries out
+    w.siltUntil = 0;
+    restore(world, TILE.SILT); restore(world, TILE.SILT_FLOOR);
+    world.events.emit('silt_dried', {});
+    refreshAllVision(world);
+  }
   // Frost freezes the lake; rain and mild weather thaw it.
   const iceBefore = iceLevel(world);
   const night = CONFIG.light.byHour[Math.floor(minutesAt(world.tick) / 60) % 24] <= 1;
@@ -104,8 +124,8 @@ export function tickWater(world) {
 
 function setBeck(world, from, to) {
   const w = world.water;
-  if (from < 3 && to === 3) flood(world);
-  if (from === 3 && to < 3) restore(world, TILE.FLOODWATER);
+  if (from < 3 && to === 3) { w.floodHours = 0; w.reach = CONFIG.water.floodReach; flood(world, w.reach); }
+  if (from === 3 && to < 3) leaveSilt(world);
   if (from < 2 && to >= 2) {
     for (let i = 0; i < world.tiles.length; i++) if (world.tiles[i] === TILE.STREAM) { w.under.set(i, TILE.STREAM); world.tiles[i] = TILE.TORRENT; }
     clearWater(world, TILE.TORRENT);
@@ -115,21 +135,111 @@ function setBeck(world, from, to) {
   refreshAllVision(world);
 }
 
-// In flood: low ground near the beck goes under.
-function flood(world) {
-  const W = CONFIG.water, w = world.water, dist = new Map();
+// In flood: low ground within `reach` of the beck or the lake goes under - lanes, gardens,
+// and the ground floors of houses (water gets under doors). A house that floods fills its
+// cellar. Anyone caught in it is soaked.
+function flood(world, reach) {
+  const w = world.water, W = world.width, land = world.landHeight || world.height, dist = new Map();
   let ring = [];
-  for (let i = 0; i < world.tiles.length; i++) if (world.tiles[i] === TILE.TORRENT || world.tiles[i] === TILE.STREAM) { dist.set(i, 0); ring.push(i); }
-  for (let d = 1; d <= W.floodReach; d++) {
+  for (let i = 0; i < land * W; i++) {
+    const t = world.tiles[i];
+    if (t === TILE.TORRENT || t === TILE.STREAM || t === TILE.LAKE) { dist.set(i, 0); ring.push(i); }
+  }
+  const fresh = [];
+  for (let d = 1; d <= reach; d++) {
     const next = [];
     for (const i of ring) for (const [dx, dy] of DIRS.slice(0, 4)) {
-      const x = (i % world.width) + dx, y = Math.floor(i / world.width) + dy, j = y * world.width + x;
-      if (x < 0 || y < 0 || x >= world.width || y >= world.height || dist.has(j) || !FLOODABLE.has(world.tiles[j])) continue;
+      const x = (i % W) + dx, y = Math.floor(i / W) + dy, j = y * W + x;
+      if (x < 0 || y < 0 || x >= W || y >= land || dist.has(j)) continue;
+      const t = world.tiles[j];
+      if (!isFlood(t) && !FLOODABLE.has(t)) continue;
       dist.set(j, d); next.push(j);
-      w.under.set(j, world.tiles[j]); world.tiles[j] = TILE.FLOODWATER;
+      if (!isFlood(t)) { submerge(world, j); fresh.push(j); }
     }
     ring = next;
   }
+  // Flooded houses: their cellars fill.
+  const hit = new Set();
+  for (const j of fresh) {
+    if (world.tiles[j] !== TILE.FLOOD_IN) continue;
+    const x = j % W, y = Math.floor(j / W);
+    (world.buildings || []).forEach((b, bi) => { if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) hit.add(bi); });
+  }
+  for (const f of world.floors || []) {
+    if (!/cellar/.test(f.name) || !hit.has(f.building)) continue;
+    for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) {
+      const j = y * W + x;
+      if (FLOODABLE.has(world.tiles[j])) { submerge(world, j); fresh.push(j); }
+    }
+    world.events.emit('cellar_flooded', { building: f.building });
+  }
+  for (const e of world.entities.values()) if (e.Needs && e.Position && isFlood(world.tiles[e.Position.y * W + e.Position.x])) soak(world, e);
+}
+
+function submerge(world, j) {
+  const w = world.water;
+  if (!w.under.has(j)) w.under.set(j, world.tiles[j]);
+  world.tiles[j] = TILE_INFO[w.under.get(j)].indoor ? TILE.FLOOD_IN : TILE.FLOODWATER;
+}
+
+// The flood goes down and leaves silt (deep, slow mud) everywhere it was, for a while.
+function leaveSilt(world) {
+  const w = world.water;
+  for (const [i, t] of w.under) if (isFlood(world.tiles[i])) world.tiles[i] = TILE_INFO[t].indoor ? TILE.SILT_FLOOR : TILE.SILT;
+  w.siltUntil = world.tick + CONFIG.water.siltTicks;
+  w.floodHours = 0; w.reach = 0;
+}
+
+// Things lying in floodwater drift, mostly downstream (down the valley): loot leaves houses,
+// bodies turn up in odd places.
+function drift(world) {
+  const W = CONFIG.water, R = W.floatRange;
+  for (const e of [...world.entities.values()]) {
+    if (!(e.Item || e.Corpse) || !e.Position || !isFlood(world.tiles[e.Position.y * world.width + e.Position.x])) continue;
+    if (!world.rng.chance(W.floatChance)) continue;
+    const spots = [];
+    for (let dy = 0; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const x = e.Position.x + dx, y = e.Position.y + dy;
+      if ((dx || dy) && x >= 0 && y >= 0 && x < world.width && y < world.height && isFlood(world.tiles[y * world.width + x])) spots.push({ x, y });
+    }
+    if (!spots.length) continue;
+    const to = spots[world.rng.int(spots.length)];
+    world.events.emit('item_drifted', { id: e.id, from: { ...e.Position }, to });
+    e.Position = { x: to.x, y: to.y };
+  }
+}
+
+// Dry-stone walls standing in the flood may give way (for good).
+function breach(world) {
+  const W = world.width, land = world.landHeight || world.height;
+  for (let i = 0; i < land * W; i++) {
+    if (world.tiles[i] !== TILE.DRYSTONE) continue;
+    const x = i % W, y = (i - x) / W;
+    if (!DIRS.slice(0, 4).some(([dx, dy]) => { const t = world.tiles[(y + dy) * W + x + dx]; return t === TILE.TORRENT || isFlood(t); })) continue;
+    if (!world.rng.chance(CONFIG.water.wallBreach)) continue;
+    world.tiles[i] = TILE.RUBBLE;
+    if (world.tileHp) world.tileHp[i] = 0;
+    world.events.emit('wall_breached', { x, y });
+    makeNoise(world, x, y, 2);
+  }
+}
+
+// The torrent eats its banks: soft ground beside it may wash out and become beck (for good),
+// so the beck widens and wanders.
+function erode(world) {
+  const w = world.water, W = world.width, land = world.landHeight || world.height;
+  let any = false;
+  for (let i = 0; i < land * W; i++) {
+    const t = world.tiles[i], orig = isFlood(t) ? w.under.get(i) : t;
+    if (!ERODIBLE.has(orig) || isFlood(t) && TILE_INFO[orig].indoor) continue;
+    const x = i % W, y = (i - x) / W;
+    if (!DIRS.slice(0, 4).some(([dx, dy]) => world.tiles[(y + dy) * W + x + dx] === TILE.TORRENT)) continue;
+    if (!world.rng.chance(CONFIG.water.erode)) continue;
+    w.under.set(i, TILE.STREAM); world.tiles[i] = TILE.TORRENT;
+    world.events.emit('bank_washed', { x, y });
+    any = true;
+  }
+  if (any) { clearWater(world, TILE.TORRENT); refreshAllVision(world); }
 }
 
 // Changed tiles of this kind go back to what they were.

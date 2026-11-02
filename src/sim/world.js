@@ -24,6 +24,7 @@ import { installScent } from './systems/scent.js';
 import { installTracks } from './systems/tracks.js';
 import { installFire } from './systems/fire.js';
 import { installWater } from './systems/water.js';
+import { installStorm } from './systems/storm.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -111,6 +112,7 @@ export function createWorld(seed, opts = {}) {
   installNeeds(world);
   installWeather(world);
   installWater(world); // the beck's level, ice, bridges (step 20)
+  installStorm(world); // gales: wind direction, fallen trees, lost roofs
   updateLight(world, true); // the time of day's light (and vision)
   return world;
 }

@@ -47,7 +47,7 @@ export function installNeeds(world) {
   // Wading a beck soaks you.
   world.events.on('entity_moved', (d) => {
     const e = world.entities.get(d.id);
-    if (!e || !e.Needs || ![TILE.STREAM, TILE.FLOODWATER].includes(world.tiles[d.to.y * world.width + d.to.x])) return;
+    if (!e || !e.Needs || ![TILE.STREAM, TILE.FLOODWATER, TILE.FLOOD_IN].includes(world.tiles[d.to.y * world.width + d.to.x])) return;
     const soaked = CONFIG.needs.wadeWet * CONFIG.needs.perLevel.wet;
     if (e.Needs.wet < soaked) adjustNeed(world, e, 'wet', soaked - e.Needs.wet);
   });

@@ -8,6 +8,7 @@ import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
 import { tickWater, drinkFrom, DRINKABLE } from './systems/water.js';
+import { tickStorm } from './systems/storm.js';
 import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
@@ -49,6 +50,7 @@ function onTick(world) {
   tickTracks(world, world.weather && world.weather.kind);
   tickFire(world);
   tickWater(world);
+  tickStorm(world);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),

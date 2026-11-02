@@ -28,7 +28,8 @@ const TILE_COLOUR = {
   [TILE.WALL_METAL]: C.wallMetal, [TILE.WALL_GLASS]: C.wallGlass,
   [TILE.PHONEBOX]: C.phoneBox, [TILE.ALLOTMENT]: C.allotment, [TILE.VOID]: C.background,
   [TILE.ASH]: C.ash, [TILE.CHARRED]: C.charred, [TILE.RUBBLE]: C.rubble,
-  [TILE.TORRENT]: C.torrent, [TILE.FLOODWATER]: C.floodwater, [TILE.ICE]: C.ice,
+  [TILE.TORRENT]: C.torrent, [TILE.FLOODWATER]: C.floodwater, [TILE.FLOOD_IN]: C.floodwater, [TILE.ICE]: C.ice,
+  [TILE.FALLEN_TREE]: C.fallenTree, [TILE.STUMP]: C.stump, [TILE.SILT]: C.silt, [TILE.SILT_FLOOR]: C.silt,
   [TILE.FLOOR_WOOD]: C.floorWood, [TILE.FLOOR_FLAGS]: C.floorFlags, [TILE.FLOOR_CONCRETE]: C.floorConcrete, [TILE.FLOOR_EARTH]: C.floorEarth,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
@@ -52,7 +53,7 @@ function roadLine(world, x, y) {
 const markInfo = (world, t, x, y) => (t === TILE.BRIDGE ? waterSides(world, x, y) : t === TILE.ROAD ? roadLine(world, x, y) : t === TILE.ICE ? { thin: iceLevel(world) <= 1 } : null);
 
 // Which sides of (x, y) touch water - a bridge draws its parapets there.
-const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.TORRENT, TILE.FLOODWATER, TILE.ICE]);
+const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.TORRENT, TILE.FLOODWATER, TILE.FLOOD_IN, TILE.ICE]);
 function waterSides(world, x, y) {
   const w = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < world.width && ny < world.height && WATER.has(world.tiles[ny * world.width + nx]); };
   return { n: w(0, -1), s: w(0, 1), e: w(1, 0), w: w(-1, 0) };
@@ -74,7 +75,13 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.TORRENT) { ctx.fillStyle = dim(C.torrentMark); for (const [fx, fy, w] of [[0.1, 0.2, 0.35], [0.5, 0.15, 0.3], [0.25, 0.5, 0.4], [0.6, 0.55, 0.3], [0.15, 0.8, 0.3], [0.55, 0.85, 0.35]]) ctx.fillRect(px + fx * s, py + fy * s, w * s, s / 10); return; } // white water
-  if (t === TILE.FLOODWATER) { ctx.fillStyle = dim(C.floodMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
+  if (t === TILE.FALLEN_TREE) { // a trunk lying across, with a tangle of branches
+    ctx.fillStyle = dim(C.fallenLeaf); for (const [fx, fy] of [[0.15, 0.15], [0.6, 0.1], [0.1, 0.6], [0.7, 0.65], [0.35, 0.75]]) ctx.fillRect(px + fx * s, py + fy * s, s / 4, s / 5);
+    ctx.fillStyle = dim(C.fallenTrunk); ctx.fillRect(px, py + s * 0.4, s - 1, s * 0.22); return;
+  }
+  if (t === TILE.STUMP) { ctx.fillStyle = dim(C.stumpMark); ctx.beginPath(); ctx.arc(px + s / 2, py + s / 2, s * 0.18, 0, Math.PI * 2); ctx.fill(); return; }
+  if (t === TILE.SILT || t === TILE.SILT_FLOOR) { ctx.fillStyle = dim(C.siltMark); for (const [fx, fy, w] of [[0.1, 0.25, 0.35], [0.5, 0.5, 0.4], [0.2, 0.75, 0.3]]) ctx.fillRect(px + fx * s, py + fy * s, w * s, s / 10); return; }
+  if (t === TILE.FLOODWATER || t === TILE.FLOOD_IN) { ctx.fillStyle = dim(C.floodMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
   if (t === TILE.ICE) { // pale ice with a crack; thin ice shows the dark water through it
     if (water && water.thin && !memory) { ctx.fillStyle = C.iceThin; ctx.fillRect(px + s * 0.2, py + s * 0.2, s * 0.6, s * 0.6); }
     ctx.fillStyle = dim(C.iceMark); const h = Math.max(1, Math.floor(s / 16));
@@ -307,11 +314,12 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       const px = ox + vx * s, py = oy + vy * s;
       if (wk === 'fog') { ctx.fillStyle = R.fog; ctx.fillRect(px, py, s - 1, s - 1); continue; }
       const h = ((x * 73856093) ^ (y * 19349663) ^ (world.turn * 83492791)) >>> 0;
-      const n = wk === 'heavyRain' ? 3 : 2;
+      const n = wk === 'heavyRain' ? 3 : wk === 'gale' ? 4 : 2;
       ctx.fillStyle = wk === 'snow' ? R.snow : R.rain;
       for (let i = 0; i < n; i++) {
         const fx = ((h >> (i * 5)) & 31) / 32, fy = ((h >> (i * 5 + 15)) & 31) / 32;
         if (wk === 'snow') ctx.fillRect(px + fx * (s - 4), py + fy * (s - 4), 3, 3);
+        else if (wk === 'gale') { ctx.fillRect(px + fx * (s * 0.6), py + fy * (s - 3), s * 0.4, 2); } // driven sideways
         else { ctx.fillRect(px + fx * (s - 3), py + fy * (s * 0.6), 2, s * 0.35); }
       }
     }

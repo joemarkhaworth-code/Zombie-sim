@@ -14,8 +14,8 @@ import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from '../gen/testgrid.js';
 import { indoorAt } from './weather.js';
 
-const NO_SNOW = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID, TILE.TORRENT, TILE.FLOODWATER]);
-const MUDDY = new Set([TILE.GRASS, TILE.LANE, TILE.PATH, TILE.FELL, TILE.BRACKEN, TILE.ALLOTMENT, TILE.GATE, TILE.FLOOR]);
+const NO_SNOW = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID, TILE.TORRENT, TILE.FLOODWATER, TILE.FLOOD_IN]);
+const MUDDY = new Set([TILE.STUMP, TILE.GRASS, TILE.LANE, TILE.PATH, TILE.FELL, TILE.BRACKEN, TILE.ALLOTMENT, TILE.GATE, TILE.FLOOR]);
 
 export const snowLevel = (world) => Math.min(3, Math.floor((world.snowCover || 0) / CONFIG.tracks.snowPerLevel));
 export const mudLevel = (world) => Math.min(3, Math.floor((world.groundWet || 0) / CONFIG.tracks.mudPerLevel));
@@ -33,7 +33,8 @@ export function installTracks(world) {
     if (!e || !e.Tracks) return;
     const i = d.to.y * world.width + d.to.x, t = world.tiles[i];
     const snow = snowLevel(world) >= 1 && holdsSnow(world, t, i);
-    const mud = !snow && mudLevel(world) >= 1 && MUDDY.has(t) && !indoorAt(world, i);
+    const silt = t === TILE.SILT || t === TILE.SILT_FLOOR; // flood silt always takes prints, indoors too
+    const mud = !snow && (silt || (mudLevel(world) >= 1 && MUDDY.has(t) && !indoorAt(world, i)));
     if (!snow && !mud) return;
     world.tracks.set(i, { mark: e.Tracks.mark, dx: Math.sign(d.to.x - d.from.x), dy: Math.sign(d.to.y - d.from.y), t: world.tick, in: snow ? 'snow' : 'mud' });
   });

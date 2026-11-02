@@ -14,11 +14,13 @@ import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems
 import { kill } from '../src/sim/systems/combat.js';
 import { ambientAt, updateLight } from '../src/sim/systems/light.js';
 import { needLevel, wetTarget } from '../src/sim/systems/needs.js';
-import { tickWeather, isIndoors } from '../src/sim/systems/weather.js';
+import { tickWeather, isIndoors, setWeather } from '../src/sim/systems/weather.js';
 import { scentLevel } from '../src/sim/systems/scent.js';
 import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
 import { flammability, ignite } from '../src/sim/systems/fire.js';
-import { tickWater, beckLevel, iceLevel, findBridges } from '../src/sim/systems/water.js';
+import { tickWater, beckLevel, iceLevel, findBridges, setWaterLevel } from '../src/sim/systems/water.js';
+import { tickStorm, fellTree } from '../src/sim/systems/storm.js';
+import { indoorAt } from '../src/sim/systems/weather.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -1885,6 +1887,7 @@ console.log('fire: flammability from data and weather, lighter starts it, spread
   restoreCfg();
   // Rain raises the beck; in spate it can't be waded and sweeps you out; things float off.
   ({ w, p } = valley());
+  WC.erode = 0; WC.wallBreach = 0; // (tested on their own below)
   w.weather = { kind: 'heavyRain', until: Infinity };
   place(w, p, 10, 5); const bean = makeItem(w, 'beans', 11, 7);
   const hp1 = p.Health.hp;
@@ -1898,13 +1901,18 @@ console.log('fire: flammability from data and weather, lighter starts it, spread
   WC.washout.footbridge = 1;
   let washed = 0; w.events.on('bridge_washed_away', () => washed++);
   waits(w, Math.ceil((WC.beckPerLevel * 3 - w.water.beck) / WC.beckRise.heavyRain) + 32);
-  assert(beckLevel(w) === 3 && w.tiles[6 * w.width + 9] === TILE.FLOODWATER && w.tiles[6 * w.width + 8] === TILE.FLOODWATER && w.tiles[6 * w.width + 7] === TILE.FLOOR, 'water: in flood the beck spills two tiles over its banks');
+  const reach = w.water.reach;
+  assert(beckLevel(w) === 3 && reach >= WC.floodReach && w.tiles[6 * w.width + 10 - reach] === TILE.FLOODWATER && w.tiles[6 * w.width + 9 - reach] === TILE.FLOOR, `water: in flood the beck spills ${reach} tiles over its banks`);
+  waits(w, 30 * WC.floodGrowHours + 2);
+  assert(w.water.reach === Math.min(WC.floodMaxReach, reach + 1) && w.tiles[6 * w.width + 9 - reach] === TILE.FLOODWATER, 'water: the longer the flood lasts, the further it spreads');
   assert(washed === 1 && w.tiles[12 * w.width + 10] === TILE.TORRENT, 'water: the flood sweeps the footbridge away');
   const json = serialize(w), back = deserialize(json, createWorldAny);
   assert(serialize(back) === json && back.water.under.size === w.water.under.size, 'water: saved in flood');
   w.weather = { kind: 'clear', until: Infinity };
   waits(w, Math.ceil((w.water.beck - WC.beckPerLevel) / WC.beckFall) + 2);
-  assert(beckLevel(w) === 1 && w.tiles[6 * w.width + 9] === TILE.FLOOR && w.tiles[6 * w.width + 10] === TILE.STREAM && w.tiles[12 * w.width + 10] === TILE.STREAM, 'water: the flood goes down; the bridge is gone, the beck can be waded');
+  assert(beckLevel(w) === 1 && w.tiles[6 * w.width + 9] === TILE.SILT && w.tiles[6 * w.width + 10] === TILE.STREAM && w.tiles[12 * w.width + 10] === TILE.STREAM, 'water: the flood goes down, leaving silt; the bridge is gone, the beck can be waded');
+  p.Health.hp = p.Health.max; p.Needs.cold = 0; p.Needs.wet = 0; p.Needs.thirst = 0; p.Needs.hunger = 0; waits(w, WC.siltTicks + 2);
+  assert(w.tiles[6 * w.width + 9] === TILE.FLOOR, 'water: the silt dries out after a day');
   restoreCfg();
   // Frost freezes the lake: walk on it. Thin ice can break: you climb out soaked and frozen; a zombie drowns.
   ({ w, p } = valley());
@@ -1928,6 +1936,82 @@ console.log('fire: flammability from data and weather, lighter starts it, spread
   restoreCfg();
 }
 console.log('water: dirty water makes you ill later (thirstier, sick, fever), corpses foul it; rain puts the beck in spate (swept out, washed away), flood over the banks, bridges washed out, goes down; ice freezes, breaks under you and drowns zombies, holes refreeze, thaws; saved OK');
+
+// 26. Storms and floods change the map (gales, flood damage).
+{
+  const WC = CONFIG.water, SC = CONFIG.storm, saved = JSON.parse(JSON.stringify({ WC, SC }));
+  const restoreCfg = () => { Object.assign(WC, JSON.parse(JSON.stringify(saved.WC))); Object.assign(SC, JSON.parse(JSON.stringify(saved.SC))); };
+  // A beck at x 10-11; a stone cottage (x 3..8, y 3..7) with its door onto the bank at (8, 5), and a cellar pocket.
+  const valley = () => {
+    const w = openWorld(); const p = playerOf(w); w.entities.delete(zombieOf(w).id);
+    for (let y = 1; y < 28; y++) for (const x of [10, 11]) w.tiles[y * w.width + x] = TILE.STREAM;
+    for (let y = 3; y <= 7; y++) for (let x = 3; x <= 8; x++) w.tiles[y * w.width + x] = (x === 3 || x === 8 || y === 3 || y === 7) ? TILE.WALL_STONE : TILE.FLOOR_WOOD;
+    w.tiles[5 * w.width + 8] = TILE.FLOOR_WOOD; makeDoor(w, 8, 5);
+    for (let y = 21; y <= 25; y++) for (let x = 1; x <= 5; x++) w.tiles[y * w.width + x] = (x === 1 || x === 5 || y === 21 || y === 25) ? TILE.WALL_STONE : TILE.FLOOR_FLAGS;
+    w.buildings = [{ kind: 'cottage', x: 3, y: 3, w: 6, h: 5, roof: 'slate' }];
+    w.floors = [{ building: 0, name: 'cellar', x: 1, y: 21, w: 5, h: 5 }];
+    for (let y = 12; y <= 14; y++) w.tiles[y * w.width + 14] = TILE.DRYSTONE; // a field wall down to the water's edge
+    for (let y = 12; y <= 14; y++) w.tiles[y * w.width + 12] = TILE.GRASS;
+    findBridges(w); place(w, p, 15, 20);
+    return { w, p };
+  };
+  const waits = (w, n) => { for (let i = 0; i < n && !w.gameOver; i++) playerAct(w, { type: 'wait' }); };
+  // A long flood gets into the house (still indoors), fills its cellar, floats things off; walls in it give way.
+  let { w, p } = valley();
+  WC.erode = 0; WC.floatChance = 1; WC.wallBreach = 1;
+  const tin = makeItem(w, 'beans', 6, 5);
+  w.weather = { kind: 'heavyRain', until: Infinity };
+  setWaterLevel(w, 'beck', 3);
+  for (let i = 0; i < 30 * WC.floodGrowHours * 4 && w.water.reach < 5; i++) { p.Health.hp = p.Health.max; playerAct(w, { type: 'wait' }); }
+  assert(w.tiles[5 * w.width + 6] === TILE.FLOOD_IN && indoorAt(w, 5 * w.width + 6), 'storm: a long flood gets into the house (and it is still indoors)');
+  assert(w.tiles[23 * w.width + 3] === TILE.FLOOD_IN, 'storm: the flooded house fills its cellar');
+  assert(!(w.entities.get(tin).Position.x === 6 && w.entities.get(tin).Position.y === 5), 'storm: things float about in the floodwater');
+  assert(w.tiles[12 * w.width + 14] !== TILE.DRYSTONE && !TILE_INFO[w.tiles[12 * w.width + 14]].blocks, 'storm: a dry-stone wall in the flood gives way');
+  // The flood goes down: silt everywhere it was, indoors too; prints in it.
+  w.weather = { kind: 'clear', until: Infinity }; setWaterLevel(w, 'beck', 1);
+  assert(w.tiles[5 * w.width + 6] === TILE.SILT_FLOOR && indoorAt(w, 5 * w.width + 6) && w.tiles[5 * w.width + 9] === TILE.SILT, 'storm: the flood leaves silt, inside and out');
+  place(w, p, 9, 6); tryMove(w, p, 0, 1);
+  assert(trackAt(w, 9, 7) && TILE_INFO[TILE.SILT].moveCost > 1, 'storm: silt is slow and takes prints');
+  assert(!TILE_INFO[w.tiles[12 * w.width + 14]].blocks, 'storm: the breached wall stays down');
+  restoreCfg();
+  // A spate eats its banks: the beck is wider for good.
+  ({ w, p } = valley());
+  WC.erode = 1;
+  w.weather = { kind: 'overcast', until: Infinity }; setWaterLevel(w, 'beck', 2);
+  waits(w, 31);
+  w.weather = { kind: 'clear', until: Infinity }; setWaterLevel(w, 'beck', 1);
+  assert(w.tiles[12 * w.width + 12] === TILE.STREAM && w.tiles[13 * w.width + 12] === TILE.STREAM && w.tiles[20 * w.width + 9] === TILE.FLOOR, 'storm: the torrent washes out its banks: the beck widens');
+  restoreCfg();
+  // Gales: a tree comes down across the lane, leaving a stump, crushing what it lands on.
+  ({ w, p } = valley());
+  w.tiles[16 * w.width + 16] = TILE.TREE;
+  const z = w.entities.get(makeZombie(w, { x: 17, y: 16 })); const zhp = z.Health.hp;
+  fellTree(w, 16 * w.width + 16, [1, 0]);
+  assert(w.tiles[16 * w.width + 16] === TILE.STUMP && w.tiles[16 * w.width + 17] === TILE.FALLEN_TREE && w.tiles[16 * w.width + 18] === TILE.FALLEN_TREE, 'storm: a tree falls downwind, leaving a stump');
+  assert(z.Health.hp === zhp - SC.crushDamage, 'storm: it crushes what it lands on');
+  assert(TILE_INFO[TILE.FALLEN_TREE].opaque && TILE_INFO[TILE.FALLEN_TREE].moveCost >= 3 && flammability(w, 16 * w.width + 18) >= 2, 'storm: a fallen tree blocks the view, is slow to cross and burns');
+  // In a gale trees come down, roofs lose slates (rain gets in), and debris hits you outside.
+  ({ w, p } = valley());
+  for (const x of [13, 15, 17]) w.tiles[9 * w.width + x] = TILE.TREE;
+  Object.assign(SC, { treeFall: 1, roofLoss: 1, debrisChance: 1 });
+  setWeather(w, 'gale');
+  assert(w.weather.wind, 'storm: a gale has a wind direction');
+  const hp0 = p.Health.hp; waits(w, 3);
+  let stumps = 0; for (const x of [13, 15, 17]) if (w.tiles[9 * w.width + x] === TILE.STUMP) stumps++;
+  let open = 0; for (let y = 4; y <= 6; y++) for (let x = 4; x <= 7; x++) if (!indoorAt(w, y * w.width + x)) open++;
+  assert(stumps >= 2, 'storm: the gale brings trees down');
+  assert(open >= 4, 'storm: the gale strips slates off the roof: the room is open to the rain');
+  assert(p.Health.hp < hp0, 'storm: out in it, flying debris hits you');
+  place(w, p, 4, 4); for (let y = 3; y <= 7; y++) for (let x = 3; x <= 8; x++) w.roofless[y * w.width + x] = 0;
+  w.roofChanged = true;
+  SC.roofLoss = 0; const hp1 = p.Health.hp;
+  waits(w, 3);
+  assert(p.Health.hp >= hp1, 'storm: indoors, the debris misses you');
+  restoreCfg();
+  const back = deserialize(serialize(w), createWorldAny);
+  assert(serialize(back) === serialize(w) && back.weather.wind, 'storm: saved');
+}
+console.log('storm: long floods spread into houses and cellars, float things off, breach walls, leave silt (slow, prints); spates widen the beck; gales fell trees (stumps, crushing, fallen trunks), strip roofs and throw debris; saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

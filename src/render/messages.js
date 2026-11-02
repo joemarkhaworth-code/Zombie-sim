@@ -110,7 +110,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
   ev.on('ground_noise', (d) => {
     if (!isPlayer(d.id)) return;
-    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.', [TILE.ICE]: 'The ice creaks.', [TILE.FLOODWATER]: 'You wade through floodwater.', [TILE.RUBBLE]: 'Rubble shifts underfoot.' }[d.tile];
+    const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.', [TILE.ICE]: 'The ice creaks.', [TILE.FLOODWATER]: 'You wade through floodwater.', [TILE.FLOOD_IN]: 'You wade through floodwater.', [TILE.FALLEN_TREE]: 'You clamber over the tree.', [TILE.SILT]: 'Silt squelches underfoot.', [TILE.SILT_FLOOR]: 'Silt squelches underfoot.', [TILE.RUBBLE]: 'Rubble shifts underfoot.' }[d.tile];
     say(t || 'Noisy ground.', PRIORITY.info);
   });
   ev.on('use_failed', (d) => {
@@ -158,7 +158,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   // Water (step 20).
   ev.on('beck_changed', (d) => {
     const t = d.to === 3 ? ['The beck floods its banks!', PRIORITY.danger] : d.to === 2 && d.from < 2 ? ['The beck is in spate.', PRIORITY.notice]
-      : d.to === 2 ? ['The flood goes down.', PRIORITY.info] : d.from >= 2 ? ['The beck goes down.', PRIORITY.info] : null;
+      : d.to === 2 ? ['The flood leaves silt.', PRIORITY.info] : d.from >= 2 ? ['The beck goes down.', PRIORITY.info] : null;
     if (t) say(t[0], t[1]);
   });
   ev.on('bridge_washed_away', (d) => say(playerSeesTile(d.x, d.y) ? `The ${d.kind} is swept away!` : 'A crash from the beck.', PRIORITY.danger));
@@ -169,6 +169,16 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (isPlayer(d.id)) say('You fall through the ice!', PRIORITY.danger);
     else if (playerSeesTile(d.x, d.y)) say(`The ${world.entities.get(d.id)?.Name?.name || 'thing'} goes under.`, PRIORITY.notice);
   });
+  // Storms and flood damage.
+  const player = () => world.entities.get(world.playerId);
+  const near = (x, y, r) => { const p = player(); return p && p.Position && Math.max(Math.abs(p.Position.x - x), Math.abs(p.Position.y - y)) <= r; };
+  ev.on('tree_fell', (d) => { if (playerSeesTile(d.x, d.y)) say('A tree comes down!', PRIORITY.danger); else if (near(d.x, d.y, 12)) say('A crash in the wind.', PRIORITY.notice); });
+  ev.on('crushed', (d) => { if (isPlayer(d.id)) say('A tree falls on you!', PRIORITY.danger); });
+  ev.on('roof_damaged', (d) => { if (playerSeesTile(d.x, d.y) || near(d.x, d.y, 6)) say('Slates crash down.', PRIORITY.notice); });
+  ev.on('pane_blown', (d) => { if (playerSeesTile(d.x, d.y)) say('Glass shatters.', PRIORITY.notice); });
+  ev.on('debris_hit', (d) => { if (isPlayer(d.id)) say('Debris hits you!', PRIORITY.danger); });
+  ev.on('flood_spread', () => say('The flood spreads.', PRIORITY.notice));
+  ev.on('wall_breached', (d) => { if (playerSeesTile(d.x, d.y)) say('A wall gives way.', PRIORITY.notice); });
   ev.on('vomited', (d) => { if (isPlayer(d.id)) say('You throw up.', PRIORITY.notice); });
   ev.on('item_used_up', (d) => { if (isPlayer(d.id)) say(`That's the last of the ${d.name}.`, PRIORITY.info); });
   // Weather (step 17).
@@ -176,8 +186,9 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     const t = {
       clear: 'The sky clears.', overcast: d.from === 'clear' ? 'Clouds roll in.' : ['rain', 'heavyRain', 'snow'].includes(d.from) ? 'It stops.' : 'The fog lifts.',
       rain: d.from === 'heavyRain' ? 'The rain eases.' : 'It starts to rain.', heavyRain: 'The rain pours down.',
-      fog: 'Fog rolls in.', snow: 'It starts to snow.',
+      fog: 'Fog rolls in.', snow: 'It starts to snow.', gale: 'A gale blows up!',
     }[d.to];
+    if (d.from === 'gale' && d.to !== 'gale') { say('The wind drops.', PRIORITY.notice); return; }
     if (t) say(t, PRIORITY.notice);
   });
   ev.on('snow_settled', () => say('Snow settles.', PRIORITY.info));
@@ -320,6 +331,8 @@ const CAUSES = {
   smoke: () => 'Choked on smoke',
   drowned: () => 'Drowned',
   illness: () => 'Died of a fever',
+  tree: () => 'Crushed by a falling tree',
+  debris: () => 'Hit by flying debris',
 };
 export function deathText(world) {
   const g = world.gameOver;

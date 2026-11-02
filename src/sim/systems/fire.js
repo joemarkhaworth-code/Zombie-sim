@@ -264,7 +264,7 @@ export function spillPetrol(world, x, y, radius = 1) {
     const tx = x + dx, ty = y + dy;
     if (tx < 0 || ty < 0 || tx >= world.width || ty >= world.height) continue;
     const i = ty * world.width + tx;
-    if (TILE_INFO[world.tiles[i]].blocks || [TILE.STREAM, TILE.LAKE, TILE.POND, TILE.FLOODWATER, TILE.TORRENT].includes(world.tiles[i])) continue;
+    if (TILE_INFO[world.tiles[i]].blocks || [TILE.STREAM, TILE.LAKE, TILE.POND, TILE.FLOODWATER, TILE.FLOOD_IN, TILE.TORRENT].includes(world.tiles[i])) continue;
     world.petrol[i] = 3;
   }
   world.events.emit('petrol_spilled', { x, y });

@@ -14,6 +14,7 @@ export const TILE = {
   PHONEBOX: 35, ALLOTMENT: 36, // village life (14d)
   ASH: 37, CHARRED: 38, RUBBLE: 39, // what fire and explosions leave (step 19)
   TORRENT: 40, FLOODWATER: 41, ICE: 42, // water as the weather leaves it (step 20)
+  FALLEN_TREE: 43, STUMP: 44, SILT: 45, SILT_FLOOR: 46, FLOOD_IN: 47, // what storms and floods leave
 };
 // Building walls by material, and floors by kind (see CONFIG.buildingTypes).
 export const WALL_OF = { stone: TILE.WALL_STONE, brick: TILE.WALL_BRICK, wood: TILE.WALL_WOOD, corrugatedMetal: TILE.WALL_METAL, glass: TILE.WALL_GLASS };
@@ -65,6 +66,11 @@ export const TILE_INFO = {
   [TILE.TORRENT]: T('beck in spate', { blocks: true }),                 // the beck after heavy rain: too strong to wade
   [TILE.FLOODWATER]: T('floodwater', { moveCost: 2, stepNoise: 2 }),   // the beck over its banks: wade it, slowly and noisily
   [TILE.ICE]: T('ice', { stepNoise: 1 }),                               // a frozen lake or pond: walkable, creaks, can break
+  [TILE.FLOOD_IN]: T('floodwater', { moveCost: 2, stepNoise: 2, indoor: true }), // floodwater in a house: still under the roof
+  [TILE.FALLEN_TREE]: T('fallen tree', { opaque: true, cover: true, moveCost: 3, stepNoise: 2, flammable: 2 }), // blown down: clamber over, branches snap
+  [TILE.STUMP]: T('tree stump', { flammable: 1, ground: true }),        // where a tree stood: you can see past it now
+  [TILE.SILT]: T('flood silt', { moveCost: 2, stepNoise: 1 }),          // what a flood leaves: deep mud, slow, squelches, takes prints
+  [TILE.SILT_FLOOR]: T('silted floor', { moveCost: 2, stepNoise: 1, indoor: true }),
   [TILE.PHONEBOX]: T('phone box'),                                     // you can stand in it; glazed, so you're seen
   [TILE.ALLOTMENT]: T('allotment bed'),                                 // dug over for winter
 };
@@ -111,6 +117,11 @@ export const TILE_DESC = {
   [TILE.TORRENT]: 'The beck in spate. Too strong to wade.',
   [TILE.FLOODWATER]: 'Floodwater.',
   [TILE.ICE]: 'Ice.',
+  [TILE.FLOOD_IN]: 'Floodwater, indoors.',
+  [TILE.FALLEN_TREE]: 'A fallen tree.',
+  [TILE.STUMP]: 'A tree stump.',
+  [TILE.SILT]: 'Flood silt.',
+  [TILE.SILT_FLOOR]: 'A floor caked in silt.',
   [TILE.PHONEBOX]: 'A red phone box. The line is dead.',
   [TILE.ALLOTMENT]: 'Allotment beds, dug over.',
 };

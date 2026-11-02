@@ -53,7 +53,7 @@ export function serialize(world) {
     stats: world.stats,
     weather: world.weather,
     ground: { scentClock: world.scentClock, snowCover: world.snowCover, groundWet: world.groundWet, tracks: [...world.tracks] },
-    water: world.water ? { beck: world.water.beck, ice: world.water.ice, snow: world.water.snow, under: [...world.water.under], holes: [...world.water.holes] } : null,
+    water: world.water ? { beck: world.water.beck, ice: world.water.ice, snow: world.water.snow, floodHours: world.water.floodHours, reach: world.water.reach, siltUntil: world.water.siltUntil, under: [...world.water.under], holes: [...world.water.holes] } : null,
     tilesArrays: Object.fromEntries(TILE_ARRAYS.map((k) => [k, rle(world[k])])),
     testBuilding: tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : null,
     entities,
@@ -112,7 +112,7 @@ export function deserialize(json, createWorld) {
     world.tracks = new Map(data.ground.tracks);
   }
   if (data.water && world.water) {
-    Object.assign(world.water, { beck: data.water.beck, ice: data.water.ice, snow: data.water.snow, under: new Map(data.water.under), holes: new Set(data.water.holes) });
+    Object.assign(world.water, { beck: data.water.beck, ice: data.water.ice, snow: data.water.snow, floodHours: data.water.floodHours, reach: data.water.reach, siltUntil: data.water.siltUntil, under: new Map(data.water.under), holes: new Set(data.water.holes) });
     rebuildWater(world); // the bridges still standing
   }
   world.testBuilding = data.testBuilding ? buildingInfo(data.testBuilding) : null;

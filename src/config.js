@@ -299,7 +299,8 @@ export const CONFIG = {
       clear:     { hours: [3, 8], next: { clear: 1, overcast: 4, fog: 2 },                  cloudy: false, dayDrop: 0, sight: 1,    mask: 0, wet: 0, chill: [0, 2], scentWash: 0, fireDamp: 0 },
       overcast:  { hours: [3, 8], next: { clear: 2, overcast: 1, rain: 4, fog: 1, snow: 1 }, cloudy: true,  dayDrop: 0, sight: 1,    mask: 0, wet: 0, chill: [1, 1], scentWash: 0, fireDamp: 0 },
       rain:      { hours: [2, 6], next: { overcast: 3, heavyRain: 2, rain: 1 },             cloudy: true,  dayDrop: 0, sight: 0.8,  mask: 1, wet: 2, chill: [1, 2], scentWash: 1, fireDamp: 1 },
-      heavyRain: { hours: [1, 3], next: { rain: 3, overcast: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.6,  mask: 2, wet: 3, chill: [2, 2], scentWash: 2, fireDamp: 2 },
+      heavyRain: { hours: [1, 3], next: { rain: 3, overcast: 1, gale: 1.5 },                cloudy: true,  dayDrop: 1, sight: 0.6,  mask: 2, wet: 3, chill: [2, 2], scentWash: 2, fireDamp: 2 },
+      gale:      { hours: [2, 5], next: { heavyRain: 2, rain: 2, overcast: 1 },             cloudy: true,  dayDrop: 1, sight: 0.6,  mask: 3, wet: 3, chill: [2, 3], scentWash: 3, fireDamp: 2, wind: true },
       fog:       { hours: [2, 5], next: { overcast: 2, clear: 1 }, hoursOfDay: [0, 10],    cloudy: true,  dayDrop: 0, sight: 0.35, mask: 0, wet: 1, chill: [1, 2], scentWash: 0, fireDamp: 1 },
       snow:      { hours: [2, 6], next: { overcast: 3, snow: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.7,  mask: 1, wet: 1, chill: [2, 3], scentWash: 1, fireDamp: 1 },
     },
@@ -321,6 +322,17 @@ export const CONFIG = {
     candleIgnite: 0.01,              // a lit candle on something that burns: chance every 5 ticks to set it alight
     blastStructure: 3, blastWall: 8, // explosion damage to doors/windows and to walls, x force (power - distance + 1)
   },
+  // Gales (after step 20, src/sim/systems/storm.js): what a storm does to the valley, per tick in a gale.
+  storm: {
+    treeFall: 0.12,                  // chance a tick that a tree somewhere comes down (most of a dozen in a gale)
+    fallLength: 2,                   // it lies across this many tiles downwind
+    crushDamage: 2,                  // to anything it lands on
+    fallNoise: 3,
+    roofLoss: 0.05,                  // chance a tick that a roof loses slates (a 2x2 patch opens to the sky; thatch twice as likely)
+    roofNoise: 2,
+    glassBreak: 0.03,                // chance a tick that a greenhouse pane blows in
+    debrisChance: 0.004,             // outdoors: chance a tick that flying debris hits you (1 damage; ~1 in 8 hours out in it)
+  },
   // Water (step 20): src/sim/systems/water.js.
   water: {
     // Dirty water: drinking from the beck, the lake, a pond or floodwater may make you ill,
@@ -335,9 +347,14 @@ export const CONFIG = {
     // The beck: world.water.beck counts ticks; level 0-3 = ticks / perLevel (1 normal,
     // 2 in spate: too strong to wade, 3 in flood: over its banks, bridges may go).
     beckPerLevel: 240,
-    beckRise: { rain: 1, heavyRain: 2 }, snowMeltRise: 2, // per tick of rain / of snow melting
+    beckRise: { rain: 1, heavyRain: 2, gale: 3 }, snowMeltRise: 2, // per tick of rain / of snow melting
     beckFall: 2,                     // per tick otherwise, never below normal (level 1)
-    floodReach: 2,                   // in flood, the beck spills this many tiles over low ground
+    floodReach: 2,                   // in flood, the beck spills this many tiles over low ground...
+    floodMaxReach: 6, floodGrowHours: 2, // ...a tile further every 2 hours it stays in flood, up to 6 (into houses, cellars fill)
+    floatChance: 0.35, floatRange: 3,  // each hour in flood, things in floodwater may drift (downstream) this far
+    siltTicks: 720,                  // floodwater leaves silt (slow, squelching mud) for a day
+    wallBreach: 0.015,               // each hour in flood, chance a dry-stone wall by the water gives way (rubble)
+    erode: 0.005,                    // each hour in spate or flood, chance a bank tile by the torrent is washed out (the beck widens)
     washout: { footbridge: 0.1, bridge: 0.01 }, // chance an hour in flood that a bridge is swept away
     // Ice: world.water.ice counts ticks of frost; level 0-3 = ticks / icePerLevel.
     // Freezing by the weather's chill (day/night): 3 +2 a tick, 2 +1; rain or chill <= 1 thaws.
@@ -381,7 +398,7 @@ export const CONFIG = {
     wadeWet: 2,                      // wading a beck soaks you to at least this level
     shelter: 2,                      // indoors it's this many levels less cold
     coldTiresFrom: 2,                // shivering (cold 2+): fatigue rises twice as fast
-    freezeEvery: 240,                // freezing (cold 3): lose 1 health every 8 hours, and you can't sleep
+    freezeEvery: 120,                // freezing (cold 3): lose 1 health every 4 hours, and you can't sleep
   },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
@@ -406,7 +423,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 13, key: 'zombie-sim-save' },
+  save: { version: 14, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -487,6 +504,8 @@ export const CONFIG = {
     torrent: '#5a7f9e', torrentMark: '#e8f0f6', // the beck in spate: churning, white water
     floodwater: '#4f5f58', floodMark: '#8aa0a0', // muddy water over the fields
     ice: '#b8d0e0', iceMark: '#ffffff', iceThin: '#7fa4c4', // ice: pale, cracks; thin ice darker
+    fallenTree: '#4a5a2a', fallenTrunk: '#6a4a2a', fallenLeaf: '#203f14', stump: '#3c5a28', stumpMark: '#7a5a36',
+    silt: '#6a5a40', siltMark: '#4e4230',
     shore: '#9a917c',
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out

@@ -519,7 +519,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
     - It moves 1 tick per tick either way (90 ticks a level).
   - Effects:
     - shivering (cold 2+): fatigue rises twice as fast;
-    - freezing (cold 3): lose 1 health every 8 h ("Died of cold"), you can't sleep ("Too cold to sleep."), and the cold wakes you.
+    - freezing (cold 3): lose 1 health every 4 h (was 8 h; made harsher after step 20) ("Died of cold"), you can't sleep ("Too cold to sleep."), and the cold wakes you.
 - Top bar: W (wet) and C (cold) after H T Z, only once they're level 1+. They use the same yellow / orange / red, and blink at 3.
   - Messages as they worsen: "You're getting wet." / "You're soaked." / "You're drenched!", "You feel cold." / "You're shivering." / "You're freezing!".
   - Weather changes: "It starts to rain.", "The rain pours down.", "The rain eases.", "Fog rolls in.", "The fog lifts.", "It starts to snow.", "It stops.", "Clouds roll in.", "The sky clears."
@@ -684,6 +684,41 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - the beck: heavy rain puts it in spate; it sweeps you ashore soaked and hurt; things in it wash away; you can't wade it; the bridge stands in spate;
   - flood: it spills two tiles over the banks and sweeps the footbridge away; saves keep it; it goes down to a ford where the bridge was;
   - ice: frost freezes the lake, inspected as thin ice; thin ice breaks under you, and you climb out soaked and freezing; a zombie drowns; thicker ice closes the hole; rain thaws it and you go in and out.
+
+## Decisions for storms and floods (after step 20, from play-testing: "flooding doesn't do an awful lot") - built
+Harsh weather now leaves lasting marks on the map, not just a temporary tile swap. Save version 14.
+- Gales: a new weather kind (CONFIG.weather.kinds.gale, wind: true), reached from heavy rain. It lasts 2-5 h. Sight 0.6, it drowns sound (mask 3), soaks you, chill 2/3, washes scent, raises the beck fast (3 a tick). Drawn as rain driven sideways. About 2% of the time, roughly every other day.
+  - src/sim/systems/storm.js. A gale picks a wind direction when it blows up (world.weather.wind, saved).
+  - Each tick (CONFIG.storm):
+    - a tree may come down (12%): it leaves a STUMP (you can see past it now) and lies downwind as FALLEN_TREE over 2 tiles. That's slow to clamber over (moveCost 3), noisy (branches snap), blocks sight, hides you and burns. Walls and houses stop it. It crushes what it lands on (2 damage, "Crushed by a falling tree"), and the crash is noise 3, so zombies come.
+    - a roof may lose slates (5%, thatch twice as likely): a 2x2 patch opens to the sky (fire.js loseRoof), so rain, cold and light get in.
+    - a greenhouse pane may blow in (3%): the glass wall becomes a gap with broken glass.
+    - anyone outdoors may be hit by flying debris (0.4%, about once per 8 h out in it; "Hit by flying debris").
+  - Nothing grows back or gets mended.
+- Floods (water.js):
+  - The longer a flood lasts, the further it spreads: 2 tiles from the beck and the lake at first, then a tile more every 2 hours, up to 6.
+  - It gets into ground floors (water gets under doors) as FLOOD_IN, which is still indoors. A flooded house fills its cellar.
+  - Each hour things lying in floodwater may drift up to 3 tiles, mostly down the valley. Loot leaves houses and bodies turn up in odd places, fouling the water.
+  - Dry-stone walls standing in the flood may give way to rubble (1.5% an hour each), opening fields.
+  - Each hour in spate or flood, soft ground beside the torrent may wash out and become beck for good (0.5% a tile), so the beck widens and wanders.
+  - When it goes down it leaves silt everywhere it was (SILT outside, SILT_FLOOR indoors) for a day. Silt is slow (moveCost 2), squelches (noise 1) and always takes prints, indoors too, then dries back.
+- Freezing (cold 3) now costs 1 health every 4 h, not 8.
+- Measured over 20 seeds x 6 days of the weather chain, per run: ~12 trees down, ~5 roofs damaged, ~3 panes, ~80 bank tiles washed out, ~50 wall sections breached, 1-2 bridges, 3 cellars flooded, ~20 things drifting. It costs ~0.04 ms a tick.
+- Play-test bot over 40 seeds: 33 of 40 died (34 before). Two died of cold now.
+- Messages:
+  - "A gale blows up!" / "The wind drops.";
+  - "A tree comes down!" / "A crash in the wind." / "A tree falls on you!";
+  - "Slates crash down.", "Glass shatters.", "Debris hits you!";
+  - "The flood spreads.", "A wall gives way.", "The flood leaves silt.";
+  - "You clamber over the tree.", "Silt squelches underfoot.".
+  Inspect: "A fallen tree.", "A tree stump.", "Flood silt.", "A floor caked in silt."
+- Tests:
+  - a long flood gets into the house (still indoors), fills its cellar, floats things off, and breaches a wall;
+  - it leaves silt inside and out, which is slow and takes prints, and the wall stays down;
+  - a spate widens the beck;
+  - a tree falls downwind leaving a stump and crushes a zombie; fallen trees block sight, are slow and burn;
+  - a gale fells trees, strips a roof open and debris hits you outdoors but not indoors;
+  - saves keep it.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).
