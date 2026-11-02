@@ -98,6 +98,7 @@ export const CONFIG = {
     pop: { name: 'can of pop', char: '!', fg: '#ffffff', bg: '#d02020', slots: 1, drink: 180, food: 45 },
     firstAid: { name: 'first aid kit', char: '+', fg: '#ffffff', bg: '#20a040', slots: 1, stanch: true, heal: 1 },
     shells: { name: 'box of shells', char: '"', fg: '#ffffff', bg: '#803000', slots: 1, ammoFor: 'shotgun', rounds: 4 },
+    brolly: { name: 'brolly', char: '/', fg: '#ffffff', bg: '#202060', slots: 1, weapon: { damage: 1, hitChance: 0.8, verb: 'hit' }, rainCover: 2 }, // wielded: keeps the rain off (2 levels)
     // Lights (step 15): USE switches them on/off. charge = ticks of light (2 min each).
     torch: { name: 'torch', char: '(', fg: '#000000', bg: '#f0f080', slots: 1, light: { radius: 6, level: 3 }, charge: 480 }, // ~16 hours of battery
     candle: { name: 'candle', char: 'i', fg: '#000000', bg: '#f8f0d8', slots: 1, light: { radius: 2, level: 2, burnsOut: true }, charge: 180 }, // ~6 hours, then gone
@@ -110,8 +111,8 @@ export const CONFIG = {
     rooms: {
       kitchen: { n: [1, 3], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1, water: 2, pop: 1 } },
       scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1, torch: 2, candle: 1 } },
-      'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1 } },
-      'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1 } },
+      'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1, brolly: 2 } },
+      'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1, brolly: 2 } },
       'sitting room': { n: [0, 1], items: { ale: 2, stick: 1 } },
       'front bedroom': { n: [0, 1], items: { bandage: 2, airRifle: 1, pellets: 1 } },
       'back bedroom': { n: [0, 1], items: { bandage: 2, chocolate: 1, golfClub: 1 } },
@@ -121,7 +122,7 @@ export const CONFIG = {
       shop: { n: [2, 5], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1, water: 3, pop: 3 } },
       'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2, torch: 1, candle: 1, water: 3, pop: 2 } },
       'stock cellar': { n: [1, 3], items: { beans: 3, crisps: 1, planks: 1 } },
-      bar: { n: [1, 3], items: { ale: 4, crisps: 3, pop: 2 } },
+      bar: { n: [1, 3], items: { ale: 4, crisps: 3, pop: 2, brolly: 1 } },
       store: { n: [1, 2], items: { ale: 2, crisps: 2, planks: 1 } },
       'beer cellar': { n: [1, 3], items: { ale: 4, planks: 1 } },
       vestry: { n: [1, 2], items: { firstAid: 2, chocolate: 1, candle: 4 } },
@@ -247,6 +248,7 @@ export const CONFIG = {
   },
   render: {
     dimAlpha: [1, 0.45, 0.25, 0],    // black overlay per visibility level 0-3 (0 is not drawn at all)
+    weather: { rain: 'rgba(170,200,255,0.55)', snow: 'rgba(255,255,255,0.85)', fog: 'rgba(190,190,190,0.35)' }, // overlays on outdoor tiles in sight (step 17)
   },
   noise: {
     radiusByLevel: [0, 4, 8, 12],    // noise level 0-3 -> starting strength (tiles it carries in the open)
@@ -279,10 +281,27 @@ export const CONFIG = {
     footsteps: 1,                    // noise level when walking
     sneakFootsteps: 0,               // noise level when sneaking (silent)
   },
+  // Weather (step 17, systems/weather.js): one weather for the valley, changing every few
+  // hours. Per kind: hours [min, max] it lasts; next: weighted kinds that follow;
+  // hoursOfDay: only starts in these hours (fog: mornings). cloudy: hides the moon (night
+  // outdoors 0). dayDrop: dims the day. sight: outdoor sight radius x this. mask: heard
+  // noise is this much weaker outdoors. wet: wetness level 0-3 you drift toward outdoors.
+  // chill: [day, night] cold level 0-3 outdoors. scentWash / fireDamp: steps 18 / 19.
+  weather: {
+    start: 'overcast',
+    kinds: {
+      clear:     { hours: [3, 8], next: { clear: 1, overcast: 4, fog: 2 },                  cloudy: false, dayDrop: 0, sight: 1,    mask: 0, wet: 0, chill: [0, 2], scentWash: 0, fireDamp: 0 },
+      overcast:  { hours: [3, 8], next: { clear: 2, overcast: 1, rain: 4, fog: 1, snow: 1 }, cloudy: true,  dayDrop: 0, sight: 1,    mask: 0, wet: 0, chill: [1, 1], scentWash: 0, fireDamp: 0 },
+      rain:      { hours: [2, 6], next: { overcast: 3, heavyRain: 2, rain: 1 },             cloudy: true,  dayDrop: 0, sight: 0.8,  mask: 1, wet: 2, chill: [1, 2], scentWash: 1, fireDamp: 1 },
+      heavyRain: { hours: [1, 3], next: { rain: 3, overcast: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.6,  mask: 2, wet: 3, chill: [2, 2], scentWash: 2, fireDamp: 2 },
+      fog:       { hours: [2, 5], next: { overcast: 2, clear: 1 }, hoursOfDay: [0, 10],    cloudy: true,  dayDrop: 0, sight: 0.35, mask: 0, wet: 1, chill: [1, 2], scentWash: 0, fireDamp: 1 },
+      snow:      { hours: [2, 6], next: { overcast: 3, snow: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.7,  mask: 1, wet: 1, chill: [2, 3], scentWash: 1, fireDamp: 1 },
+    },
+  },
   // Needs (step 16, systems/needs.js): hunger, thirst and fatigue, counted in ticks (2 min)
   // and shown as levels 0-3 (one level every perLevel ticks).
   needs: {
-    perLevel: { hunger: 360, thirst: 240, fatigue: 180 }, // 12 h, 8 h, 6 h awake per level
+    perLevel: { hunger: 360, thirst: 240, fatigue: 180, wet: 40, cold: 90 }, // 12 h, 8 h, 6 h awake; wet/cold (step 17) per level
     starveEvery: 360,                // starving (hunger 3, after 36 h): lose 1 health every 12 hours
     parchedEvery: 180,               // parched (thirst 3, after 24 h): lose 1 health every 6 hours
     exhaustedCost: 1.5,              // exhausted (fatigue 3): every action takes 1.5x as long
@@ -291,6 +310,15 @@ export const CONFIG = {
     restHealEvery: 240,              // awake, fed, watered and rested (all <= 1), not bleeding: +1 health every 8 hours
     maxSleepTicks: 360,              // nobody sleeps more than 12 hours
     drinkNoise: 1,                   // scooping water from the beck splashes
+    // Wet and cold (step 17). Both drift toward a target level: wet toward the weather's wet
+    // outdoors (0 indoors, less under a brolly), cold toward the weather's chill (+1 if you're
+    // soaked, -shelter indoors). Getting wet takes 1 tick per tick; drying takes dryIndoors
+    // ticks per tick indoors, dryOutdoors outdoors. Cold rises 1 per tick and eases 1 per tick.
+    dryIndoors: 2, dryOutdoors: 4,   // ticks of drying per tick of wetness gone
+    wadeWet: 2,                      // wading a beck soaks you to at least this level
+    shelter: 2,                      // indoors it's this many levels less cold
+    coldTiresFrom: 2,                // shivering (cold 2+): fatigue rises twice as fast
+    freezeEvery: 240,                // freezing (cold 3): lose 1 health every 8 hours, and you can't sleep
   },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
@@ -314,7 +342,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 8, key: 'zombie-sim-save' },
+  save: { version: 9, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,

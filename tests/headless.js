@@ -14,6 +14,7 @@ import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems
 import { kill } from '../src/sim/systems/combat.js';
 import { ambientAt, updateLight } from '../src/sim/systems/light.js';
 import { needLevel } from '../src/sim/systems/needs.js';
+import { tickWeather } from '../src/sim/systems/weather.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -161,6 +162,7 @@ function openWorld(walls = []) {
   for (const e of query(w, 'Structure')) w.entities.delete(e.id); // no test building
   w.structures.clear(); w.glass.fill(0);
   playerOf(w).Memory.tiles.fill(null); // forget the generated map
+  w.weather = { kind: 'clear', until: Infinity }; // unit tests: fixed clear weather unless they set it
   return w;
 }
 function place(w, e, x, y) { e.Position.x = x; e.Position.y = y; refreshAllVision(w); }
@@ -1489,6 +1491,7 @@ console.log('life: phone box, allotments, loot by room, keys in pockets or by do
   const w = createWorld(1, { map: 'village' });
   const p = playerOf(w);
   for (const z of query(w, 'Brain')) w.entities.delete(z.id); // no interruptions
+  w.weather = { kind: 'clear', until: Infinity }; // a clear night: moonlight
   const toHour = (h) => { w.tick = ((h - CONFIG.time.startHour + 24) % 24) * 60 / CONFIG.time.minutesPerTick; updateLight(w); };
   const indoor = w.tiles.findIndex((t) => t === TILE.FLOOR_WOOD), outdoor = p.Position.y * w.width + p.Position.x;
   assert(w.light[outdoor] === 3 && w.light[indoor] === 2, 'light: by day, outside is bright and indoors dim');
@@ -1593,6 +1596,75 @@ console.log('light: hourly daylight, dark interiors at night, torches light you 
   assert(back.entities.get(back.playerId).Needs.thirst === vp.Needs.thirst, 'needs: saved');
 }
 console.log('needs: rise with time, food/drink, starving and parched hurt and kill, exhausted is slow, sleep (one input, wakes rested or by noise, not with zombies about), drinking from the beck, saved OK');
+
+// 22. Weather, wet and cold (step 17).
+{
+  const W = CONFIG.weather, N = CONFIG.needs, HOUR = 60 / CONFIG.time.minutesPerTick;
+  // The chain: kinds change, last their hours, fog only forms in the morning; same seed, same weather.
+  const run = (seed) => {
+    const w = createWorld(seed); const seen = [];
+    for (let i = 0; i < 400; i++) { w.tick = w.weather.until; if (tickWeather(w)) seen.push([w.weather.kind, Math.floor((CONFIG.time.startHour * 60 + w.tick * CONFIG.time.minutesPerTick) / 60) % 24, (w.weather.until - w.tick) / HOUR]); }
+    return seen;
+  };
+  const seq = run(3);
+  assert(JSON.stringify(seq) === JSON.stringify(run(3)), 'weather: same seed, same weather');
+  const kinds = new Set(seq.map(([k]) => k));
+  for (const k of ['clear', 'overcast', 'rain', 'heavyRain', 'fog', 'snow']) assert(kinds.has(k), `weather: ${k} happens`);
+  for (const [k, hour, hours] of seq) {
+    assert(hours >= W.kinds[k].hours[0] && hours <= W.kinds[k].hours[1], `weather: ${k} lasts ${hours} h`);
+    if (W.kinds[k].hoursOfDay) assert(hour >= W.kinds[k].hoursOfDay[0] && hour <= W.kinds[k].hoursOfDay[1], `weather: fog formed at ${hour}:00`);
+  }
+  const set = (w, kind) => { w.weather = { kind, until: Infinity }; updateLight(w, true); };
+  // Light: cloud hides the moon; heavy rain dims the day.
+  let w = openWorld(); let p = playerOf(w);
+  const at = () => w.light[p.Position.y * w.width + p.Position.x];
+  w.tick = 13 * HOUR; set(w, 'clear'); const clearNight = at(); set(w, 'rain'); const rainNight = at();
+  w.tick = 4 * HOUR; set(w, 'heavyRain'); const pourDay = at(); set(w, 'clear');
+  assert(clearNight === 1 && rainNight === 0 && pourDay === 2 && at() === 3, `weather: moonlit ${clearNight}, rainy night ${rainNight}, downpour day ${pourDay}`);
+  // Fog: you see much less far, and so does everything else.
+  let z = zombieOf(w); place(w, p, 5, 5); place(w, z, 5, 13);
+  assert(canSee(w, p, z), 'weather: on a clear day you see it 8 tiles off');
+  set(w, 'fog'); refreshAllVision(w);
+  assert(!canSee(w, p, z) && sightRadius(p, w) < sightRadius(p) / 2, `weather: in fog you don't (sight ${sightRadius(p, w)})`);
+  // Rain drowns your footsteps.
+  set(w, 'clear'); w.light.fill(0); place(w, z, 5, 8); z.Brain.goal = null;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  const heardClear = !!z.Brain.goal;
+  set(w, 'rain'); w.light.fill(0); place(w, p, 5, 5); z.Brain.goal = null; place(w, z, 5, 8);
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(heardClear && !z.Brain.goal, 'weather: the zombie hears your footsteps on a dry day, not in the rain');
+  // Wet: rain soaks you outdoors; a brolly keeps it off; indoors you dry; wading soaks you at once.
+  w = openWorld(); p = playerOf(w); w.entities.delete(zombieOf(w).id);
+  set(w, 'rain');
+  for (let i = 0; i < N.perLevel.wet * 2 + 5; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'wet') === 2, `weather: out in the rain you get soaked (${needLevel(p, 'wet')})`);
+  const brolly = makeItem(w, 'brolly', null, null); p.Inventory.items.push(brolly); playerAct(w, { type: 'use', itemId: brolly });
+  for (let i = 0; i < N.perLevel.wet * N.dryOutdoors + 5; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'wet') < 2, `weather: under a brolly you start to dry (${needLevel(p, 'wet')})`);
+  w.tiles.fill(TILE.FLOOR_WOOD); // indoors, everywhere
+  for (let i = 0; i < N.perLevel.wet * 3 * N.dryIndoors; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'wet') === 0, 'weather: indoors you dry off');
+  // Cold: a soaking night outdoors chills you to freezing; it hurts and you can't sleep; indoors you warm.
+  w = openWorld(); p = playerOf(w); w.entities.delete(zombieOf(w).id);
+  w.tick = 13 * HOUR; set(w, 'heavyRain'); p.Needs.fatigue = N.perLevel.fatigue;
+  const hp0 = p.Health.hp;
+  for (let i = 0; i < N.perLevel.cold * 3 + N.freezeEvery && p.Health.hp === hp0; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'cold') === 3 && p.Health.hp < hp0, `weather: a wet night outdoors, freezing and losing health (cold ${needLevel(p, 'cold')})`);
+  assert(!playerAct(w, { type: 'sleep' }), 'weather: too cold to sleep');
+  w.tiles.fill(TILE.FLOOR_WOOD); set(w, 'heavyRain');
+  for (let i = 0; i < N.perLevel.cold * 3; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'cold') <= 1, `weather: indoors you warm up (${needLevel(p, 'cold')})`);
+  // Wading the beck soaks you; saves keep the weather.
+  const v = createWorld(1, { map: 'village' }); const vp = playerOf(v);
+  for (const zz of query(v, 'Brain')) v.entities.delete(zz.id);
+  const beck = v.tiles.findIndex((t, i) => t === TILE.STREAM && Math.abs(Math.floor(i / v.width) - vp.Position.y) < 3 && Math.abs(i % v.width - vp.Position.x) === 2);
+  playerAct(v, { type: 'move', dx: Math.sign(beck % v.width - vp.Position.x), dy: Math.sign(Math.floor(beck / v.width) - vp.Position.y) });
+  playerAct(v, { type: 'move', dx: Math.sign(beck % v.width - vp.Position.x), dy: Math.sign(Math.floor(beck / v.width) - vp.Position.y) });
+  assert(needLevel(vp, 'wet') >= N.wadeWet, `weather: wading the beck soaks you (${needLevel(vp, 'wet')})`);
+  const back = deserialize(serialize(v), createWorldAny);
+  assert(back.weather.kind === v.weather.kind && back.weather.until === v.weather.until && serialize(back) === serialize(v), 'weather: saved');
+}
+console.log('weather: seeded chain (fog mornings), cloud hides the moon, downpours dim the day, fog cuts sight, rain drowns footsteps, wet/brolly/drying, cold night freezes you, too cold to sleep, wading soaks, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

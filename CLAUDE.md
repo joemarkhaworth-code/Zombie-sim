@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (8 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (9 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -491,6 +491,52 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - drinking from the beck by the bridge, and not away from water;
   - needs are saved.
   Checked on 150 seeds.
+
+## Decisions for step 17 (weather, wet, cold) - built
+- src/sim/systems/weather.js. world.weather = { kind, until }: one weather for the whole valley, saved with the game.
+- Kinds (CONFIG.weather.kinds), each pure data: clear, overcast, rain, heavyRain, fog, snow.
+  - Each lasts hours [min, max]; then a weighted next kind is picked (seeded, so runs replay).
+  - Fog only forms between 00:00 and 10:00 (hoursOfDay).
+  - The weights suit a wet Lakeland November: mostly overcast and rain, some clear spells, morning fog, the odd snow.
+  - A run starts overcast. tickWeather runs at the end of each player turn; a change emits weather_changed and refreshes light and everyone's sight.
+- What weather does (all from the kind's numbers):
+  - Light (light.js ambientFor):
+    - cloudy kinds hide the moon, so night outdoors is 0, not 1. A rainy night is pitch black: bring a torch.
+    - dayDrop dims the day by a level (heavy rain, snow).
+    - Indoors stays one level darker than that.
+  - Sight: outdoors, sight radius x sight. Fog 0.35 (about 5 tiles), heavy rain 0.6, snow 0.7, rain 0.8. It applies to everyone outdoors, zombies too (vision.js sightRadius(e, world)).
+  - Hearing: outdoors, a heard noise is mask weaker: rain 1, heavy rain 2, snow 1. Footsteps are drowned in the rain, so sneaking is easier and so is being crept up on. Indoors you hear normally (noise.js).
+  - Scent (step 18) and fire (step 19): scentWash and fireDamp are already on each kind, waiting for those systems.
+- Wet and cold join Needs (needs.js) as two more 0-3 levels. Each drifts toward a target where you stand; the player starts dry and warm.
+  - Wet:
+    - target outdoors = the kind's wet (rain 2, heavy rain 3, snow 1, fog 1); indoors 0.
+    - A wielded brolly (new item: a weak weapon, 1 dmg; rainCover 2) takes 2 off.
+    - You get wetter 1 tick per tick (40 ticks a level). You dry 1 tick per 2 ticks indoors, per 4 outdoors.
+    - Wading the beck soaks you to at least 2 at once.
+  - Cold:
+    - target = the kind's chill [day, night] (clear 0/2, overcast 1/1, rain 1/2, heavy rain 2/2, fog 1/2, snow 2/3);
+    - +1 if you're soaked (wet 2+); -2 indoors (shelter); capped 0-3.
+    - It moves 1 tick per tick either way (90 ticks a level).
+  - Effects:
+    - shivering (cold 2+): fatigue rises twice as fast;
+    - freezing (cold 3): lose 1 health every 8 h ("Died of cold"), you can't sleep ("Too cold to sleep."), and the cold wakes you.
+- Top bar: W (wet) and C (cold) after H T Z, only once they're level 1+. They use the same yellow / orange / red, and blink at 3.
+  - Messages as they worsen: "You're getting wet." / "You're soaked." / "You're drenched!", "You feel cold." / "You're shivering." / "You're freezing!".
+  - Weather changes: "It starts to rain.", "The rain pours down.", "The rain eases.", "Fog rolls in.", "The fog lifts.", "It starts to snow.", "It stops.", "Clouds roll in.", "The sky clears."
+  - Dusk and dawn messages come from the clock only, never from the weather.
+  - Inspecting yourself adds damp/soaked/drenched and cold/shivering/freezing.
+- Drawn over the outdoor tiles you can see (greybox step 3b, CONFIG.render.weather): rain streaks (more in a downpour), snowflakes, a grey fog haze. The marks shift each turn so it reads as falling.
+- Tests:
+  - same seed, same weather; every kind happens; durations within range; fog only in the morning;
+  - a clear night 1, a rainy night 0, a downpour day 2;
+  - fog hides a zombie 8 tiles off that you see on a clear day;
+  - a zombie 3 tiles off hears your footsteps when dry, not in rain;
+  - rain soaks you to 2; under a brolly you dry; indoors you dry fully;
+  - a heavy-rain night chills you to freezing and costs health; too cold to sleep; indoors you warm up;
+  - wading the beck soaks you; saves keep the weather.
+  The unit-test helper pins clear weather so older tests stay steady. Checked on 150 seeds.
+- Play-test bot over 40 seeds: deaths unchanged (34 of 40, against 35 before), none from cold. Weather adds pressure (wet, cold nights, black rainy nights, fog) without being a killer by itself.
+- Save version 9 (weather, wet/cold).
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).

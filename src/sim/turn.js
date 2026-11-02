@@ -16,6 +16,7 @@ import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 import { climb, setLadder } from './systems/floors.js';
 import { tickLight, updateLight } from './systems/light.js';
+import { tickWeather } from './systems/weather.js';
 import { tickNeeds, needLevel, waterNearby, adjustNeed, wake } from './systems/needs.js';
 import { makeNoise } from './systems/noise.js';
 import { TILE } from './gen/testgrid.js';
@@ -119,6 +120,7 @@ export function playerAct(world, action) {
     makeNoise(world, water.x, water.y, CONFIG.needs.drinkNoise, player.id);
   } else if (action.type === 'sleep') {
     if (!canSleep(player)) { world.events.emit('use_failed', { id: player.id, reason: 'not_tired' }); return false; }
+    if (needLevel(player, 'cold') >= 3) { world.events.emit('use_failed', { id: player.id, reason: 'too_cold' }); return false; }
     if (world.sightings.size) { world.events.emit('use_failed', { id: player.id, reason: 'not_safe' }); return false; } // not with something in sight
     player.Asleep = { since: world.tick };
     world.events.emit('fell_asleep', { id: player.id });
@@ -150,7 +152,8 @@ function endTurn(world, player, cost) {
   delete player.Actor.nextCost;
   world.turn++;
   advance(world, act, onTick);
-  updateLight(world); // the hour's light, torches carried about: refreshes vision if changed
+  const weatherChanged = tickWeather(world);
+  updateLight(world, weatherChanged); // the hour's light, weather, torches carried about: refreshes vision if changed
   updateSightings(world);
   world.events.emit('turn_ended', { turn: world.turn });
 }

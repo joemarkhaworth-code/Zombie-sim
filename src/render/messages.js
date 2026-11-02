@@ -120,6 +120,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (d.reason === 'not_tired') say("You're not tired.", PRIORITY.blocked);
     if (d.reason === 'no_water') say('No water here.', PRIORITY.blocked);
     if (d.reason === 'not_safe') say('Not with them about.', PRIORITY.blocked);
+    if (d.reason === 'too_cold') say('Too cold to sleep.', PRIORITY.blocked);
     if (d.reason === 'not_hurt') say("You're not hurt.", PRIORITY.blocked);
   });
   // Needs (step 16).
@@ -127,6 +128,8 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     hunger: [null, "You're getting hungry.", "You're hungry.", "You're starving!"],
     thirst: [null, "You're thirsty.", "You're very thirsty.", "You're parched!"],
     fatigue: [null, "You're tired.", "You're very tired.", "You're exhausted!"],
+    wet: [null, "You're getting wet.", "You're soaked.", "You're drenched!"],
+    cold: [null, 'You feel cold.', "You're shivering.", "You're freezing!"],
   };
   ev.on('need_changed', (d) => {
     if (!isPlayer(d.id) || d.level <= d.from) return; // only say it when it gets worse
@@ -136,8 +139,17 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('fell_asleep', (d) => { if (isPlayer(d.id)) say('You fall asleep.', PRIORITY.info); });
   ev.on('woke', (d) => {
     if (!isPlayer(d.id)) return;
-    const t = { rested: ['You wake, rested.', PRIORITY.info], noise: ['A noise wakes you!', PRIORITY.danger], hurt: ['You wake in pain!', PRIORITY.danger], hunger: ['Hunger wakes you.', PRIORITY.notice], thirst: ['Thirst wakes you.', PRIORITY.notice] }[d.reason] || ['You wake.', PRIORITY.info];
+    const t = { rested: ['You wake, rested.', PRIORITY.info], noise: ['A noise wakes you!', PRIORITY.danger], hurt: ['You wake in pain!', PRIORITY.danger], hunger: ['Hunger wakes you.', PRIORITY.notice], thirst: ['Thirst wakes you.', PRIORITY.notice], cold: ['The cold wakes you.', PRIORITY.notice] }[d.reason] || ['You wake.', PRIORITY.info];
     say(t[0], t[1]);
+  });
+  // Weather (step 17).
+  ev.on('weather_changed', (d) => {
+    const t = {
+      clear: 'The sky clears.', overcast: d.from === 'clear' ? 'Clouds roll in.' : ['rain', 'heavyRain', 'snow'].includes(d.from) ? 'It stops.' : 'The fog lifts.',
+      rain: d.from === 'heavyRain' ? 'The rain eases.' : 'It starts to rain.', heavyRain: 'The rain pours down.',
+      fog: 'Fog rolls in.', snow: 'It starts to snow.',
+    }[d.to];
+    if (t) say(t, PRIORITY.notice);
   });
   // Light (step 15).
   ev.on('ambient_changed', (d) => {
@@ -234,7 +246,7 @@ export function describeTile(world, x, y) {
     if (x === player.Position.x && y === player.Position.y) {
       const under = query(world, 'Item', 'Position').filter((e) => e.Position.x === x && e.Position.y === y).pop();
       if (under) return `You're on a ${under.Name.name}.`;
-      const how = [['hunger', ['', 'peckish', 'hungry', 'starving']], ['thirst', ['', 'thirsty', 'very thirsty', 'parched']], ['fatigue', ['', 'tired', 'very tired', 'exhausted']]]
+      const how = [['hunger', ['', 'peckish', 'hungry', 'starving']], ['thirst', ['', 'thirsty', 'very thirsty', 'parched']], ['fatigue', ['', 'tired', 'very tired', 'exhausted']], ['wet', ['', 'damp', 'soaked', 'drenched']], ['cold', ['', 'cold', 'shivering', 'freezing']]]
         .map(([n, words]) => words[needLevel(player, n)]).filter(Boolean);
       if (how.length) return `You: ${how.join(', ')}.`;
       return TILE_INFO[tileAt(world, x, y)].cover ? `You, hidden in a ${TILE_INFO[tileAt(world, x, y)].name}.` : "That's you.";
@@ -265,6 +277,7 @@ const CAUSES = {
   shove: () => 'Slammed into a wall',
   starved: () => 'Starved to death',
   thirst: () => 'Died of thirst',
+  cold: () => 'Died of cold',
 };
 export function deathText(world) {
   const g = world.gameOver;

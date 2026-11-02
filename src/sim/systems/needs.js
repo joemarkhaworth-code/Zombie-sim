@@ -17,14 +17,40 @@
 // Timers use world.tick, so runs replay exactly.
 import { CONFIG } from '../../config.js';
 import { damage } from './combat.js';
+import { weatherOf, isIndoors } from './weather.js';
+import { TILE } from '../gen/testgrid.js';
+import { minutesAt } from '../time.js';
 
-const NEEDS = ['hunger', 'thirst', 'fatigue'];
+const NEEDS = ['hunger', 'thirst', 'fatigue', 'wet', 'cold'];
 
-export const needLevel = (e, need) => (e && e.Needs ? Math.min(3, Math.floor(e.Needs[need] / CONFIG.needs.perLevel[need])) : 0);
+// Wet and cold (step 17): the level each drifts toward where you are now.
+const isNight = (tick) => CONFIG.light.byHour[Math.floor(minutesAt(tick) / 60) % 24] <= 1;
+export function wetTarget(world, e) {
+  if (isIndoors(world, e.Position.x, e.Position.y)) return 0;
+  const held = e.Inventory && e.Inventory.wielded && world.entities.get(e.Inventory.wielded);
+  const cover = (held && CONFIG.items[held.Item.type].rainCover) || 0; // a brolly keeps the rain off
+  return Math.max(0, weatherOf(world).wet - cover);
+}
+export function coldTarget(world, e) {
+  let c = weatherOf(world).chill[isNight(world.tick) ? 1 : 0];
+  if (needLevel(e, 'wet') >= 2) c++; // soaked through
+  if (isIndoors(world, e.Position.x, e.Position.y)) c -= CONFIG.needs.shelter;
+  return Math.max(0, Math.min(3, c));
+}
+
+export const needLevel = (e, need) => (e && e.Needs && e.Needs[need] !== undefined ? Math.min(3, Math.floor(e.Needs[need] / CONFIG.needs.perLevel[need])) : 0);
 
 const cap = (need) => CONFIG.needs.perLevel[need] * 4 - 1; // never more than "level 3, and a bit"
+// (wet and cold top out at exactly level 3: they drift toward a target)
 
 export function installNeeds(world) {
+  // Wading a beck soaks you.
+  world.events.on('entity_moved', (d) => {
+    const e = world.entities.get(d.id);
+    if (!e || !e.Needs || world.tiles[d.to.y * world.width + d.to.x] !== TILE.STREAM) return;
+    const soaked = CONFIG.needs.wadeWet * CONFIG.needs.perLevel.wet;
+    if (e.Needs.wet < soaked) adjustNeed(world, e, 'wet', soaked - e.Needs.wet);
+  });
   // Woken by a noise, or by being hurt.
   world.events.on('noise_heard', (d) => { const e = world.entities.get(d.id); if (e && e.Asleep) wake(world, e, 'noise'); });
   world.events.on('entity_damaged', (d) => { const e = world.entities.get(d.id); if (e && e.Asleep) wake(world, e, 'hurt'); });
@@ -52,8 +78,22 @@ export function tickNeeds(world) {
     const asleep = !!e.Asleep;
     adjustNeed(world, e, 'hunger', 1);
     adjustNeed(world, e, 'thirst', 1);
-    adjustNeed(world, e, 'fatigue', asleep ? -N.sleepRecovery : 1);
-    const hunger = needLevel(e, 'hunger'), thirst = needLevel(e, 'thirst'), fatigue = needLevel(e, 'fatigue');
+    const shivering = needLevel(e, 'cold') >= N.coldTiresFrom; // cold wears you out
+    adjustNeed(world, e, 'fatigue', (asleep ? -N.sleepRecovery : 1) + (shivering ? 1 : 0));
+    // Wet and cold drift toward the weather where you are (step 17).
+    if (e.Position && e.Needs.wet !== undefined) {
+      const wetGoal = wetTarget(world, e) * N.perLevel.wet;
+      const dryEvery = isIndoors(world, e.Position.x, e.Position.y) ? N.dryIndoors : N.dryOutdoors;
+      if (e.Needs.wet < wetGoal) adjustNeed(world, e, 'wet', 1);
+      else if (e.Needs.wet > wetGoal && t % dryEvery === 0) adjustNeed(world, e, 'wet', -1);
+      const coldGoal = coldTarget(world, e) * N.perLevel.cold;
+      if (e.Needs.cold < coldGoal) adjustNeed(world, e, 'cold', 1);
+      else if (e.Needs.cold > coldGoal) adjustNeed(world, e, 'cold', -1);
+    }
+    const hunger = needLevel(e, 'hunger'), thirst = needLevel(e, 'thirst'), fatigue = needLevel(e, 'fatigue'), cold = needLevel(e, 'cold');
+    if (asleep && cold === 3) wake(world, e, 'cold');
+    if (cold === 3 && t % N.freezeEvery === 0) damage(world, e, 1, { cause: 'cold' });
+    if (!world.entities.has(e.id)) continue;
     if (asleep && e.Needs.fatigue === 0) wake(world, e, 'rested');
     if (asleep && (hunger === 3 || thirst === 3)) wake(world, e, hunger === 3 ? 'hunger' : 'thirst');
     if (hunger === 3 && t % N.starveEvery === 0) damage(world, e, 1, { cause: 'starved' });

@@ -19,6 +19,7 @@ import { rebuildLinks } from './systems/floors.js';
 import { populateVillage } from './gen/life.js';
 import { updateLight } from './systems/light.js';
 import { installNeeds } from './systems/needs.js';
+import { installWeather } from './systems/weather.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -76,7 +77,7 @@ export function createWorld(seed, opts = {}) {
     Vision: { eyesight: CONFIG.player.eyesight, visible: new Map(), clip: { x: Math.floor(CONFIG.view.tilesAcross / 2), y: CONFIG.view.sightHalfHeight } },
     Hearing: { level: CONFIG.player.hearing },
     Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
-    Needs: { hunger: 0, thirst: 0, fatigue: 0 }, // ticks; levels 0-3 (step 16)
+    Needs: { hunger: 0, thirst: 0, fatigue: 0, wet: 0, cold: 0 }, // ticks; levels 0-3 (steps 16, 17)
     Melee: { ...CONFIG.player.melee },
     Inventory: { items: [], capacity: CONFIG.inventory.capacity, wielded: null },
     Keyring: { keys: [] }, // keys don't take bag slots
@@ -99,6 +100,7 @@ export function createWorld(seed, opts = {}) {
   installNoise(world);
   installShamble(world);
   installNeeds(world);
+  installWeather(world);
   updateLight(world, true); // the time of day's light (and vision)
   return world;
 }

@@ -6,7 +6,7 @@
 // never drawn from memory.
 // (The art pass will use dithering for levels 2 and 1 instead of plain darkening.)
 import { CONFIG } from '../config.js';
-import { TILE } from '../sim/gen/testgrid.js';
+import { TILE, TILE_INFO } from '../sim/gen/testgrid.js';
 import { query } from '../sim/world.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { canSee } from '../sim/systems/vision.js';
@@ -244,6 +244,27 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       if (!lv || !a) continue;
       ctx.fillStyle = `rgba(0,0,0,${a})`;
       ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
+    }
+  }
+
+  // 3b. Weather over the outdoor tiles you can see: rain streaks, snowflakes, fog haze.
+  // The marks shift each turn (seeded by tile and turn), so it reads as falling.
+  const wk = world.weather && world.weather.kind;
+  if (wk && wk !== 'clear' && wk !== 'overcast') {
+    const R = CONFIG.render.weather;
+    for (let vy = 0; vy < rows; vy++) for (let vx = 0; vx < cols; vx++) {
+      const x = camX + vx, y = camY + vy;
+      if (!onScreen(x, y) || !levelAt(x, y) || TILE_INFO[world.tiles[y * world.width + x]].indoor) continue;
+      const px = ox + vx * s, py = oy + vy * s;
+      if (wk === 'fog') { ctx.fillStyle = R.fog; ctx.fillRect(px, py, s - 1, s - 1); continue; }
+      const h = ((x * 73856093) ^ (y * 19349663) ^ (world.turn * 83492791)) >>> 0;
+      const n = wk === 'heavyRain' ? 3 : 2;
+      ctx.fillStyle = wk === 'snow' ? R.snow : R.rain;
+      for (let i = 0; i < n; i++) {
+        const fx = ((h >> (i * 5)) & 31) / 32, fy = ((h >> (i * 5 + 15)) & 31) / 32;
+        if (wk === 'snow') ctx.fillRect(px + fx * (s - 4), py + fy * (s - 4), 3, 3);
+        else { ctx.fillRect(px + fx * (s - 3), py + fy * (s * 0.6), 2, s * 0.35); }
+      }
     }
   }
 

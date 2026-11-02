@@ -20,6 +20,7 @@ import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, query } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 import { isSneaking, inCover } from './stealth.js';
+import { sightFactor } from './weather.js';
 
 export function installVision(world) {
   world.sightings = new Set(); // actor ids the player could see at the end of last turn
@@ -59,13 +60,15 @@ export function lineClear(world, x0, y0, x1, y1, blocked = opaqueAt) {
   return true;
 }
 
-// How far this viewer can see in the open: the light range scaled by eyesight.
-export function sightRadius(e) {
-  return Math.floor(CONFIG.light.range * CONFIG.vision.eyesightFactor[e.Vision.eyesight]);
+// How far this viewer can see in the open: the light range scaled by eyesight, and
+// outdoors by the weather (fog, rain: weather.js).
+export function sightRadius(e, world = null) {
+  const w = world ? sightFactor(world, e) : 1;
+  return Math.floor(CONFIG.light.range * CONFIG.vision.eyesightFactor[e.Vision.eyesight] * w);
 }
 
 export function updateVision(world, e) {
-  const r = sightRadius(e);
+  const r = sightRadius(e, world);
   const { x: ox, y: oy } = e.Position;
   const d2 = (x, y) => (x - ox) ** 2 + (y - oy) ** 2;
   const visible = new Map();
@@ -123,7 +126,7 @@ export function canSee(world, viewer, target, { tracking = false } = {}) {
   const lv = visibilityAt(world, viewer, x, y);
   if (lv < CONFIG.vision.minLevelToSpot) return false;
   if (inCover(world, x, y) && !tracking) return false;
-  let range = sightRadius(viewer) * CONFIG.vision.noticeByLight[lv];
+  let range = sightRadius(viewer, world) * CONFIG.vision.noticeByLight[lv];
   if (isSneaking(target) && !tracking) range *= CONFIG.stealth.sneakNoticeFactor;
   return dx * dx + dy * dy <= range * range;
 }

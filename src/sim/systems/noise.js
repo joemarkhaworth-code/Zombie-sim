@@ -16,6 +16,7 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt } from '../world.js';
 import { TILE_INFO } from '../gen/testgrid.js';
+import { hearingMask } from './weather.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 
@@ -94,8 +95,8 @@ export function makeNoise(world, x, y, level, sourceId = null) {
   for (const e of world.entities.values()) {
     if (!e.Hearing || !e.Position || e.id === sourceId) continue;
     const at = e.Position.y * world.width + e.Position.x;
-    const s = field.get(at) || 0;
-    if (s >= CONFIG.noise.minStrengthToHear[e.Hearing.level]) {
+    const s = (field.get(at) || 0) - hearingMask(world, e); // rain drowns sound outdoors
+    if (s >= CONFIG.noise.minStrengthToHear[e.Hearing.level] && s > 0) {
       const o = origins.get(at); // the source, or the stairs it came through
       world.events.emit('noise_heard', { id: e.id, x: o % world.width, y: Math.floor(o / world.width), strength: s, sourceId, sourceX: x, sourceY: y });
     }

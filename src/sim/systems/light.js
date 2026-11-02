@@ -17,6 +17,7 @@
 import { CONFIG } from '../../config.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 import { minutesAt } from '../time.js';
+import { ambientFor } from './weather.js';
 import { lineClear, refreshAllVision, updateVision } from './vision.js';
 
 export function ambientAt(tick) {
@@ -42,12 +43,11 @@ export function lightSources(world) {
 
 // Bring world.light up to date. force: recompute even if nothing seems to have changed.
 export function updateLight(world, force = false) {
-  const amb = ambientAt(world.tick);
+  const amb = ambientFor(world, ambientAt(world.tick)); // the hour's light as the weather leaves it
   const sources = lightSources(world);
   const key = sources.map((s) => `${s.x},${s.y},${s.radius},${s.level}`).join(';');
   const hourChanged = amb !== world.ambient;
   if (!force && !hourChanged && key === world.lightKey) return false;
-  const before = world.ambient;
   world.ambient = amb;
   world.lightKey = key;
   // The hour's light (lightBase) only changes with the hour; lights are laid over it.
@@ -79,7 +79,10 @@ export function updateLight(world, force = false) {
       if (e.Vision && e.Position && near.some((q) => Math.abs(q.x - e.Position.x) <= reach && Math.abs(q.y - e.Position.y) <= reach)) updateVision(world, e);
     }
   }
-  if (hourChanged && before !== undefined) world.events.emit('ambient_changed', { from: before, to: amb });
+  // Dusk and dawn come from the clock, not the weather (a downpour isn't nightfall).
+  const daylight = ambientAt(world.tick);
+  if (world.daylight !== undefined && daylight !== world.daylight) world.events.emit('ambient_changed', { from: world.daylight, to: daylight });
+  world.daylight = daylight;
   return true;
 }
 
