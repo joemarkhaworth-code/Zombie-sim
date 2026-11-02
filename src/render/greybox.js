@@ -12,6 +12,7 @@ import { rememberedAt } from '../sim/systems/memory.js';
 import { canSee } from '../sim/systems/vision.js';
 import { trackAt, snowLevel, holdsSnow } from '../sim/systems/tracks.js';
 import { scentLevel } from '../sim/systems/scent.js';
+import { indoorAt } from '../sim/systems/weather.js';
 
 const C = CONFIG.colours;
 const TILE_COLOUR = {
@@ -225,7 +226,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         ctx.fillRect(px, py, s - 1, s - 1);
         drawTileMark(ctx, t, px, py, s, false, markInfo(world, t, x, y));
         const snow = snowLevel(world);
-        if (snow && holdsSnow(world, t)) { ctx.fillStyle = C.snow[snow]; ctx.fillRect(px, py, s - 1, s - 1); } // settled snow
+        if (snow && holdsSnow(world, t, y * world.width + x)) { ctx.fillStyle = C.snow[snow]; ctx.fillRect(px, py, s - 1, s - 1); } // settled snow
         drawTrack(ctx, trackAt(world, x, y), px, py, s, false);
         const fi = y * world.width + x;
         if (world.petrol && world.petrol[fi]) { ctx.fillStyle = C.petrol; ctx.fillRect(px + s * 0.15, py + s * 0.55, s * 0.5, s * 0.25); }
@@ -292,7 +293,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
     const R = CONFIG.render.weather;
     for (let vy = 0; vy < rows; vy++) for (let vx = 0; vx < cols; vx++) {
       const x = camX + vx, y = camY + vy;
-      if (!onScreen(x, y) || !levelAt(x, y) || TILE_INFO[world.tiles[y * world.width + x]].indoor) continue;
+      if (!onScreen(x, y) || !levelAt(x, y) || indoorAt(world, y * world.width + x)) continue;
       const px = ox + vx * s, py = oy + vy * s;
       if (wk === 'fog') { ctx.fillStyle = R.fog; ctx.fillRect(px, py, s - 1, s - 1); continue; }
       const h = ((x * 73856093) ^ (y * 19349663) ^ (world.turn * 83492791)) >>> 0;

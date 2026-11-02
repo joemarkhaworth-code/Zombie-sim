@@ -17,7 +17,7 @@ import { rebuildLinks } from './systems/floors.js';
 import { rebuildFireActive } from './systems/fire.js';
 import { updateLight } from './systems/light.js';
 
-const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp', 'scentLaid', 'fire', 'fuel', 'smoke', 'petrol'];
+const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp', 'scentLaid', 'fire', 'fuel', 'smoke', 'petrol', 'roofless'];
 // Tile arrays are mostly long runs (village maps are tens of thousands of tiles), so they
 // are saved run-length encoded: [value, count, value, count, ...].
 const rle = (arr) => { const out = []; for (let i = 0; i < arr.length;) { let j = i; while (j < arr.length && arr[j] === arr[i]) j++; out.push(arr[i], j - i); i = j; } return out; };

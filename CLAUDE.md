@@ -632,7 +632,13 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - ashes, a charred floor, rubble.
 - TUNE panel: a third world row, Give (- next, + give): - picks the next item type, + puts one in your bag (or at your feet). For testing fire, lights, weapons, anything.
 - Speed: with ~90 tiles burning, ~5 ms a turn. Tile changes from fire don't refresh everyone's sight; the end-of-turn light update refreshes those near fires.
-- Save version 11.
+- Roofs (fix after play-testing: blowing up a building left it dry inside). "Indoors" is one rule, weather.js indoorAt(world, i): an indoor floor tile whose roof is still on. world.roofless (0/1 per tile, saved) records lost roofs (fire.js loseRoof):
+  - an explosion takes the roof off every tile nearer than its edge (the same tiles whose walls it can bring down);
+  - a floor that burns out (floorboards to charred) loses its roof: the timbers burnt with it;
+  - cellars never lose a roof (they have a floor over them).
+  Everything that asked "indoors?" now asks indoorAt: wet and cold (needs.js), the weather's sight and hearing, light (an open room gets the sky's light; light.js rebuilds lightBase when world.roofChanged), scent ageing, snow and mud prints, fire damping and smoke clearing, and the rain/snow/fog drawn over the map.
+- Blasts spread out a step at a time (8 ways) up to their power, through walls but never across the void, so a blast in one floor pocket can't reach the next pocket along (it used to be a plain square).
+- Save version 12 (roofless).
 - Tests:
   - flammability from data (floorboards yes, stone/bare ground no; dry grass yes, sodden or snowy no);
   - a lighter fire spreads through a wooden-floored room, leaves charred floor, is stopped by stone walls and burns a wooden wall into a gap;

@@ -13,8 +13,8 @@ import { validTargets } from '../src/sim/systems/ranged.js';
 import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems/structures.js';
 import { kill } from '../src/sim/systems/combat.js';
 import { ambientAt, updateLight } from '../src/sim/systems/light.js';
-import { needLevel } from '../src/sim/systems/needs.js';
-import { tickWeather } from '../src/sim/systems/weather.js';
+import { needLevel, wetTarget } from '../src/sim/systems/needs.js';
+import { tickWeather, isIndoors } from '../src/sim/systems/weather.js';
 import { scentLevel } from '../src/sim/systems/scent.js';
 import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
 import { flammability, ignite } from '../src/sim/systems/fire.js';
@@ -1814,6 +1814,18 @@ console.log('scent: fades, rain washes it outdoors, the beck holds none, zombies
   assert(booms === 1 && !w.entities.has(bottle) && p.Health.hp < hp2, 'fire: the gas bottle explodes in the fire and hurts you');
   assert(w.entities.get(door).Door.broken, 'fire: the blast blows the door in');
   assert(w.tiles[6 * w.width + 3] === TILE.RUBBLE || w.tiles[5 * w.width + 3] === TILE.RUBBLE, 'fire: the blast brings the wall down to rubble');
+  // The blast takes the roof off round it: the weather gets in there, not at the far end of the room.
+  assert(!isIndoors(w, 5, 6) && isIndoors(w, 11, 9), 'fire: the blast lifts the roof off near it, not across the room');
+  w.weather = { kind: 'rain', until: Infinity }; place(w, p, 5, 6);
+  for (const [x, y] of [[5, 6], [5, 5], [6, 6]]) w.fire[y * w.width + x] = 0;
+  assert(wetTarget(w, p) >= 2, 'fire: rain falls into the blown-open room');
+  playerAct(w, { type: 'wait' });
+  assert(w.ambient >= 2 && w.lightBase[6 * w.width + 5] === w.ambient && w.lightBase[9 * w.width + 11] < w.ambient, 'fire: daylight falls into the blown-open room like outdoors');
+  // A room that burns out loses its roof; cellars never do.
+  ({ w, p } = room());
+  ignite(w, 6, 6); place(w, p, 2, 20); burnFor(w, 120);
+  let open = 0; for (let y = 4; y <= 9; y++) for (let x = 4; x <= 11; x++) if (w.tiles[y * w.width + x] === TILE.CHARRED && !isIndoors(w, x, y)) open++;
+  assert(open > 30, `fire: a burnt-out room is open to the sky (${open} tiles)`);
   // A shot sets off a gas bottle; petrol makes tarmac burn.
   w = openWorld(); p = playerOf(w); w.entities.delete(zombieOf(w).id); place(w, p, 5, 5);
   const gun = give(w, p, 'shotgun'); playerAct(w, { type: 'use', itemId: gun });
@@ -1828,7 +1840,7 @@ console.log('scent: fades, rain washes it outdoors, the beck holds none, zombies
   const back = deserialize(serialize(w), createWorldAny);
   assert(serialize(back) === serialize(w) && back.fireActive.size === w.fireActive.size, 'fire: saved');
 }
-console.log('fire: flammability from data and weather, lighter starts it, spreads through floorboards not stone, charred floors, wooden walls burn to gaps, burns you and zombies, lights the dark, smoke blinds/chokes, rain damps it, gas bottles explode (fire or shot) blowing doors and walls, petrol, saved OK');
+console.log('fire: flammability from data and weather, lighter starts it, spreads through floorboards not stone, charred floors, wooden walls burn to gaps, burns you and zombies, lights the dark, smoke blinds/chokes, rain damps it, gas bottles explode (fire or shot) blowing doors, walls and roofs (rain gets in), burnt rooms open to the sky, petrol, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

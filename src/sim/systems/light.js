@@ -17,7 +17,7 @@
 import { CONFIG } from '../../config.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 import { minutesAt } from '../time.js';
-import { ambientFor } from './weather.js';
+import { ambientFor, indoorAt } from './weather.js';
 import { fireLights } from './fire.js';
 import { lineClear, refreshAllVision, updateVision, solidAt } from './vision.js';
 
@@ -49,14 +49,16 @@ export function updateLight(world, force = false) {
   const sources = lightSources(world);
   const key = sources.map((s) => `${s.x},${s.y},${s.radius},${s.level}`).join(';');
   const hourChanged = amb !== world.ambient;
-  if (!force && !hourChanged && key === world.lightKey) return false;
+  const roofs = !!world.roofChanged; // a roof came off: the base light changes
+  world.roofChanged = false;
+  if (!force && !hourChanged && !roofs && key === world.lightKey) return false;
   world.ambient = amb;
   world.lightKey = key;
   // The hour's light (lightBase) only changes with the hour; lights are laid over it.
-  if (force || hourChanged || !world.lightBase) {
+  if (force || hourChanged || roofs || !world.lightBase) {
     const dim = CONFIG.light.indoorDim;
     world.lightBase = new Uint8Array(world.tiles.length);
-    for (let i = 0; i < world.tiles.length; i++) world.lightBase[i] = TILE_INFO[world.tiles[i]].indoor ? Math.max(0, amb - dim) : amb;
+    for (let i = 0; i < world.tiles.length; i++) world.lightBase[i] = indoorAt(world, i) ? Math.max(0, amb - dim) : amb;
   }
   world.light.set(world.lightBase);
   for (const s of sources) {
@@ -74,7 +76,7 @@ export function updateLight(world, force = false) {
   // that moved, came on or went out.
   const near = [...sources, ...(world.lastLights || [])];
   world.lastLights = sources.map((q) => ({ x: q.x, y: q.y }));
-  if (force || hourChanged) refreshAllVision(world);
+  if (force || hourChanged || roofs) refreshAllVision(world);
   else {
     const reach = CONFIG.light.range + 10;
     for (const e of world.entities.values()) {

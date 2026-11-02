@@ -15,7 +15,7 @@
 // neighbour that's fresher than where it stands. Where the trail ends it searches.
 import { CONFIG } from '../../config.js';
 import { TILE, TILE_INFO } from '../gen/testgrid.js';
-import { weatherOf } from './weather.js';
+import { weatherOf, indoorAt } from './weather.js';
 
 const NO_SCENT = new Set([TILE.STREAM, TILE.LAKE, TILE.POND, TILE.VOID]);
 
@@ -24,8 +24,7 @@ export function installScent(world) {
   world.scentClock = 0;
 }
 
-const isIndoor = (world, i) => !!TILE_INFO[world.tiles[i]].indoor;
-const clockFor = (world, i) => (isIndoor(world, i) ? world.tick : world.scentClock);
+const clockFor = (world, i) => (indoorAt(world, i) ? world.tick : world.scentClock);
 
 // Age (in its clock's ticks) of the scent at tile i; Infinity if none.
 function ageAt(world, i) {

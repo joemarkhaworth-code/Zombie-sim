@@ -380,7 +380,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 11, key: 'zombie-sim-save' },
+  save: { version: 12, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,

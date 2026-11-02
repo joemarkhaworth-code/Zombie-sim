@@ -17,7 +17,10 @@ const HOUR = () => 60 / CONFIG.time.minutesPerTick; // ticks per hour
 
 export const weatherOf = (world) => CONFIG.weather.kinds[(world.weather && world.weather.kind) || 'clear'];
 
-export const isIndoors = (world, x, y) => !!TILE_INFO[world.tiles[y * world.width + x]].indoor;
+// Indoors = an indoor floor with its roof still on. A blast or a burnt-out room takes the
+// roof off (world.roofless, fire.js), and then the weather gets in: rain, cold, snow, light.
+export const indoorAt = (world, i) => !!TILE_INFO[world.tiles[i]].indoor && !(world.roofless && world.roofless[i]);
+export const isIndoors = (world, x, y) => indoorAt(world, y * world.width + x);
 
 export function installWeather(world) {
   const W = CONFIG.weather;
