@@ -10,6 +10,7 @@ import { serialize, deserialize } from './sim/save.js';
 import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from './sim/tuning.js';
 import { refreshAllVision } from './sim/systems/vision.js';
 import { stairsAt } from './sim/systems/floors.js';
+import { canDrinkHere, canSleep } from './sim/turn.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -127,7 +128,7 @@ function stairButtons(p) {
 function currentButtons() {
   const pad = 8, w = layout.width, h = layout.height, barH = layout.barHeight;
   const p = world.entities.get(world.playerId);
-  const ids = aim ? ['cancel'] : ['sneak', 'shove', 'bag', ...(p && wieldedGun(world, p) ? ['fire'] : []), ...stairButtons(p)];
+  const ids = aim ? ['cancel'] : ['sneak', 'shove', 'bag', ...(p && wieldedGun(world, p) ? ['fire'] : []), ...stairButtons(p), ...(p && canDrinkHere(world, p) ? ['drink'] : []), ...(p && canSleep(p) ? ['sleep'] : [])];
   const bw = Math.floor((w - pad * (ids.length + 1)) / ids.length);
   return ids.map((id, i) => ({ id, x: pad + i * (bw + pad), y: h - barH + pad, w: bw, h: barH - pad * 2 }));
 }
@@ -292,6 +293,8 @@ function onButton(px, py) {
     return;
   }
   if (b.id === 'up' || b.id === 'down') { act({ type: 'climb' }); render(); return; }
+  if (b.id === 'drink') { act({ type: 'drink' }); render(); return; }
+  if (b.id === 'sleep') { act({ type: 'sleep' }); render(); return; }
   if (b.id === 'pull' || b.id === 'lower') { act({ type: 'ladder', up: b.id === 'pull' }); render(); return; }
   if (b.id === 'fire') {
     if (gunAmmo() <= 0) { act({ type: 'fire', x: -1, y: -1 }); render(); return; } // shows "Out of ammo."

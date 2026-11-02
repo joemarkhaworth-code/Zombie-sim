@@ -3,6 +3,7 @@
 
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
+import { needLevel } from '../sim/systems/needs.js';
 import { dayOf, daysSurvived, clockOf } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO, TILE } from '../sim/gen/testgrid.js';
@@ -114,7 +115,29 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
     if (d.reason === 'no_gun') say('No gun to load.', PRIORITY.blocked);
     if (d.reason === 'spent') say("It's spent.", PRIORITY.blocked);
+    if (d.reason === 'not_hungry') say("You're not hungry.", PRIORITY.blocked);
+    if (d.reason === 'not_thirsty') say("You're not thirsty.", PRIORITY.blocked);
+    if (d.reason === 'not_tired') say("You're not tired.", PRIORITY.blocked);
+    if (d.reason === 'no_water') say('No water here.', PRIORITY.blocked);
+    if (d.reason === 'not_safe') say('Not with them about.', PRIORITY.blocked);
     if (d.reason === 'not_hurt') say("You're not hurt.", PRIORITY.blocked);
+  });
+  // Needs (step 16).
+  const NEED_WORDS = {
+    hunger: [null, "You're getting hungry.", "You're hungry.", "You're starving!"],
+    thirst: [null, "You're thirsty.", "You're very thirsty.", "You're parched!"],
+    fatigue: [null, "You're tired.", "You're very tired.", "You're exhausted!"],
+  };
+  ev.on('need_changed', (d) => {
+    if (!isPlayer(d.id) || d.level <= d.from) return; // only say it when it gets worse
+    say(NEED_WORDS[d.need][d.level], d.level >= 3 ? PRIORITY.danger : PRIORITY.notice);
+  });
+  ev.on('drank', (d) => { if (isPlayer(d.id)) say('You drink from the water.', PRIORITY.info); });
+  ev.on('fell_asleep', (d) => { if (isPlayer(d.id)) say('You fall asleep.', PRIORITY.info); });
+  ev.on('woke', (d) => {
+    if (!isPlayer(d.id)) return;
+    const t = { rested: ['You wake, rested.', PRIORITY.info], noise: ['A noise wakes you!', PRIORITY.danger], hurt: ['You wake in pain!', PRIORITY.danger], hunger: ['Hunger wakes you.', PRIORITY.notice], thirst: ['Thirst wakes you.', PRIORITY.notice] }[d.reason] || ['You wake.', PRIORITY.info];
+    say(t[0], t[1]);
   });
   // Light (step 15).
   ev.on('ambient_changed', (d) => {
@@ -211,6 +234,9 @@ export function describeTile(world, x, y) {
     if (x === player.Position.x && y === player.Position.y) {
       const under = query(world, 'Item', 'Position').filter((e) => e.Position.x === x && e.Position.y === y).pop();
       if (under) return `You're on a ${under.Name.name}.`;
+      const how = [['hunger', ['', 'peckish', 'hungry', 'starving']], ['thirst', ['', 'thirsty', 'very thirsty', 'parched']], ['fatigue', ['', 'tired', 'very tired', 'exhausted']]]
+        .map(([n, words]) => words[needLevel(player, n)]).filter(Boolean);
+      if (how.length) return `You: ${how.join(', ')}.`;
       return TILE_INFO[tileAt(world, x, y)].cover ? `You, hidden in a ${TILE_INFO[tileAt(world, x, y)].name}.` : "That's you.";
     }
     const here = query(world, 'Position', 'Name').filter((e) => e.Position.x === x && e.Position.y === y);
@@ -237,6 +263,8 @@ const CAUSES = {
   shot: (k) => `Shot by a ${k || 'stranger'}`,
   thrown: (k) => `Hit by something ${k ? `a ${k} threw` : 'thrown'}`,
   shove: () => 'Slammed into a wall',
+  starved: () => 'Starved to death',
+  thirst: () => 'Died of thirst',
 };
 export function deathText(world) {
   const g = world.gameOver;

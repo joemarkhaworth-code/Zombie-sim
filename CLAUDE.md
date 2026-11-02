@@ -223,7 +223,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Staggered { actions } is a general component: the scheduler still charges the creature's time, but its action is wasted (entity_lost_action). Any future system can stagger things.
 - Forced movement hook: anything moved by force goes through pushEntity(), which emits entity_pushed { id, by, from, to, dx, dy }. Water, fire, ledges and the like subscribe to it and react to the destination tile, without knowing who pushed or why. Slamming emits entity_slammed { id, x, y, blockerId }.
 - Other attack types (ranged, thrown) wait until weapons exist (step 10).
-- Items (src/sim/systems/items.js): an item is an entity with Item { type, slots } + Glyph + Name. On the map it has a Position; carried, it has none and its id is in Inventory.items. Item types live in CONFIG.items as data; effects are properties, not special cases: heal (eat: +health, used up), stanch (bandage: stops bleeding, used up, refused if you're not bleeding), weapon (wield/stow; replaces bare-hands melee numbers). Test items: tin of beans (%, heals 1 until hunger exists in step 16), bandage (+), cricket bat (/, damage 2), scattered on open tiles (CONFIG.testGrid.items).
+- Items (src/sim/systems/items.js): an item is an entity with Item { type, slots } + Glyph + Name. On the map it has a Position; carried, it has none and its id is in Inventory.items. Item types live in CONFIG.items as data; effects are properties, not special cases: food / drink (feeds / waters you, step 16), heal (+health), stanch (bandage: stops bleeding, used up, refused if you're not bleeding), weapon (wield/stow; replaces bare-hands melee numbers). Test items: tin of beans (%, food), bandage (+), cricket bat (/, damage 2), scattered on open tiles (CONFIG.testGrid.items).
 - Inventory { items, capacity, wielded }: capacity is in slots (player 6; beans/bandage 1, bat 2). A full bag leaves the item on the tile ("Your bag is full.").
 - Picking up: walking onto an item picks it up as part of the step, free. Tapping yourself while standing on an item picks it up (takes a turn) instead of waiting - for things you dropped or couldn't fit. Inspecting your own tile says "You're on a <item>."
 - BAG is the third action-bar button. It opens an 8-bit list over the map (Teletext blue): header "BAG used/capacity" + CLOSE, one 56 px row per item with a coloured glyph, name, slots, and two big buttons: use (EAT / USE / WIELD / STOW) and DROP. Opening takes no turn. Use and drop take a turn and close the bag so you see what happened. Wielded item is marked "> name, in hand".
@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (7 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (8 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -383,7 +383,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - Per-building extras (CONFIG.loot.extras): farmhouse shotgun 60% and shells 70%; a cricket bat at the pub; sometimes a bat or air rifle in a detached cottage. About 100 items per village.
   - New items (CONFIG.items), as data like the rest:
     - weapons: garden fork (2 dmg), walking stick (1, accurate), golf club (2), kitchen knife (1, bleeds);
-    - food (heal 1 until hunger, step 16): bag of crisps, bar of chocolate, bottle of ale;
+    - food and drink (step 16): bag of crisps, bar of chocolate, bottle of ale; plus bottles of water and cans of pop;
     - first aid kit: stops bleeding and heals 1; refused if you're not hurt;
     - box of shells / tin of pellets: ammo.
     Anything can still be thrown as a lure.
@@ -443,6 +443,53 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - a candle burns away and a torch goes flat; a flat torch won't switch on;
   - saves keep the night and the lit torch;
   - adjacent creatures are noticed in pitch darkness.
+  Checked on 150 seeds.
+
+## Decisions for step 16 (hunger, thirst, fatigue) - built
+- src/sim/systems/needs.js. The player has Needs { hunger, thirst, fatigue }, counted in ticks (2 min). Each shows as a level 0-3: ticks / CONFIG.needs.perLevel, capped at 3 (pillar 4: coarse levels on screen).
+  - hunger: a level every 12 h; thirst every 8 h; fatigue every 6 h awake.
+  - From 08:00 you're thirsty and tired by mid-afternoon, hungry by evening.
+  - Exhausted by about 02:00 if you don't sleep; parched after a day without drinking; starving after a day and a half without food.
+- Effects (all from world.tick, so runs replay exactly):
+  - Starving (hunger 3): lose 1 health every 12 h. Parched (thirst 3): every 6 h. You can die of either ("Starved to death", "Died of thirst").
+  - Exhausted (fatigue 3): every action takes 1.5x the time (turn.js endTurn), so zombies get more turns.
+  - Healing (no healing before step 16 except food and first aid): asleep and not starving/parched, +1 health every 2 h. Awake, fed, watered and rested (all <= 1) and not bleeding, +1 every 8 h.
+- Food and drink are properties of items, in ticks off a need:
+  - tin of beans: a full level of hunger;
+  - chocolate and crisps: less;
+  - bottle of water: a level of thirst;
+  - ale and pop: both, a bit of each.
+  - Using food or drink you don't need is refused ("You're not hungry.").
+  - Food no longer heals; first aid still does. Water and pop are in kitchens, the shop and stock rooms; pop in the bar.
+- Drinking from the beck, the lake or a pond: a DRINK button appears when you're thirsty and on or next to water ({ type: 'drink' }, a turn). It takes a level of thirst off and splashes (noise 1). Dirty water making you ill comes with step 20.
+- Sleep:
+  - A SLEEP button appears when you're tired (fatigue >= 1). Refused if anything is in sight ("Not with them about.").
+  - { type: 'sleep' } is one recorded input. You fall asleep (Asleep component) and the world runs on a turn at a time until you wake. While asleep, fatigue falls 3 ticks per tick, so 6 h clears 3 levels.
+  - You wake when:
+    - rested (fatigue 0);
+    - you hear a noise (any noise_heard: a zombie bashing the door, glass breaking);
+    - you're hurt;
+    - hunger or thirst reaches 3;
+    - or after 12 h at most.
+  - Zombies shuffle silently, so one can walk up and bite you in your sleep. Sleep somewhere safe: a pulled-up loft, a locked house.
+  - Replays exactly (tested).
+- Top bar: H (hunger), T (thirst), Z (tired) after the health blocks, only at level 1+, coloured yellow / orange / red; level 3 blinks.
+  - Messages when a level gets worse: "You're getting hungry." / "You're hungry." / "You're starving!", "You're thirsty." / "You're very thirsty." / "You're parched!", "You're tired." / "You're very tired." / "You're exhausted!".
+  - Waking: "You wake, rested.", "A noise wakes you!", "You wake in pain!", "Hunger wakes you."
+  - Inspecting yourself lists how you are ("You: hungry, very tired.").
+- Tuning by the play-test bot (now eats, drinks from the bag or the beck and sleeps when tired and nothing's in sight; 40 seeds x 1500 turns):
+  - The first rates (hunger 8 h, thirst 6 h, damage every 4 h / 2 h) killed every run, a third from hunger or thirst inside two days. Too harsh.
+  - The slower rates above leave bites and bleeding as the main killers; hunger and thirst finish off a wounded bot that never looks for food or water.
+  - Knobs: CONFIG.needs and the items' food/drink values.
+- Save version 8 (the player carries Needs).
+- Tests:
+  - levels rise with time and say so;
+  - water, ale and beans relieve needs; not needed means refused;
+  - parched and starving hurt and can kill;
+  - exhausted actions take ~1.5x;
+  - sleep: refused when not tired, one input that wakes you rested and healed, a noise wakes you, refused with a zombie in sight, and a natural run with sleep replays exactly;
+  - drinking from the beck by the bridge, and not away from water;
+  - needs are saved.
   Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d

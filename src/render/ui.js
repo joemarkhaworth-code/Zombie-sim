@@ -1,6 +1,7 @@
 // Status bar: one line, Teletext-ish. Turn number on the left, the latest message
 // after it. With no message, the seed shows on the right.
 import { CONFIG } from '../config.js';
+import { needLevel } from '../sim/systems/needs.js';
 import { PRIORITY } from './messages.js';
 import { dayOf, clockOf } from '../sim/time.js';
 
@@ -20,6 +21,25 @@ function drawHealth(ctx, world, x, h, blink) {
   return x + p.Health.max * (size + gap);
 }
 
+// Needs (step 16): H (hunger), T (thirst), Z (tired), only when level >= 1, coloured by
+// level (yellow, orange, red); level 3 blinks. Returns the x after them.
+function drawNeeds(ctx, world, x, h, blink) {
+  const p = world.entities.get(world.playerId);
+  if (!p || !p.Needs) return x;
+  const C = CONFIG.colours;
+  ctx.save();
+  ctx.font = `bold ${Math.floor(h * 0.5)}px monospace`;
+  ctx.textAlign = 'left';
+  for (const [need, ch] of [['hunger', 'H'], ['thirst', 'T'], ['fatigue', 'Z']]) {
+    const lv = needLevel(p, need);
+    if (!lv) continue;
+    if (!(lv === 3 && blink)) { ctx.fillStyle = C.needLevel[lv]; ctx.fillText(ch, x, h / 2); }
+    x += ctx.measureText(ch).width + 3;
+  }
+  ctx.restore();
+  return x;
+}
+
 export function drawStatus(ctx, world, layout, message, blink = false) {
   const C = CONFIG.colours;
   const { width, statusHeight: h } = layout;
@@ -32,7 +52,7 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
   const turnText = `D${dayOf(world.tick)} ${clockOf(world.tick)}`; // day and clock time
   ctx.fillText(turnText, 8, h / 2);
   const healthX = 8 + ctx.measureText(turnText + ' ').width;
-  const msgX = drawHealth(ctx, world, healthX, h, blink) + 8;
+  const msgX = drawNeeds(ctx, world, drawHealth(ctx, world, healthX, h, blink) + 6, h, blink) + 8;
   if (message) {
     ctx.fillStyle = message.priority >= PRIORITY.danger ? C.statusDanger : C.statusText;
     ctx.fillText(message.text, msgX, h / 2, width - msgX - 8);
@@ -48,7 +68,7 @@ export function drawStatus(ctx, world, layout, message, blink = false) {
 //   SHOVE  - one-shot: orange when armed, waiting for you to tap a creature
 // layout.buttons: [{ id, x, y, w, h }] - main.js uses the same rects for taps.
 // ui: { armed } - which one-shot action (if any) is waiting for a target.
-const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'], fire: ['FIRE', 'FIRE'], cancel: ['CANCEL', 'CANCEL'], up: ['UP', 'UP'], down: ['DOWN', 'DOWN'], pull: ['PULL UP', 'PULL UP'], lower: ['LOWER', 'LOWER'] };
+const LABELS = { sneak: ['SNEAK', 'SNEAKING'], shove: ['SHOVE', 'SHOVE ->'], bag: ['BAG', 'BAG'], fire: ['FIRE', 'FIRE'], cancel: ['CANCEL', 'CANCEL'], up: ['UP', 'UP'], down: ['DOWN', 'DOWN'], drink: ['DRINK', 'DRINK'], sleep: ['SLEEP', 'SLEEP'], pull: ['PULL UP', 'PULL UP'], lower: ['LOWER', 'LOWER'] };
 export function drawButtons(ctx, world, layout, ui = {}) {
   const C = CONFIG.colours;
   const player = world.entities.get(world.playerId);
@@ -125,7 +145,7 @@ export function bagLayout(world, layout, ui = {}) {
       const item = world.entities.get(id);
       const def = CONFIG.items[item.Item.type];
       const y = top + pad * 2 + 44 + i * (rowH + pad);
-      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.light ? (item.Item.lit ? 'OFF' : 'ON') : def.ammoFor ? 'LOAD' : def.stanch ? 'USE' : def.heal ? 'EAT' : 'USE';
+      const useLabel = def.weapon ? (p.Inventory.wielded === id ? 'STOW' : 'WIELD') : def.light ? (item.Item.lit ? 'OFF' : 'ON') : def.ammoFor ? 'LOAD' : def.stanch ? 'USE' : def.food ? 'EAT' : def.drink ? 'DRINK' : def.heal ? 'EAT' : 'USE';
       const bw = Math.floor((w - pad * 5) / 3), by = y + 44, bh = rowH - 52;
       rows.push({
         itemId: id, item, y, h: rowH, wielded: p.Inventory.wielded === id,

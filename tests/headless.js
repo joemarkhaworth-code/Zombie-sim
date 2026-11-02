@@ -4,7 +4,7 @@ import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable, mak
 // Most tests below were written for the phase-1 test grid; default to it. Village tests pass { map: 'village' }.
 const createWorld = (seed, opts = {}) => createWorldAny(seed, { map: 'testgrid', ...opts });
 import { TILE_INFO, TILE, WALL_OF, FLOOR_OF } from '../src/sim/gen/testgrid.js';
-import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
+import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius, updateSightings } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { wound } from '../src/sim/systems/bleeding.js';
@@ -13,12 +13,13 @@ import { validTargets } from '../src/sim/systems/ranged.js';
 import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems/structures.js';
 import { kill } from '../src/sim/systems/combat.js';
 import { ambientAt, updateLight } from '../src/sim/systems/light.js';
+import { needLevel } from '../src/sim/systems/needs.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
 import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from '../src/sim/tuning.js';
 import { addEntity } from '../src/sim/world.js';
-import { playerAct, replay } from '../src/sim/turn.js';
+import { playerAct, replay, canDrinkHere } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { CONFIG } from '../src/config.js';
 import { createEventBus } from '../src/sim/events.js';
@@ -770,13 +771,15 @@ function firstStrike(setup, playerMoves) {
   console.log('items: pickup on step, slot limit, drop, tap pickup OK');
 }
 
-{ // Use: beans heal, bandage stops bleeding, bat changes melee damage.
+{ // Use: beans feed you, bandage stops bleeding, bat changes melee damage.
   const w = openWorld();
   const p = playerOf(w), z = zombieOf(w);
   place(w, p, 5, 5); place(w, z, 18, 26);
   const beans = makeItem(w, 'beans', 5, 5); playerAct(w, { type: 'pickup' });
-  p.Health.hp = 3;
-  assert(playerAct(w, { type: 'use', itemId: beans }) && p.Health.hp === 3 + CONFIG.items.beans.heal, 'use: beans heal');
+  p.Needs.hunger = 0;
+  assert(!playerAct(w, { type: 'use', itemId: beans }), 'use: not hungry, so the beans stay in the bag');
+  p.Needs.hunger = 500;
+  assert(playerAct(w, { type: 'use', itemId: beans }) && p.Needs.hunger === 500 - CONFIG.items.beans.food + 1, 'use: beans take a level of hunger off');
   assert(!w.entities.has(beans) && !p.Inventory.items.includes(beans), 'use: beans are used up');
   const band = makeItem(w, 'bandage', 5, 5); playerAct(w, { type: 'pickup' });
   const t0 = w.turn;
@@ -798,7 +801,7 @@ function firstStrike(setup, playerMoves) {
   assert(p.Inventory.wielded === null, 'bat: using again puts it away');
   playerAct(w, { type: 'use', itemId: bat }); playerAct(w, { type: 'drop', itemId: bat });
   assert(p.Inventory.wielded === null, 'bat: dropping a wielded weapon empties your hands');
-  console.log('use: beans heal, bandage stanches, bat hits harder OK');
+  console.log('use: beans feed you, bandage stanches, bat hits harder OK');
 }
 
 { // The test map has the configured items, on open tiles, and you remember seeing them.
@@ -1417,7 +1420,9 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const back = deserialize(serialize(w), createWorldAny);
   assert(serialize(back) === serialize(w) && back.entities.get(top.id).Stairs.pulled && back.links.size === w.links.size, 'floors: saves keep links and pulled-up ladders');
   playerAct(w, { type: 'move', dx: -off2[0], dy: -off2[1] });
-  assert(playerAct(w, { type: 'ladder', up: false }) && playerAct(w, { type: 'climb' }) && p.Position.y < w.landHeight, 'floors: lower it and climb down');
+  w.entities.delete(z.id); // (it may be standing at the foot of the ladder)
+  const lowered = playerAct(w, { type: 'ladder', up: false }); let why = null; w.events.on('climb_blocked', (d) => { if (d.id === p.id) why = d.reason; }); const climbed = playerAct(w, { type: 'climb' });
+  assert(lowered && climbed && p.Position.y < w.landHeight, `floors: lower it and climb down (lowered ${lowered}, climbed ${climbed}, ${why})`);
   CONFIG.zombie.staggerChance = 0.2;
 }
 console.log('floors: upstairs/cellars/lofts ringed by void, linked; climbing, sight per floor, sound through links, zombies follow, pulled-up ladders stop them, saved OK');
@@ -1440,7 +1445,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   assert(items.length > 40, `life ${seed}: ${items.length} items`);
   for (const it of items) assert(!TILE_INFO[tileAt(w, it.Position.x, it.Position.y)].blocks, `life ${seed}: item in a wall`);
   const inRoom = (p, name) => w.buildings.some((b) => [...b.rooms, ...(b.floors || []).flatMap((f) => f.rooms)].some((r) => r.name === name && p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h));
-  assert(items.some((it) => CONFIG.items[it.Item.type].heal && inRoom(it.Position, 'kitchen')), `life ${seed}: food in a kitchen`);
+  assert(items.some((it) => (CONFIG.items[it.Item.type].food || CONFIG.items[it.Item.type].drink) && inRoom(it.Position, 'kitchen')), `life ${seed}: food in a kitchen`);
   // Keys: each opens a locked building; carried ones are in a zombie's pocket.
   const lockIds = new Set(query(w, 'Door').filter((d) => d.Door.locked).map((d) => d.Door.lockId));
   const keys = query(w, 'Item').filter((i) => i.Item.type === 'key');
@@ -1520,6 +1525,74 @@ console.log('life: phone box, allotments, loot by room, keys in pockets or by do
   assert(serialize(back) === serialize(w) && back.light[outdoor] === w.light[outdoor] && back.ambient === w.ambient, 'light: a save keeps the night and the lit torch');
 }
 console.log('light: hourly daylight, dark interiors at night, torches light you up (both ways), light out of windows, burning down, saved OK');
+
+// 21. Hunger, thirst, fatigue (step 16).
+{
+  const N = CONFIG.needs;
+  const fresh = () => { const w = openWorld(); const p = playerOf(w), z = zombieOf(w); w.entities.delete(z.id); return { w, p }; };
+  // Needs rise with time, a level at a time, and say so.
+  let { w, p } = fresh();
+  const said = []; w.events.on('need_changed', (d) => said.push(`${d.need}${d.level}`));
+  for (let i = 0; i < N.perLevel.thirst; i++) playerAct(w, { type: 'wait' });
+  assert(needLevel(p, 'thirst') === 1 && needLevel(p, 'fatigue') === 1 && needLevel(p, 'hunger') === 0 && said.includes('thirst1'), 'needs: after 8 hours you are thirsty and tired, not yet hungry');
+  // Food and drink: beans feed, water waters, ale does a bit of both; refused if not needed.
+  const give = (type) => { const id = makeItem(w, type, null, null); p.Inventory.items.push(id); return id; };
+  p.Needs.hunger = 500; p.Needs.thirst = 500;
+  assert(playerAct(w, { type: 'use', itemId: give('water') }) && p.Needs.thirst === 500 - CONFIG.items.water.drink + 1, `needs: water quenches thirst (${p.Needs.thirst})`);
+  assert(playerAct(w, { type: 'use', itemId: give('ale') }) && p.Needs.hunger < 500, 'needs: ale takes the edge off hunger and thirst');
+  p.Needs.thirst = 0;
+  assert(!playerAct(w, { type: 'use', itemId: give('water') }), 'needs: not thirsty, the water stays in the bag');
+  // Starving and parched hurt; you can die of it.
+  ({ w, p } = fresh());
+  p.Needs.thirst = N.perLevel.thirst * 3; const hp0 = p.Health.hp;
+  for (let i = 0; i < N.parchedEvery + 2; i++) playerAct(w, { type: 'wait' });
+  assert(p.Health.hp < hp0, 'needs: parched, you lose health');
+  p.Health.hp = 1; p.Needs.hunger = N.perLevel.hunger * 3;
+  for (let i = 0; i < N.starveEvery + 2 && !w.gameOver; i++) playerAct(w, { type: 'wait' });
+  assert(w.gameOver && ['starved', 'thirst'].includes(w.gameOver.cause), `needs: starving or parched can kill (${w.gameOver && w.gameOver.cause})`);
+  // Exhausted: everything takes longer.
+  ({ w, p } = fresh());
+  let t0 = w.tick; for (let i = 0; i < 10; i++) playerAct(w, { type: 'wait' }); const normal = w.tick - t0;
+  p.Needs.fatigue = N.perLevel.fatigue * 3;
+  t0 = w.tick; for (let i = 0; i < 10; i++) playerAct(w, { type: 'wait' }); const tired = w.tick - t0;
+  assert(tired >= normal * 1.4, `needs: exhausted, 10 waits take ${tired} ticks instead of ${normal}`);
+  // Sleep: one input, the world runs on until you wake rested, healed a little.
+  ({ w, p } = fresh());
+  assert(!playerAct(w, { type: 'sleep' }), 'needs: not tired, you cannot sleep');
+  p.Needs.fatigue = N.perLevel.fatigue * 2 + 10; p.Health.hp = 3;
+  const inputs0 = w.inputs.length; t0 = w.tick;
+  let woke = null; w.events.on('woke', (d) => { woke = d.reason; });
+  assert(playerAct(w, { type: 'sleep' }) && woke === 'rested' && p.Needs.fatigue === 0 && !p.Asleep, `needs: you sleep until rested (${woke})`);
+  assert(w.tick - t0 >= N.perLevel.fatigue * 2 / N.sleepRecovery && p.Health.hp > 3 && w.inputs.length === inputs0 + 1, `needs: hours pass (${w.tick - t0} ticks), you heal, it's one input`);
+  { // a natural run: wait until tired, then sleep; it replays exactly from seed + inputs
+    const r = createWorld(9);
+    for (let i = 0; i < N.perLevel.fatigue + 5 && !r.gameOver; i++) playerAct(r, { type: 'wait' });
+    playerAct(r, { type: 'sleep' });
+    const again = replay(createWorld, 9, r.inputs);
+    assert(again.tick === r.tick && again.turn === r.turn && serialize(again) === serialize(r), 'needs: a run with sleep replays exactly');
+  }
+  // A noise wakes you; you can't sleep with something in sight.
+  ({ w, p } = fresh());
+  p.Needs.fatigue = N.perLevel.fatigue * 3; woke = null; w.events.on('woke', (d) => { woke = d.reason; });
+  w.events.on('turn_ended', () => { if (p.Asleep && w.tick === 40) makeNoise(w, p.Position.x + 2, p.Position.y, 2); });
+  playerAct(w, { type: 'sleep' });
+  assert(woke === 'noise' && w.tick < 60, `needs: a noise wakes you (${woke} at tick ${w.tick})`);
+  const zid = makeZombie(w, { x: p.Position.x + 3, y: p.Position.y }); refreshAllVision(w); updateSightings(w);
+  assert(!playerAct(w, { type: 'sleep' }), 'needs: not with a zombie in sight');
+  w.entities.delete(zid);
+  // Drinking from the beck.
+  const v = createWorld(1, { map: 'village' }); const vp = playerOf(v);
+  for (const z of query(v, 'Brain')) v.entities.delete(z.id);
+  vp.Needs.thirst = 400;
+  for (const dx of [-1, 1]) if (tileAt(v, vp.Position.x + dx * 2, vp.Position.y) === TILE.STREAM) place(v, vp, vp.Position.x + dx, vp.Position.y); // edge of the bridge
+  assert(canDrinkHere(v, vp) && playerAct(v, { type: 'drink' }) && vp.Needs.thirst === 400 - N.perLevel.thirst + 1, 'needs: you drink from the beck by the bridge');
+  place(v, vp, vp.Position.x, vp.Position.y + 8);
+  assert(!canDrinkHere(v, vp) && !playerAct(v, { type: 'drink' }), 'needs: no water, no drink');
+  // Saves keep needs.
+  const back = deserialize(serialize(v), createWorldAny);
+  assert(back.entities.get(back.playerId).Needs.thirst === vp.Needs.thirst, 'needs: saved');
+}
+console.log('needs: rise with time, food/drink, starving and parched hurt and kill, exhausted is slow, sleep (one input, wakes rested or by noise, not with zombies about), drinking from the beck, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

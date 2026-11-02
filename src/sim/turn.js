@@ -16,6 +16,10 @@ import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 import { climb, setLadder } from './systems/floors.js';
 import { tickLight, updateLight } from './systems/light.js';
+import { tickNeeds, needLevel, waterNearby, adjustNeed, wake } from './systems/needs.js';
+import { makeNoise } from './systems/noise.js';
+import { TILE } from './gen/testgrid.js';
+import { CONFIG } from '../config.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -35,6 +39,7 @@ function act(world, e) {
 function onTick(world) {
   tickBleeding(world);
   tickLight(world);
+  tickNeeds(world);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),
@@ -44,6 +49,7 @@ function onTick(world) {
 //         { type: 'throw', itemId, x, y }, { type: 'fire', x, y } (wielded gun),
 //         { type: 'door', x, y } (open/close the adjacent door at x, y),
 //         { type: 'bash', x, y } (smash/bash the adjacent window, locked door or barricade),
+//         { type: 'drink' } (from the beck/lake next to you), { type: 'sleep' } (sleep until woken),
 //         { type: 'climb' } (take the stairs/ladder you're standing on),
 //         { type: 'ladder', up } (pull up / lower the ladder you're at the top of),
 //         or { type: 'sneak', on } (toggle stance: recorded, but takes no turn).
@@ -105,6 +111,17 @@ export function playerAct(world, action) {
     if (!climb(world, player)) return false;
   } else if (action.type === 'ladder') {
     if (!setLadder(world, player, !!action.up)) return false;
+  } else if (action.type === 'drink') {
+    const water = player.Needs && player.Needs.thirst > 0 && waterNearby(world, player, isWater);
+    if (!water) { world.events.emit('use_failed', { id: player.id, reason: player.Needs && player.Needs.thirst > 0 ? 'no_water' : 'not_thirsty' }); return false; }
+    adjustNeed(world, player, 'thirst', -CONFIG.needs.perLevel.thirst);
+    world.events.emit('drank', { id: player.id, x: water.x, y: water.y });
+    makeNoise(world, water.x, water.y, CONFIG.needs.drinkNoise, player.id);
+  } else if (action.type === 'sleep') {
+    if (!canSleep(player)) { world.events.emit('use_failed', { id: player.id, reason: 'not_tired' }); return false; }
+    if (world.sightings.size) { world.events.emit('use_failed', { id: player.id, reason: 'not_safe' }); return false; } // not with something in sight
+    player.Asleep = { since: world.tick };
+    world.events.emit('fell_asleep', { id: player.id });
   } else if (action.type === 'wait') {
     world.events.emit('entity_waited', { id: player.id });
   } else {
@@ -114,15 +131,34 @@ export function playerAct(world, action) {
   const { attack: _a, ...recorded } = action;
   world.inputs.push({ turn: world.turn, action: recorded });
   const tileCost = TILE_INFO[tileAt(world, player.Position.x, player.Position.y)].moveCost;
-  spend(player, action.type === 'move' && !action.attack ? moveCost(player, tileCost) : action.type === 'climb' ? player.Actor.nextCost : undefined);
+  const base = action.type === 'move' && !action.attack ? moveCost(player, tileCost) : action.type === 'climb' ? player.Actor.nextCost : CONFIG.scheduler.actionCost;
+  endTurn(world, player, base);
+  // Asleep: the world runs on, a turn at a time, until something wakes you (one input).
+  const started = world.tick;
+  while (player.Asleep && !world.gameOver && world.entities.has(player.id)) {
+    if (world.tick - started >= CONFIG.needs.maxSleepTicks) { wake(world, player, 'rested'); break; }
+    clearNoise(world);
+    endTurn(world, player, CONFIG.scheduler.actionCost);
+  }
+  return true;
+}
+
+// Spend the player's action (exhausted: it takes longer), then run the world until the
+// player can act again.
+function endTurn(world, player, cost) {
+  spend(player, Math.round(cost * (needLevel(player, 'fatigue') >= 3 && !player.Asleep ? CONFIG.needs.exhaustedCost : 1)));
   delete player.Actor.nextCost;
   world.turn++;
   advance(world, act, onTick);
   updateLight(world); // the hour's light, torches carried about: refreshes vision if changed
   updateSightings(world);
   world.events.emit('turn_ended', { turn: world.turn });
-  return true;
 }
+
+const WATER = new Set([TILE.STREAM, TILE.LAKE, TILE.POND]);
+const isWater = (t) => WATER.has(t);
+export const canDrinkHere = (world, e) => !!(e.Needs && e.Needs.thirst > 0 && waterNearby(world, e, isWater));
+export const canSleep = (e) => !!(e.Needs && needLevel(e, 'fatigue') >= 1);
 
 // Rebuild a run exactly from its seed and recorded inputs.
 export function replay(createWorld, seed, inputs) {

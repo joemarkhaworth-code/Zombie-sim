@@ -65,9 +65,10 @@ export const CONFIG = {
     items: { beans: 3, bandage: 2, bat: 1, airRifle: 1, shotgun: 1, planks: 2, key: 1 }, // test items scattered on the map
     building: { x: 2, y: 2, w: 8, h: 6 },  // test building (walls, locked door, windows)
   },
-  // Item types. slots = how much bag space it takes. Effects are data: heal, stanch, weapon.
+  // Item types. slots = how much bag space it takes. Effects are data: food / drink (ticks of
+  // hunger / thirst taken off, step 16), heal, stanch, weapon, ranged, light, ammoFor...
   items: {
-    beans: { name: 'tin of beans', char: '%', fg: '#000000', bg: '#ff9030', slots: 1, heal: 1 }, // until hunger (step 16)
+    beans: { name: 'tin of beans', char: '%', fg: '#000000', bg: '#ff9030', slots: 1, food: 360 }, // a proper meal: a level of hunger
     bandage: { name: 'bandage', char: '+', fg: '#c00000', bg: '#f0f0f0', slots: 1, stanch: true },
     bat: { name: 'cricket bat', char: '/', fg: '#000000', bg: '#d8b878', slots: 2, weapon: { damage: 2, hitChance: 0.8, verb: 'hit' } },
     planks: { name: 'planks', char: '=', fg: '#000000', bg: '#b07840', slots: 2, barricade: true }, // use next to a door/window
@@ -84,15 +85,17 @@ export const CONFIG = {
       weapon: { damage: 1, hitChance: 0.7, verb: 'hit' },
       ranged: { range: 4, damage: 4, hitChance: 0.9, woundChance: 0.8, noise: 3 }, // very loud, strong, short range
     },
-    // Village loot (step 14d). Food heals 1 until hunger exists (step 16). Anything can be
+    // Village loot (step 14d). Food and drink feed and water you (step 16). Anything can be
     // thrown as a lure. ammoFor: USE loads that many rounds into a carried gun of that type.
     fork: { name: 'garden fork', char: '/', fg: '#000000', bg: '#a0a0a0', slots: 2, weapon: { damage: 2, hitChance: 0.75, verb: 'stab' } },
     stick: { name: 'walking stick', char: '/', fg: '#000000', bg: '#8a6a40', slots: 1, weapon: { damage: 1, hitChance: 0.9, verb: 'hit' } },
     golfClub: { name: 'golf club', char: '/', fg: '#000000', bg: '#c8c8d0', slots: 2, weapon: { damage: 2, hitChance: 0.7, verb: 'hit' } },
     knife: { name: 'kitchen knife', char: '-', fg: '#000000', bg: '#d0d0d0', slots: 1, weapon: { damage: 1, hitChance: 0.85, verb: 'stab', woundChance: 0.6 } },
-    crisps: { name: 'bag of crisps', char: '%', fg: '#000000', bg: '#f0d040', slots: 1, heal: 1 },
-    chocolate: { name: 'bar of chocolate', char: '%', fg: '#ffffff', bg: '#6a3a1a', slots: 1, heal: 1 },
-    ale: { name: 'bottle of ale', char: '!', fg: '#000000', bg: '#c08030', slots: 1, heal: 1 },
+    crisps: { name: 'bag of crisps', char: '%', fg: '#000000', bg: '#f0d040', slots: 1, food: 120 },
+    chocolate: { name: 'bar of chocolate', char: '%', fg: '#ffffff', bg: '#6a3a1a', slots: 1, food: 180 },
+    ale: { name: 'bottle of ale', char: '!', fg: '#000000', bg: '#c08030', slots: 1, drink: 180, food: 45 },
+    water: { name: 'bottle of water', char: '!', fg: '#000000', bg: '#b0e0ff', slots: 1, drink: 240 },
+    pop: { name: 'can of pop', char: '!', fg: '#ffffff', bg: '#d02020', slots: 1, drink: 180, food: 45 },
     firstAid: { name: 'first aid kit', char: '+', fg: '#ffffff', bg: '#20a040', slots: 1, stanch: true, heal: 1 },
     shells: { name: 'box of shells', char: '"', fg: '#ffffff', bg: '#803000', slots: 1, ammoFor: 'shotgun', rounds: 4 },
     // Lights (step 15): USE switches them on/off. charge = ticks of light (2 min each).
@@ -105,7 +108,7 @@ export const CONFIG = {
   // a random room (farmers keep a shotgun). Rooms not listed get nothing.
   loot: {
     rooms: {
-      kitchen: { n: [1, 2], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1 } },
+      kitchen: { n: [1, 3], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1, water: 2, pop: 1 } },
       scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1, torch: 2, candle: 1 } },
       'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1 } },
       'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1 } },
@@ -115,10 +118,10 @@ export const CONFIG = {
       bedroom: { n: [0, 1], items: { bandage: 1, chocolate: 1, candle: 1 } },
       bathroom: { n: [0, 1], items: { bandage: 2, firstAid: 1 } },
       flat: { n: [0, 1], items: { beans: 1, crisps: 1 } },
-      shop: { n: [2, 4], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1 } },
-      'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2, torch: 1, candle: 1 } },
+      shop: { n: [2, 5], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1, water: 3, pop: 3 } },
+      'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2, torch: 1, candle: 1, water: 3, pop: 2 } },
       'stock cellar': { n: [1, 3], items: { beans: 3, crisps: 1, planks: 1 } },
-      bar: { n: [1, 3], items: { ale: 4, crisps: 3 } },
+      bar: { n: [1, 3], items: { ale: 4, crisps: 3, pop: 2 } },
       store: { n: [1, 2], items: { ale: 2, crisps: 2, planks: 1 } },
       'beer cellar': { n: [1, 3], items: { ale: 4, planks: 1 } },
       vestry: { n: [1, 2], items: { firstAid: 2, chocolate: 1, candle: 4 } },
@@ -276,6 +279,19 @@ export const CONFIG = {
     footsteps: 1,                    // noise level when walking
     sneakFootsteps: 0,               // noise level when sneaking (silent)
   },
+  // Needs (step 16, systems/needs.js): hunger, thirst and fatigue, counted in ticks (2 min)
+  // and shown as levels 0-3 (one level every perLevel ticks).
+  needs: {
+    perLevel: { hunger: 360, thirst: 240, fatigue: 180 }, // 12 h, 8 h, 6 h awake per level
+    starveEvery: 360,                // starving (hunger 3, after 36 h): lose 1 health every 12 hours
+    parchedEvery: 180,               // parched (thirst 3, after 24 h): lose 1 health every 6 hours
+    exhaustedCost: 1.5,              // exhausted (fatigue 3): every action takes 1.5x as long
+    sleepRecovery: 3,                // asleep, fatigue drops 3 ticks per tick (6 h sleep clears 3 levels)
+    sleepHealEvery: 60,              // asleep and not starving/parched: +1 health every 2 hours
+    restHealEvery: 240,              // awake, fed, watered and rested (all <= 1), not bleeding: +1 health every 8 hours
+    maxSleepTicks: 360,              // nobody sleeps more than 12 hours
+    drinkNoise: 1,                   // scooping water from the beck splashes
+  },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
     health: 4,
@@ -298,7 +314,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 7, key: 'zombie-sim-save' },
+  save: { version: 8, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -392,6 +408,7 @@ export const CONFIG = {
     memoryBlood: '#4a2a2a',
     healthFull: '#ff2020',
     healthEmpty: '#400000',
+    needLevel: ['#000000', '#f0e040', '#ff9020', '#ff3030'], // H/T/Z marks in the top bar by level (0 not shown)
     inspect: '#ffffff',              // outline on the long-pressed tile
     debugNoise: '255,96,0',          // heatmap overlay colour (r,g,b)
     player: '#ffff00',

@@ -3,7 +3,8 @@
 //    has a Position; carried, it has none and its id is in the carrier's Inventory.
 //  - Inventory { items: [ids], capacity } - capacity is in slots (each item uses Item.slots).
 //  - What using an item does comes from its type in CONFIG.items (data, not special cases):
-//      heal: n     - eat/drink it: restore n health, used up
+//      food / drink: n - eat/drink it: n ticks off hunger/thirst (needs.js), used up
+//      heal: n     - restore n health (first aid), used up
 //      stanch: true - bandage: stops bleeding, used up
 //      barricade: true - planks: nail over an adjacent door/window (used up)
 //      key: true   - goes on the Keyring { keys: [ids] } instead of the bag (no slot);
@@ -16,6 +17,7 @@ import { CONFIG } from '../../config.js';
 import { addEntity, isPassable, query } from '../world.js';
 import { adjacentStructures, addBarricade } from './structures.js';
 import { toggleLight } from './light.js';
+import { consumeFood } from './needs.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 
 // extra: { lockId, name } override the type's (a key to a particular building).
@@ -100,6 +102,14 @@ export function useItem(world, carrier, itemId) {
     world.events.emit('gun_loaded', { id: carrier.id, gunId: gun.id, rounds: def.rounds, ammo: gun.Item.ammo });
     inv.items.splice(inv.items.indexOf(itemId), 1);
     world.entities.delete(itemId);
+    return true;
+  }
+  if (def.food || def.drink) { // step 16: feeds / waters you; refused if you don't need it
+    if (!consumeFood(world, carrier, def)) {
+      world.events.emit('use_failed', { id: carrier.id, itemId, reason: def.food ? 'not_hungry' : 'not_thirsty' });
+      return false;
+    }
+    consume(world, carrier, item, def.drink && !def.food ? 'drunk' : 'eaten');
     return true;
   }
   if (def.stanch && def.heal) { // first aid kit: stops bleeding and heals; only if it does something
