@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (3 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (4 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -279,11 +279,51 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - Dry-stone walls: stone courses. The bridge is plain pale road surface with dark parapet strips only on its sides facing water, so it never looks like a wall.
   - Also leaf dots for hedges, a dark round crown for trees, ripples for water, fronds for bracken, a peak for rock, pebbles for scree.
   - Remembered tiles use a dark grey of each tile's own colour, so they keep their shapes.
-- Save version 3: the village is now true scale, so older saves start a new game. Saves stay small on the big map: tile arrays are run-length encoded and map memory saves only the remembered tiles (~65 KB, ~2.5 ms per autosave).
+- Save version 4 (14b): the village now has buildings, so older saves start a new game. Saves stay small on the big map: tile arrays are run-length encoded and map memory saves only the remembered tiles (~65 KB, ~2.5 ms per autosave).
 - Until 14d places village loot and zombies, the single test zombie spawns 8-20 tiles from the start (zombie.spawnMaxDistance) and the test items are scattered within 20 tiles of it (testGrid.itemRadius), off slow ground; on the big map they'd otherwise never be found.
+
+## Decisions for step 14b (buildings) - built
+- 14a decides where every building goes: each plot has a size from CONFIG.scale, a facing and a front tile. 14b (src/sim/gen/buildings.js, buildVillage, called by createWorld after the land) builds every plot with one generic builder. Nothing is special-cased per map position.
+- Outbuildings are plots too, reserved in 14a:
+  - a shed (3x3) in some terraced/shop back yards (CONFIG.village.yardShed), in the far corner, using the yard's walls as its own (the yard gate moves to the other side);
+  - a greenhouse (3x4, turned) in every detached cottage's back garden, sometimes a shed in the other corner (gardenShed);
+  - a shed in each farmyard corner by the gate wall.
+  All face their house/yard.
+- Terraced cottages (and the pub/shop at a terrace's end) share party walls: each plot starts on the last row of the one before, so a row of n cottages is 4n+1 long and there are no double walls. Their yard walls are shared the same way.
+- Frame: each building is laid out in its own frame from its facing: u along the front (0..W-1), v back from it (0..L-1). So a turned building (the church along the street, the greenhouse) or one facing a farmyard uses the same layouts. The front door goes where the plot's front tile is (the middle of the front).
+- What a building is: walls round the edge as wall tiles of its material (TILE.WALL_STONE / _BRICK / _WOOD / _METAL / _GLASS: they block, and block sight unless the material is seeThrough, so greenhouses are see-through). A floor inside (FLOOR_WOOD floorboards, _FLAGS flagstones, _CONCRETE, _EARTH). Partition walls between rooms (same material), each with an inside door (wood, starts open 70%: innerDoorOpen). Outside doors and windows are the existing structure entities (Door, Window) standing on floor tiles in gaps in the wall, so everything from step 11 works: bash, lock, smash glass, board up, zombies bashing in, noise muffled by walls. Wall health comes from the wall tile's material (initTileHp reads TILE_INFO material).
+- CONFIG.buildingTypes per type: walls and roof (weighted material choices; roof 'walls' = same as walls), floor, outside door material ('walls' = same: glass greenhouse doors, metal shed doors), lockFront / lockBack chances. Current picks:
+  - terraced/detached cottages: stone or brick, slate or thatch roof, floorboards;
+  - shop: stone or brick, floorboards;
+  - pub: stone or brick, flagstones;
+  - church: stone, flagstones;
+  - farmhouse: stone, flagstones;
+  - barn: stone or corrugated metal, concrete;
+  - shed: wood or corrugated metal, concrete;
+  - greenhouse: glass, earth.
+  Roofs aren't drawn (top-down, you see inside); they're recorded for fire (step 19).
+- Locks: one lockId per building ('building-N'), shared by its front and back doors. Most front doors are locked (cottages 60%, shop 90%, pub 80%, church 30%, barn 10%). Keys are placed with loot in 14d; until then get in by bashing a door or smashing a window, which is noisy.
+- Room layouts (LAYOUTS in buildings.js, in the building's frame):
+  - terraced cottage 5x7: front room and kitchen, an inside door to one side; front door and windows on the street, back door and window onto the yard.
+  - detached cottage / farmhouse 7x9: living room across the front; kitchen and scullery behind; side windows. The back door is into the kitchen.
+  - corner shop 6x8: a shop floor with a wide shop window; stock room behind.
+  - pub 10x12: the bar across the front; kitchen and store behind; back door to the yard.
+  - church 18x9 (lying along the street): nave and vestry; windows every 3 tiles front and back. The front door is at the end of the lychgate path.
+  - barn 8x12: one space, double doors onto the yard, slit windows if stone.
+  - shed, greenhouse: one tiny room and a door.
+- Safety rules in the builder: no back door unless the tile behind is walkable (farm buildings back onto the yard wall: none). No window onto a wall (shared party walls get none). The land's reachability pass (14a) never routes through a building plot, so walls never cut anything off.
+- world.buildings = [{ kind, building, x, y, w, h, facing, walls, roof, floor, lockId, rooms: [{ name, x, y, w, h }] }], in the same order as world.plots. 14c hangs stairs and ladders on rooms; 14d puts loot, keys and zombies in them. Rebuilt from the seed on load; door and window state is saved with the entities.
+- Greybox look:
+  - stone building walls: neat courses (rougher than dry-stone field walls);
+  - brick: red with offset bricks;
+  - wood: brown vertical boards;
+  - corrugated metal: grey ridges;
+  - glass: pale blue with a glazing bar;
+  - floors: floorboards (brown planks), flagstones (grey slabs), concrete (plain grey), earth (dark with specks).
+- Tests: one building per plot; every type appears; materials come from the type's table; the front door sits by the plot's front tile; every room is reachable from the front door; doors and windows on the outer wall open onto walkable ground; some front doors locked; glass walls see-through; wall health from material. Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Buildings can have an upstairs and/or a cellar. Each extra floor is a small separate map, reached by stairs or a ladder from a tile in the ground floor (and back). Creatures, items, noise and sight work per map; travelling between maps takes a turn on the stairs/ladder tile.
 - Ladders can be pulled up from the top: a pulled-up ladder can't be climbed from below, so zombies can't follow you up (you can lower it again). Stairs can't be pulled up (barricade them instead).
-- Building types are generated at step 14, each with its own rooms: cottage, pub, shop, church, shed, greenhouse. Room layouts and contents (and which have upstairs/cellars) are decided then.
-- Building materials are chosen at generation from the materials table: e.g. sheds are either wood or corrugated metal (picked per shed, seeded), greenhouses are mostly glass, cottages stone or brick with slate or thatch roofs. CONFIG.build becomes per-building choices instead of one global default.
+- Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.
+- Building materials are chosen per building from the materials table (built in 14b); CONFIG.build is now only the test grid's defaults.

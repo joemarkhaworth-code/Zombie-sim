@@ -3,7 +3,7 @@
 import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable } from '../src/sim/world.js';
 // Most tests below were written for the phase-1 test grid; default to it. Village tests pass { map: 'village' }.
 const createWorld = (seed, opts = {}) => createWorldAny(seed, { map: 'testgrid', ...opts });
-import { TILE_INFO, TILE } from '../src/sim/gen/testgrid.js';
+import { TILE_INFO, TILE, WALL_OF, FLOOR_OF } from '../src/sim/gen/testgrid.js';
 import { refreshAllVision, canSee, lineClear, visibilityAt, sightRadius } from '../src/sim/systems/vision.js';
 import { rememberedAt } from '../src/sim/systems/memory.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
@@ -1209,7 +1209,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const T = (x, y) => (inBounds(w, x, y) ? tileAt(w, x, y) : -1);
   const n4 = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => T(x + dx, y + dy));
   const each = (t, fn) => { for (let i = 0; i < w.tiles.length; i++) if (w.tiles[i] === t) fn(i % w.width, Math.floor(i / w.width)); };
-  for (const [name, t] of Object.entries({ road: TILE.ROAD, pavement: TILE.PAVEMENT, lane: TILE.LANE, ginnel: TILE.GINNEL, yard: TILE.YARD, gate: TILE.GATE, footpath: TILE.PATH, plot: TILE.PLOT, gravestone: TILE.GRAVE, beck: TILE.STREAM, bridge: TILE.BRIDGE, wall: TILE.DRYSTONE, tree: TILE.TREE, fell: TILE.FELL, bracken: TILE.BRACKEN, lake: TILE.LAKE })) {
+  for (const [name, t] of Object.entries({ road: TILE.ROAD, pavement: TILE.PAVEMENT, lane: TILE.LANE, ginnel: TILE.GINNEL, yard: TILE.YARD, gate: TILE.GATE, footpath: TILE.PATH, floorboards: TILE.FLOOR_WOOD, flagstones: TILE.FLOOR_FLAGS, 'glass wall': TILE.WALL_GLASS, gravestone: TILE.GRAVE, beck: TILE.STREAM, bridge: TILE.BRIDGE, wall: TILE.DRYSTONE, tree: TILE.TREE, fell: TILE.FELL, bracken: TILE.BRACKEN, lake: TILE.LAKE })) {
     assert(count(t) > 0, `village ${seed}: has ${name}`);
   }
   assert(count(TILE.TREE) >= 20, `village ${seed}: trees along the beck and a wood`);
@@ -1247,7 +1247,8 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   for (const k of ['cottage', 'detached', 'pub', 'shop', 'church', 'farmhouse', 'barn']) assert(kinds[k] >= 1, `village ${seed}: has a ${k} plot`);
   assert(kinds.cottage >= 6, `village ${seed}: ${kinds.cottage} cottages`);
   for (const pl of w.plots) {
-    for (let y = pl.y; y < pl.y + pl.h; y++) for (let x = pl.x; x < pl.x + pl.w; x++) assert(T(x, y) === TILE.PLOT, `village ${seed}: ${pl.kind} plot not clear at ${x},${y}`);
+    const built = new Set([...Object.values(WALL_OF), ...Object.values(FLOOR_OF)]);
+    for (let y = pl.y; y < pl.y + pl.h; y++) for (let x = pl.x; x < pl.x + pl.w; x++) assert(built.has(T(x, y)), `village ${seed}: ${pl.kind} plot not built at ${x},${y}`);
     assert(!TILE_INFO[T(pl.front.x, pl.front.y)].blocks, `village ${seed}: ${pl.kind} front blocked`);
     if (['cottage', 'pub', 'shop'].includes(pl.kind)) {
       assert(T(pl.front.x, pl.front.y) === TILE.PAVEMENT, `village ${seed}: ${pl.kind} doesn't front the pavement`);
@@ -1256,7 +1257,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   }
   // Terraces are continuous: neighbouring street plots share an edge.
   const street = w.plots.filter((p) => ['cottage', 'pub', 'shop'].includes(p.kind));
-  assert(street.some((a) => street.some((b) => a !== b && a.x === b.x && a.y + a.h === b.y)), `village ${seed}: no terraced rows`);
+  assert(street.some((a) => street.some((b) => a !== b && a.x === b.x && a.y + a.h - 1 === b.y)), `village ${seed}: no terraced rows sharing a party wall`);
   const pub = w.plots.find((p) => p.kind === 'pub');
   assert(Math.abs(pub.y + pub.h / 2 - w.bridgeRow) <= 12, `village ${seed}: the pub is by the bridge`);
   // 4. Ginnels run from the pavement through to a back lane.
@@ -1289,6 +1290,55 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   for (let i = 0; i < w.tiles.length; i++) if (!TILE_INFO[w.tiles[i]].blocks) assert(seen[i], `village ${seed}: unreachable tile ${i % w.width},${Math.floor(i / w.width)}`);
 }
 console.log('village: layers - valley, road + bridge, high street + pavements, terraces, ginnels + yards, green + church, farms, fields, footpaths; all reachable OK');
+
+// 17. Buildings (step 14b): every plot built, true size, doors, windows, rooms all reachable.
+for (const seed of [1, 5, 11, 42, 2024]) {
+  const w = createWorld(seed, { map: 'village' });
+  assert(w.buildings.length === w.plots.length, `buildings ${seed}: one building per plot`);
+  const kinds = new Set(w.buildings.map((b) => b.building));
+  for (const k of ['terracedCottage', 'detachedCottage', 'farmhouse', 'cornerShop', 'pub', 'church', 'barn', 'shed', 'greenhouse']) assert(kinds.has(k), `buildings ${seed}: has a ${k}`);
+  const doorAt = (x, y) => { const e = structureAt(w, x, y); return e && e.Door ? e : null; };
+  let locked = 0;
+  w.buildings.forEach((b, i) => {
+    const p = w.plots[i], type = CONFIG.buildingTypes[b.building];
+    // Materials come from the type's table; the walls are tiles of that material.
+    assert(b.walls in type.walls && (type.roof === 'walls' ? b.roof === b.walls : b.roof in type.roof), `buildings ${seed}: ${b.building} made of ${b.walls}/${b.roof}`);
+    assert(w.tiles[p.y * w.width + p.x] === WALL_OF[b.walls] || b.building === 'terracedCottage' || b.building === 'pub' || b.building === 'cornerShop', `buildings ${seed}: ${b.building} corner isn't ${b.walls}`);
+    // A front door just inside the plot's front tile; the front tile is walkable.
+    const f = p.front, inside = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [f.x + dx, f.y + dy]).filter(([x, y]) => x >= p.x && y >= p.y && x < p.x + p.w && y < p.y + p.h);
+    assert(inside.length === 1 && doorAt(...inside[0]), `buildings ${seed}: ${b.building} has no front door by its front tile`);
+    assert(!TILE_INFO[tileAt(w, f.x, f.y)].blocks, `buildings ${seed}: ${b.building} front blocked`);
+    if (doorAt(...inside[0]).Door.locked) locked++;
+    // Every room is reachable from the front door, through inside doors.
+    const seen = new Set([inside[0].join()]), q = [inside[0]];
+    while (q.length) {
+      const [x, y] = q.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < p.x || ny < p.y || nx >= p.x + p.w || ny >= p.y + p.h || seen.has(`${nx},${ny}`)) continue;
+        if (TILE_INFO[tileAt(w, nx, ny)].blocks) continue;
+        seen.add(`${nx},${ny}`); q.push([nx, ny]);
+      }
+    }
+    for (const r of b.rooms) {
+      assert(r.x > p.x && r.y > p.y && r.x + r.w < p.x + p.w && r.y + r.h < p.y + p.h, `buildings ${seed}: ${b.building} ${r.name} outside its walls`);
+      assert(seen.has(`${r.x},${r.y}`), `buildings ${seed}: ${b.building} ${r.name} can't be reached`);
+    }
+    // Windows and doors on the outer wall open onto something walkable.
+    for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) {
+      const e = structureAt(w, x, y);
+      if (!e || (x > p.x && y > p.y && x < p.x + p.w - 1 && y < p.y + p.h - 1)) continue;
+      const out = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [x + dx, y + dy]).filter(([ox, oy]) => ox < p.x || oy < p.y || ox >= p.x + p.w || oy >= p.y + p.h);
+      assert(out.length && out.every(([ox, oy]) => !TILE_INFO[tileAt(w, ox, oy)].blocks), `buildings ${seed}: ${b.building} ${e.Door ? 'door' : 'window'} at ${x},${y} opens onto a wall`);
+    }
+  });
+  assert(locked > 0 && locked < w.buildings.length, `buildings ${seed}: some front doors locked (${locked}/${w.buildings.length})`);
+  // Walls block; glass walls let you see through; wall health comes from the material.
+  const glass = w.tiles.indexOf(TILE.WALL_GLASS), stone = w.tiles.indexOf(TILE.WALL_STONE);
+  assert(TILE_INFO[TILE.WALL_GLASS].blocks && !TILE_INFO[TILE.WALL_GLASS].opaque && TILE_INFO[TILE.WALL_STONE].opaque, 'buildings: glass walls see-through, stone not');
+  assert(w.tileHp[glass] === CONFIG.materials.glass.hp && w.tileHp[stone] === CONFIG.materials.stone.hp, `buildings ${seed}: wall health from material`);
+}
+console.log('buildings: every plot built at true size from its materials; front doors, windows onto open ground, every room reachable; some locked OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

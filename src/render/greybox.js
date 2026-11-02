@@ -20,6 +20,9 @@ const TILE_COLOUR = {
   [TILE.LAKE]: C.lake, [TILE.SHORE]: C.shore,
   [TILE.ROAD]: C.road, [TILE.PAVEMENT]: C.pavement, [TILE.GINNEL]: C.ginnel, [TILE.YARD]: C.yard,
   [TILE.GATE]: C.gate, [TILE.PATH]: C.path, [TILE.PLOT]: C.plot, [TILE.GRAVE]: C.grass,
+  [TILE.WALL_STONE]: C.wallStone, [TILE.WALL_BRICK]: C.wallBrick, [TILE.WALL_WOOD]: C.wallWood,
+  [TILE.WALL_METAL]: C.wallMetal, [TILE.WALL_GLASS]: C.wallGlass,
+  [TILE.FLOOR_WOOD]: C.floorWood, [TILE.FLOOR_FLAGS]: C.floorFlags, [TILE.FLOOR_CONCRETE]: C.floorConcrete, [TILE.FLOOR_EARTH]: C.floorEarth,
 };
 // Remembered tiles: a dark grey version of each tile's colour (keeps brightness differences).
 const greyOf = (hex) => {
@@ -64,6 +67,23 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   if (t === TILE.SCREE) { ctx.fillStyle = dim(C.screeMark); for (const [fx, fy] of [[0.15, 0.2], [0.5, 0.15], [0.8, 0.3], [0.3, 0.5], [0.65, 0.6], [0.2, 0.8], [0.55, 0.85]]) ctx.fillRect(px + fx * s, py + fy * s, s / 9, s / 11); return; }
   if (t === TILE.LAKE) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.2, py + s * 0.4, s * 0.25, s / 14); ctx.fillRect(px + s * 0.6, py + s * 0.7, s * 0.25, s / 14); return; }
   if (t === TILE.STREAM) { ctx.fillStyle = dim(C.streamMark); ctx.fillRect(px + s * 0.15, py + s * 0.35, s * 0.3, s / 12); ctx.fillRect(px + s * 0.55, py + s * 0.65, s * 0.3, s / 12); return; }
+  // Building walls: neat courses (stone), offset bricks, vertical boards, ridges, a glazing bar.
+  if (t === TILE.WALL_STONE || t === TILE.WALL_BRICK) {
+    ctx.fillStyle = dim(t === TILE.WALL_STONE ? C.wallStoneMark : C.wallBrickMark); const h = Math.max(1, Math.floor(s / 16));
+    const rows = t === TILE.WALL_STONE ? 2 : 4;
+    for (let r = 1; r < rows; r++) ctx.fillRect(px, py + (s * r) / rows, s - 1, h);
+    for (let r = 0; r < rows; r++) ctx.fillRect(px + (r % 2 ? s * 0.25 : s * 0.75), py + (s * r) / rows, h, s / rows);
+    return;
+  }
+  if (t === TILE.WALL_WOOD || t === TILE.WALL_METAL) {
+    ctx.fillStyle = dim(t === TILE.WALL_WOOD ? C.wallWoodMark : C.wallMetalMark); const h = Math.max(1, Math.floor(s / 14));
+    for (const f of t === TILE.WALL_WOOD ? [0.33, 0.66] : [0.2, 0.4, 0.6, 0.8]) ctx.fillRect(px + f * s, py, h, s - 1);
+    return;
+  }
+  if (t === TILE.WALL_GLASS) { ctx.fillStyle = dim(C.wallGlassMark); const h = Math.max(2, Math.floor(s / 10)); ctx.fillRect(px + s / 2 - h / 2, py, h, s - 1); ctx.fillRect(px, py + s / 2 - h / 2, s - 1, h); return; }
+  if (t === TILE.FLOOR_WOOD) { ctx.fillStyle = dim(C.floorWoodMark); const h = Math.max(1, Math.floor(s / 16)); for (const f of [0.33, 0.66]) ctx.fillRect(px, py + f * s, s - 1, h); return; }
+  if (t === TILE.FLOOR_FLAGS) { ctx.fillStyle = dim(C.floorFlagsMark); const h = Math.max(1, Math.floor(s / 16)); ctx.fillRect(px, py + s / 2, s - 1, h); ctx.fillRect(px + s / 2, py, h, s - 1); return; }
+  if (t === TILE.FLOOR_EARTH) { ctx.fillStyle = dim(C.floorEarthMark); const d = Math.max(2, Math.floor(s / 12)); for (const [fx, fy] of [[0.25, 0.3], [0.65, 0.6], [0.4, 0.8]]) ctx.fillRect(px + fx * s, py + fy * s, d, d); return; }
   if (t === TILE.ROAD) { // faded centre line between the two lanes of tarmac
     if (water && water.line) { ctx.fillStyle = dim(C.roadMark); ctx.fillRect(water.line === 1 ? px + s - 2 : px + s / 2 - 1, py + s * 0.2, 2, s * 0.4); }
     return;

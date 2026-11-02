@@ -7,7 +7,13 @@ export const TILE = {
   GRASS: 3, LANE: 4, STREAM: 5, BRIDGE: 6, DRYSTONE: 7, HEDGE: 8, TREE: 9, POND: 10,
   FELL: 11, BRACKEN: 12, ROCK: 13, SCREE: 14, LAKE: 15, SHORE: 16,
   ROAD: 17, PAVEMENT: 18, GINNEL: 19, YARD: 20, GATE: 21, PATH: 22, PLOT: 23, GRAVE: 24,
+  // Buildings (step 14b): a wall tile per material, a floor tile per floor kind.
+  WALL_STONE: 25, WALL_BRICK: 26, WALL_WOOD: 27, WALL_METAL: 28, WALL_GLASS: 29,
+  FLOOR_WOOD: 30, FLOOR_FLAGS: 31, FLOOR_CONCRETE: 32, FLOOR_EARTH: 33,
 };
+// Building walls by material, and floors by kind (see CONFIG.buildingTypes).
+export const WALL_OF = { stone: TILE.WALL_STONE, brick: TILE.WALL_BRICK, wood: TILE.WALL_WOOD, corrugatedMetal: TILE.WALL_METAL, glass: TILE.WALL_GLASS };
+export const FLOOR_OF = { wood: TILE.FLOOR_WOOD, flags: TILE.FLOOR_FLAGS, concrete: TILE.FLOOR_CONCRETE, earth: TILE.FLOOR_EARTH };
 // blocks: stops movement. opaque: stops sight (and muffles noise).
 // cover: anything standing here can only be noticed from an adjacent tile.
 // moveCost: a step onto it costs this many times the normal time (hedge 3, stream 2).
@@ -40,6 +46,13 @@ export const TILE_INFO = {
   [TILE.PATH]: T('footpath'),                                           // worn path: easy going, even on the fell
   [TILE.PLOT]: T('building plot'),                                      // empty until buildings (step 14b)
   [TILE.GRAVE]: T('gravestone', { blocks: true, material: 'stone' }),   // see over it, can't walk through
+  // A wall blocks sight unless its material is see-through (a greenhouse).
+  ...Object.fromEntries(Object.entries({ stone: 'stone wall', brick: 'brick wall', wood: 'wooden wall', corrugatedMetal: 'metal wall', glass: 'glass wall' })
+    .map(([m, name]) => [WALL_OF[m], T(name, { blocks: true, opaque: !CONFIG.materials[m].seeThrough, material: m })])),
+  [TILE.FLOOR_WOOD]: T('floorboards'),
+  [TILE.FLOOR_FLAGS]: T('flagstone floor'),
+  [TILE.FLOOR_CONCRETE]: T('concrete floor'),
+  [TILE.FLOOR_EARTH]: T('earth floor'),
 };
 // Short description for long-press inspect (render side picks the wording).
 export const TILE_DESC = {
@@ -68,6 +81,15 @@ export const TILE_DESC = {
   [TILE.PATH]: 'A footpath.',
   [TILE.PLOT]: 'An empty building plot.',
   [TILE.GRAVE]: 'A gravestone.',
+  [TILE.WALL_STONE]: 'A stone wall.',
+  [TILE.WALL_BRICK]: 'A brick wall.',
+  [TILE.WALL_WOOD]: 'A wooden wall.',
+  [TILE.WALL_METAL]: 'A corrugated metal wall.',
+  [TILE.WALL_GLASS]: 'A glass wall.',
+  [TILE.FLOOR_WOOD]: 'Floorboards.',
+  [TILE.FLOOR_FLAGS]: 'A flagstone floor.',
+  [TILE.FLOOR_CONCRETE]: 'A concrete floor.',
+  [TILE.FLOOR_EARTH]: 'Bare earth.',
 };
 
 export function generateTestGrid(rng, width, height) {

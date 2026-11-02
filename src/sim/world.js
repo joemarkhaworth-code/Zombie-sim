@@ -13,6 +13,7 @@ import { installBleeding } from './systems/bleeding.js';
 import { scatterTestItems } from './systems/items.js';
 import { installStructures, initTileHp } from './systems/structures.js';
 import { buildTestBuilding } from './gen/building.js';
+import { buildVillage } from './gen/buildings.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -43,7 +44,8 @@ export function createWorld(seed, opts = {}) {
   installBleeding(world); // world.blood
   installStructures(world); // world.structures, world.glass, world.tileHp
   if (map === 'testgrid') buildTestBuilding(world);
-  initTileHp(world, (t) => !!TILE_INFO[t].material && TILE_INFO[t].blocks);
+  else buildVillage(world, plots); // step 14b: a building on every plot
+  initTileHp(world, (t) => (TILE_INFO[t].blocks && TILE_INFO[t].material) || null);
 
   // Player starts in the middle of the map: on the lane in the village, else the nearest open tile.
   // Village: on the road at the bridge (the village centre).

@@ -211,17 +211,27 @@ export function generateVillage(rng, width, height) {
     }
     // A street plot (terraced cottage, pub, shop) fronting the pavement, with a walled yard
     // behind it and a gate onto the back lane. lastInRow: the yard also needs its far wall.
-    const streetPlot = (a, building, kind, lastInRow) => {
+    // A street plot (terraced cottage, pub, shop) fronting the pavement, with a walled yard
+    // behind it and a gate onto the back lane. Neighbours in a terrace share a party wall,
+    // so each plot starts on the last row of the one before (yard walls are shared too).
+    // Some yards get a shed in the far corner (its walls are the yard's); the gate moves over.
+    const outbuilding = (t0, t1, k0, k1, building, turned) => {
+      fill(t0, t1, k0, k1, TILE.PLOT);
+      plots.push({ ...rect(t0, t1, k0, k1), kind: building, building, facing: facing(s), turned: !!turned, front: at2(t0 + Math.floor((t1 - t0) / 2), k0 - 1) });
+    };
+    const streetPlot = (a, building, kind) => {
       const [f, d] = BLD[building];
+      const notPlot = (tt, k0, k1, tile) => { for (let k = k0; k <= k1; k++) { const { x, y } = at2(tt, k); if (at(x, y) !== TILE.PLOT) lay(x, y, tile); } };
       fill(a, a + f - 1, 2, 1 + d, TILE.PLOT);
-      fill(a, a + f - 1, 2 + d, B, TILE.YARD);
-      fill(a, a, 2 + d, B, TILE.DRYSTONE); // party wall between yards
-      if (lastInRow) fill(a + f - 1, a + f - 1, 2 + d, B, TILE.DRYSTONE);
+      for (let tt = a; tt < a + f; tt++) notPlot(tt, 2 + d, B, tt === a || tt === a + f - 1 ? TILE.DRYSTONE : TILE.YARD);
       fill(a, a + f - 1, 1 + B, 1 + B, TILE.DRYSTONE); // back wall
       const m = a + Math.floor(f / 2);
-      put(m, 1 + B, TILE.GATE);
-      plots.push({ ...rect(a, a + f - 1, 2, 1 + d), kind, building, facing: facing(s), front: at2(m, 1), back: at2(m, 2 + d) });
-      return f;
+      const [sw, sl] = BLD.shed;
+      const shed = B - (1 + d) >= sl + 2 && f >= sw + 2 && rng.chance(V.yardShed);
+      put(shed ? a + f - 2 : m, 1 + B, TILE.GATE);
+      plots.push({ ...rect(a, a + f - 1, 2, 1 + d), kind, building, facing: facing(s), front: at2(m, 1), back: at2(m, 2 + d), yard: rect(a + 1, a + f - 2, 2 + d, B) });
+      if (shed) outbuilding(a, a + sw - 1, 2 + B - sl, 1 + B, 'shed');
+      return f - 1; // the next plot shares this one's end wall
     };
     // A detached cottage in its own walled garden: front gate and path from the pavement.
     const [dw, dd] = BLD.detachedCottage, gsd = V.detachedGarden;
@@ -232,8 +242,13 @@ export function generateVillage(rng, width, height) {
       fill(a + 1, a1 - 1, 3, B, TILE.GRASS);
       fill(a + 1 + gsd, a + gsd + dw, 4, 3 + dd, TILE.PLOT);
       put(m, 2, TILE.GATE); put(m, 3, TILE.PATH);
-      put(a + 2, 1 + B, TILE.GATE);
-      plots.push({ ...rect(a + 1 + gsd, a + gsd + dw, 4, 3 + dd), kind: 'detached', building: 'detachedCottage', facing: facing(s), front: at2(m, 3), back: at2(m, 4 + dd) });
+      put(m, 1 + B, TILE.GATE);
+      plots.push({ ...rect(a + 1 + gsd, a + gsd + dw, 4, 3 + dd), kind: 'detached', building: 'detachedCottage', facing: facing(s), front: at2(m, 3), back: at2(m, 4 + dd), garden: rect(a + 1, a1 - 1, 3, B) });
+      // In the back garden (its walls shared with the garden's): a greenhouse in one corner,
+      // sometimes a shed in the other. Both face the house.
+      const [gw, gl] = BLD.greenhouse, [sw, sl] = BLD.shed;
+      if (B - (3 + dd) >= gw) outbuilding(a1 - gl + 1, a1, 2 + B - gw, 1 + B, 'greenhouse', true);
+      if (B - (3 + dd) >= sl && rng.chance(V.gardenShed)) outbuilding(a, a + sw - 1, 2 + B - sl, 1 + B, 'shed');
     };
     let special = pName === gp && s === -gs ? 'pub' : pName !== gp && s === shopSide ? 'shop' : null;
     const cottageW = BLD.terracedCottage[0];
@@ -245,14 +260,11 @@ export function generateVillage(rng, width, height) {
       if (room >= specialW + 2 * cottageW) {
         // A terrace row: [pub or shop first, by the bridge or the corner] + 3-5 cottages.
         const units = special ? [special] : [];
-        let sum = specialW;
+        let sum = specialW; // rows used (neighbours share a wall row)
         const n = pick(rng, V.terraceUnits);
-        for (let i = 0; i < n && sum + cottageW <= room; i++) { units.push('cottage'); sum += cottageW; }
+        for (let i = 0; i < n && sum + cottageW - (sum ? 1 : 0) <= room; i++) { units.push('cottage'); sum += cottageW - (sum ? 1 : 0); }
         let a = t;
-        units.forEach((u, i) => {
-          const building = u === 'pub' ? 'pub' : u === 'shop' ? 'cornerShop' : 'terracedCottage';
-          a += streetPlot(a, building, u, i === units.length - 1);
-        });
+        for (const u of units) a += streetPlot(a, u === 'pub' ? 'pub' : u === 'shop' ? 'cornerShop' : 'terracedCottage', u);
         special = null;
         t += sum;
         if (t < P.len) ginnel(t++);
@@ -315,6 +327,10 @@ export function generateVillage(rng, width, height) {
       };
       building('farmhouse', 'farmhouse', fhW, fhL, y0 + 2);
       building('barn', 'barn', bnW, bnL, y0 + 2 + fhW + 1);
+      // A shed in the yard corner by the gate wall (sharing the yard's walls), facing into the yard.
+      const [sw, sl] = BLD.shed, sy = dy < 0 ? y0 : y0 + Hc - sl, sxa = Xf(kF), sxb = Xf(kF + sw - 1);
+      for (let y = sy; y < sy + sl; y++) for (let x = Math.min(sxa, sxb); x <= Math.max(sxa, sxb); x++) lay(x, y, TILE.PLOT);
+      plots.push({ x: Math.min(sxa, sxb), y: sy, w: sw, h: sl, kind: 'shed', building: 'shed', facing: dy < 0 ? 'S' : 'N', front: { x: Xf(kF + 1), y: dy < 0 ? sy + sl : sy - 1 } });
       // The side lane (walled both sides) and the gate into the yard.
       for (let yy = yL; yy < yL + lw; yy++) for (const x of span(yy, 1)) lay(x, yy, TILE.LANE);
       for (const yy of [yL - 1, yL + lw]) for (const x of span(yy, 2)) lay(x, yy, TILE.DRYSTONE);
@@ -449,7 +465,8 @@ function valueNoise(rng, width, height, cell) {
   };
 }
 
-const passable = (t) => !TILE_INFO[t].blocks;
+// Building plots don't count: they become walled buildings (14b), so no way may run through one.
+const passable = (t) => !TILE_INFO[t].blocks && t !== TILE.PLOT;
 // What a blocker becomes when a way has to be knocked through it.
 const OPENED = { [TILE.DRYSTONE]: TILE.GATE, [TILE.ROCK]: TILE.FELL, [TILE.GRAVE]: TILE.GRASS };
 
@@ -482,7 +499,7 @@ function makeReachable(tiles, width, height, [sx, sy]) {
       const i = bfs[h], x = i % width, y = (i - x) / width;
       for (const [dx, dy] of N) {
         const nx = x + dx, ny = y + dy, j = ny * width + nx;
-        if (!inside(nx, ny) || prev[j] >= 0 || tiles[j] === TILE.LAKE || tiles[j] === TILE.POND) continue;
+        if (!inside(nx, ny) || prev[j] >= 0 || tiles[j] === TILE.LAKE || tiles[j] === TILE.POND || tiles[j] === TILE.PLOT) continue;
         prev[j] = i;
         if (seen[j]) { goal = j; break; }
         bfs.push(j);

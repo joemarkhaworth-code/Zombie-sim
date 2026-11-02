@@ -41,6 +41,7 @@ export const CONFIG = {
     greenRows: [10, 12],             // the green by the bridge
     graveRows: 2,                    // rows of graves between the church and the graveyard wall
     detachedGarden: 1,               // garden tiles each side of a detached cottage
+    yardShed: 0.4, gardenShed: 0.5,  // chance of a shed in a back yard / a detached cottage's back garden (greenhouse: always)
     graves: 0.75,                    // chance of a gravestone on each grave spot
     backHedge: 0.2,                  // field edge behind a back lane is sometimes a hedge (else dry stone)
     farms: 2, farmYard: 8,           // walled farmyard (yard this deep) with a farmhouse and a barn
@@ -96,7 +97,25 @@ export const CONFIG = {
     corrugatedMetal: { hp: 8,  flammability: 0, heatDamage: 2, seeThrough: false, hitNoise: 3, breakNoise: 3 }, // buckles; clangs
     thatch:          { hp: 4,  flammability: 3, heatDamage: 3, seeThrough: false, hitNoise: 1, breakNoise: 1 },
   },
-  // What things are made of (for now; step 14 picks per building).
+  // Building types (step 14b): what each is made of, picked per building from the seed.
+  // walls/roof: weighted choice of CONFIG.materials keys (roof 'walls' = same as the walls;
+  // roofs are recorded for fire, step 19). floor: wood | flags | concrete | earth.
+  // door: material of outside doors ('walls' = same as the walls). lockFront/lockBack: chance
+  // the outside door is locked (keys come with loot, 14d). innerDoorOpen: chance an inside
+  // door starts open. Room layouts live in src/sim/gen/buildings.js.
+  buildingTypes: {
+    terracedCottage: { walls: { stone: 3, brick: 1 }, roof: { slate: 4, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
+    detachedCottage: { walls: { stone: 4, brick: 1 }, roof: { slate: 3, thatch: 1 }, floor: 'wood', door: 'wood', lockFront: 0.6, lockBack: 0.4 },
+    farmhouse: { walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.5, lockBack: 0.5 },
+    cornerShop: { walls: { stone: 2, brick: 1 }, roof: { slate: 1 }, floor: 'wood', door: 'wood', lockFront: 0.9, lockBack: 0.6 },
+    pub: { walls: { stone: 3, brick: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.8, lockBack: 0.5 },
+    church: { walls: { stone: 1 }, roof: { slate: 1 }, floor: 'flags', door: 'wood', lockFront: 0.3, lockBack: 0.3 },
+    barn: { walls: { stone: 2, corrugatedMetal: 1 }, roof: { slate: 1, corrugatedMetal: 1 }, floor: 'concrete', door: 'walls', lockFront: 0.1, lockBack: 0 },
+    shed: { walls: { wood: 3, corrugatedMetal: 2 }, roof: 'walls', floor: 'concrete', door: 'walls', lockFront: 0.5, lockBack: 0 },
+    greenhouse: { walls: { glass: 1 }, roof: 'walls', floor: 'earth', door: 'walls', lockFront: 0, lockBack: 0 },
+  },
+  innerDoorOpen: 0.7,
+  // What things are made of on the test grid (the village picks per building, above).
   build: {
     wall: 'stone',                   // wall tiles
     door: 'wood',
@@ -196,7 +215,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 3, key: 'zombie-sim-save' },
+  save: { version: 4, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -234,6 +253,15 @@ export const CONFIG = {
     plot: '#3a302a',                 // bare earth: empty building plot (14b builds here)
     plotMark: '#5a4a3e',
     graveStone: '#a8a8a0',
+    wallStone: '#8c8678', wallStoneMark: '#5e5a50',      // building walls (neat courses; dry-stone field walls are rougher)
+    wallBrick: '#8e4a36', wallBrickMark: '#5e2e22',
+    wallWood: '#7a5430', wallWoodMark: '#4e3418',
+    wallMetal: '#7e868c', wallMetalMark: '#5a6066',
+    wallGlass: '#a8d8e8', wallGlassMark: '#6a98a8',
+    floorWood: '#6a4c32', floorWoodMark: '#523a26',      // floorboards
+    floorFlags: '#6c6860', floorFlagsMark: '#56524a',
+    floorConcrete: '#7a7a76',
+    floorEarth: '#4e3c2a', floorEarthMark: '#3c2e20',
     stream: '#2f6fb0',
     streamMark: '#9cc8f0',
     bridge: '#a99f88',               // paved like the road (walkable), not like a wall

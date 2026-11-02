@@ -36,10 +36,12 @@ export function installStructures(world) {
 
 const mat = (name) => CONFIG.materials[name];
 
-// Walls get their health from their material (CONFIG.build.wall for now).
-export function initTileHp(world, isWall) {
-  const hp = mat(CONFIG.build.wall).hp;
-  for (let i = 0; i < world.tiles.length; i++) if (isWall(world.tiles[i])) world.tileHp[i] = hp;
+// Solid tiles get their health from their material: materialOf(tile) -> material key or null.
+export function initTileHp(world, materialOf) {
+  for (let i = 0; i < world.tiles.length; i++) {
+    const m = materialOf(world.tiles[i]);
+    if (m) world.tileHp[i] = mat(m).hp;
+  }
 }
 
 export const structureAt = (world, x, y) => {
