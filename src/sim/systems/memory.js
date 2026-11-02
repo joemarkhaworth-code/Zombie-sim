@@ -13,6 +13,7 @@
 // snapshotTile() so memory records it too.
 // Snapshots are plain data, so memory can be saved and loaded.
 import { query, inBounds } from '../world.js';
+import { trackAt } from './tracks.js';
 
 // Snapshots refresh whenever the viewer's sight changes (it moved) and at the end of
 // every turn (things may have changed in view while it stood still).
@@ -42,11 +43,17 @@ function rememberVisible(world, e) {
   for (const idx of e.Vision.visible.keys()) mem[idx] = snapshotTile(world, idx, thingsAt.get(idx) || []);
 }
 
+function trackSnap(world, idx) {
+  const tr = trackAt(world, idx % world.width, Math.floor(idx / world.width));
+  return tr ? { mark: tr.mark, dx: tr.dx, dy: tr.dy, in: tr.in } : null;
+}
+
 function snapshotTile(world, idx, things) {
   return {
     tile: world.tiles[idx],
     blood: world.blood ? world.blood[idx] : 0,
     glass: world.glass ? world.glass[idx] : 0,
+    track: trackSnap(world, idx), // prints in snow or mud (step 18)
     things: things.map((t) => ({
       name: t.Name ? t.Name.name : 'something',
       char: t.Glyph.char, fg: t.Glyph.fg, bg: t.Glyph.bg,

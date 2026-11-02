@@ -10,6 +10,8 @@ import { TILE, TILE_INFO } from '../sim/gen/testgrid.js';
 import { query } from '../sim/world.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { canSee } from '../sim/systems/vision.js';
+import { trackAt, snowLevel, holdsSnow } from '../sim/systems/tracks.js';
+import { scentLevel } from '../sim/systems/scent.js';
 
 const C = CONFIG.colours;
 const TILE_COLOUR = {
@@ -135,6 +137,20 @@ function drawTileMark(ctx, t, px, py, s, memory, water = null) {
   }
 }
 
+// Prints (step 18): boots are a pair of dots side by side, a zombie's drag a streak, both
+// laid along the direction of travel (dx, dy) so you can tell which way it went.
+function drawTrack(ctx, tr, px, py, s, memory) {
+  if (!tr) return;
+  ctx.fillStyle = memory ? 'rgba(0,0,0,0.45)' : tr.in === 'snow' ? C.trackSnow : C.trackMud;
+  const cx = px + s / 2, cy = py + s / 2, d = Math.max(3, Math.floor(s / 8));
+  const ax = tr.dx || 0, ay = tr.dy || 0, nx = -ay, ny = ax; // along / across the way it went
+  if (tr.mark === 'boots') {
+    for (const [a, n] of [[-0.18, -0.15], [0.18, 0.15]]) ctx.fillRect(cx + (ax * a + nx * n) * s - d / 2, cy + (ay * a + ny * n) * s - d / 2, d, d);
+  } else {
+    for (let k = -2; k <= 2; k++) ctx.fillRect(cx + ax * k * 0.1 * s - d / 2, cy + ay * k * 0.1 * s - d / 2, d, d);
+  }
+}
+
 // Blood: red spots, more for higher levels (1-3).
 const BLOOD_SPOTS = [[0.2, 0.6], [0.65, 0.3], [0.45, 0.75], [0.3, 0.25], [0.75, 0.7], [0.5, 0.45]];
 function drawBlood(ctx, px, py, s, level, colour) {
@@ -193,6 +209,9 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         ctx.fillStyle = TILE_COLOUR[t];
         ctx.fillRect(px, py, s - 1, s - 1);
         drawTileMark(ctx, t, px, py, s, false, markInfo(world, t, x, y));
+        const snow = snowLevel(world);
+        if (snow && holdsSnow(world, t)) { ctx.fillStyle = C.snow[snow]; ctx.fillRect(px, py, s - 1, s - 1); } // settled snow
+        drawTrack(ctx, trackAt(world, x, y), px, py, s, false);
         if (world.blood) drawBlood(ctx, px, py, s, world.blood[y * world.width + x], C.blood);
         if (world.glass) drawGlass(ctx, px, py, s, world.glass[y * world.width + x], C.glass);
         continue;
@@ -202,6 +221,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       ctx.fillStyle = MEMORY_COLOUR[snap.tile];
       ctx.fillRect(px, py, s - 1, s - 1);
       drawTileMark(ctx, snap.tile, px, py, s, true, markInfo(world, snap.tile, x, y));
+      drawTrack(ctx, snap.track, px, py, s, true);
       drawBlood(ctx, px, py, s, snap.blood || 0, C.memoryBlood);
       drawGlass(ctx, px, py, s, snap.glass || 0, C.memoryGlass);
       const thing = snap.things[snap.things.length - 1]; // top-most remembered thing
@@ -286,6 +306,18 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
         ctx.fillStyle = '#fff';
         ctx.fillText(String(n), px + 2, py + 2);
       }
+    }
+    // ...and the scent trail (green, by level), bottom-right of each tile.
+    for (let vy = 0; vy < rows; vy++) for (let vx = 0; vx < cols; vx++) {
+      const x = camX + vx, y = camY + vy;
+      if (!onScreen(x, y)) continue;
+      const lv = scentLevel(world, x, y);
+      if (!lv) continue;
+      const px = ox + vx * s, py = oy + vy * s;
+      ctx.fillStyle = `rgba(${C.debugScent},${(0.15 + 0.2 * lv).toFixed(2)})`;
+      ctx.fillRect(px + s / 2, py + s / 2, s / 2 - 1, s / 2 - 1);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(String(lv), px + s / 2 + 2, py + s / 2 + 2);
     }
   }
 

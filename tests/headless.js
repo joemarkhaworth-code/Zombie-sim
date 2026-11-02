@@ -1,6 +1,6 @@
 // Headless test run: drive the sim for N turns without rendering.
 // Usage: node tests/headless.js [turns] [seed]
-import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable, makeZombie } from '../src/sim/world.js';
+import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable, makeZombie, tryMove } from '../src/sim/world.js';
 // Most tests below were written for the phase-1 test grid; default to it. Village tests pass { map: 'village' }.
 const createWorld = (seed, opts = {}) => createWorldAny(seed, { map: 'testgrid', ...opts });
 import { TILE_INFO, TILE, WALL_OF, FLOOR_OF } from '../src/sim/gen/testgrid.js';
@@ -15,6 +15,8 @@ import { kill } from '../src/sim/systems/combat.js';
 import { ambientAt, updateLight } from '../src/sim/systems/light.js';
 import { needLevel } from '../src/sim/systems/needs.js';
 import { tickWeather } from '../src/sim/systems/weather.js';
+import { scentLevel } from '../src/sim/systems/scent.js';
+import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -163,6 +165,7 @@ function openWorld(walls = []) {
   w.structures.clear(); w.glass.fill(0);
   playerOf(w).Memory.tiles.fill(null); // forget the generated map
   w.weather = { kind: 'clear', until: Infinity }; // unit tests: fixed clear weather unless they set it
+  for (const z of query(w, 'Smell')) z.Smell.level = 0; // ...and no sense of smell unless they test it (step 18)
   return w;
 }
 function place(w, e, x, y) { e.Position.x = x; e.Position.y = y; refreshAllVision(w); }
@@ -1665,6 +1668,77 @@ console.log('needs: rise with time, food/drink, starving and parched hurt and ki
   assert(back.weather.kind === v.weather.kind && back.weather.until === v.weather.until && serialize(back) === serialize(v), 'weather: saved');
 }
 console.log('weather: seeded chain (fog mornings), cloud hides the moon, downpours dim the day, fog cuts sight, rain drowns footsteps, wet/brolly/drying, cold night freezes you, too cold to sleep, wading soaks, saved OK');
+
+// 23. Scent and tracks (step 18).
+{
+  const S = CONFIG.scent, T = CONFIG.tracks;
+  const setW = (w, kind) => { w.weather = { kind, until: Infinity }; };
+  // Scent: you leave a trail that fades; rain washes it faster outdoors; water holds none.
+  let w = openWorld(); let p = playerOf(w); let z = zombieOf(w);
+  w.entities.delete(z.id); place(w, p, 5, 5);
+  playerAct(w, { type: 'wait' });
+  assert(scentLevel(w, 5, 5) === 3, 'scent: fresh where you stand');
+  for (let i = 0; i < 3; i++) playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  for (let i = 0; i < S.fadeTicks; i++) playerAct(w, { type: 'wait' });
+  const dry = scentLevel(w, 5, 5);
+  assert(dry === 2, `scent: it fades with time (${dry})`);
+  w.tiles[6 * w.width + 5] = TILE.FLOOR_WOOD; // an indoor tile next to it
+  place(w, p, 5, 6); playerAct(w, { type: 'wait' }); place(w, p, 10, 10);
+  setW(w, 'heavyRain');
+  for (let i = 0; i < S.fadeTicks; i++) playerAct(w, { type: 'wait' });
+  assert(scentLevel(w, 5, 5) === 0 && scentLevel(w, 5, 6) === 2, `scent: rain washes it off outdoors (${scentLevel(w, 5, 5)}), not indoors (${scentLevel(w, 5, 6)})`);
+  w.tiles[10 * w.width + 11] = TILE.STREAM; setW(w, 'clear');
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(scentLevel(w, 11, 10) === 0 && scentLevel(w, 10, 10) === 3, 'scent: the beck holds no scent');
+  // Smell: a zombie with nothing seen or heard follows a fresh trail to you, in the dark.
+  w = openWorld(); p = playerOf(w); z = zombieOf(w);
+  z.Smell.level = CONFIG.zombie.smell; CONFIG.zombie.staggerChance = 0;
+  place(w, z, 3, 3); place(w, p, 6, 3);
+  for (let i = 0; i < 12; i++) playerAct(w, { type: 'move', dx: 0, dy: 1 }); // walk away south: a trail from (6,3) to (6,15)
+  place(w, z, 5, 3); z.Brain.goal = null; w.light.fill(0); refreshAllVision(w);
+  p.Stealth.sneaking = true; // silent
+  let followed = 0; w.events.on('scent_followed', (d) => { if (d.id === z.id) followed++; });
+  for (let i = 0; i < 40 && Math.max(Math.abs(z.Position.x - p.Position.x), Math.abs(z.Position.y - p.Position.y)) > 1; i++) { w.light.fill(0); playerAct(w, { type: 'wait' }); }
+  CONFIG.zombie.staggerChance = 0.2;
+  assert(followed > 0 && Math.max(Math.abs(z.Position.x - p.Position.x), Math.abs(z.Position.y - p.Position.y)) <= 1, `scent: the zombie followed your trail to you (${z.Position.x},${z.Position.y})`);
+  // Snow settles while it snows and shows your prints, with the way you went; zombies leave drag marks.
+  w = openWorld(); p = playerOf(w); z = zombieOf(w);
+  setW(w, 'snow');
+  for (let i = 0; i < T.snowPerLevel + 2; i++) playerAct(w, { type: 'wait' });
+  assert(snowLevel(w) >= 1, 'tracks: snow settles');
+  setW(w, 'clear');
+  place(w, p, 5, 5); playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  const tr = trackAt(w, 6, 5);
+  assert(tr && tr.mark === 'boots' && tr.dx === 1 && tr.dy === 0 && tr.in === 'snow', 'tracks: your boot prints in the snow, heading east');
+  place(w, p, 9, 9);
+  assert(describeTile(w, 6, 5) === 'Footprints in the snow.', `tracks: inspect (${describeTile(w, 6, 5)})`);
+  tryMove(w, z, 0, 1);
+  const zt = trackAt(w, z.Position.x, z.Position.y);
+  assert(zt && zt.mark === 'drag', 'tracks: a zombie leaves drag marks');
+  // Prints are remembered, and fade: fresh snow fills them in.
+  const snap = rememberedAt(w, p, 6, 5);
+  assert(snap && snap.track && snap.track.mark === 'boots', 'tracks: you remember prints you saw');
+  setW(w, 'snow');
+  for (let i = 0; i < T.coveredLife + 31; i++) playerAct(w, { type: 'wait' });
+  assert(!trackAt(w, 6, 5), 'tracks: falling snow fills them in');
+  // Mud: rain makes soft ground muddy; prints on grass, none on the road.
+  const v = createWorld(1, { map: 'village' }); const vp = playerOf(v);
+  for (const zz of query(v, 'Brain')) v.entities.delete(zz.id);
+  v.weather = { kind: 'rain', until: Infinity };
+  for (let i = 0; i < T.mudPerLevel + 2; i++) playerAct(v, { type: 'wait' });
+  assert(mudLevel(v) >= 1, 'tracks: rain makes mud');
+  v.weather = { kind: 'clear', until: Infinity };
+  playerAct(v, { type: 'move', dx: 0, dy: 3 }); playerAct(v, { type: 'move', dx: 0, dy: 1 }); playerAct(v, { type: 'move', dx: 0, dy: 1 });
+  assert(!trackAt(v, vp.Position.x, vp.Position.y), 'tracks: no prints on tarmac');
+  const grass = v.tiles.findIndex((t, i) => t === TILE.GRASS && Math.abs(i % v.width - vp.Position.x) < 8 && Math.abs(Math.floor(i / v.width) - vp.Position.y) < 8);
+  place(v, vp, grass % v.width - 1, Math.floor(grass / v.width));
+  tryMove(v, vp, 1, 0);
+  assert(trackAt(v, grass % v.width, Math.floor(grass / v.width))?.in === 'mud', 'tracks: prints in the mud on grass');
+  // Saves keep scent, snow, mud and prints.
+  const back = deserialize(serialize(v), createWorldAny);
+  assert(serialize(back) === serialize(v) && back.tracks.size === v.tracks.size && back.groundWet === v.groundWet, 'scent/tracks: saved');
+}
+console.log('scent: fades, rain washes it outdoors, the beck holds none, zombies follow it to you; tracks: snow settles, boots and drag prints with direction, remembered, covered by fresh snow, mud on grass not tarmac, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

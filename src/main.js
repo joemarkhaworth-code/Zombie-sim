@@ -300,7 +300,7 @@ setInterval(() => {
 // Debug: tapping the top bar toggles the noise heatmap. Takes no turn.
 function toggleNoiseMap() {
   debug.noise = !debug.noise;
-  messages.show(debug.noise ? 'Noise map on.' : 'Noise map off.');
+  messages.show(debug.noise ? 'Debug map on.' : 'Debug map off.');
   render();
 }
 

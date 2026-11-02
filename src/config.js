@@ -298,6 +298,20 @@ export const CONFIG = {
       snow:      { hours: [2, 6], next: { overcast: 3, snow: 1 },                           cloudy: true,  dayDrop: 1, sight: 0.7,  mask: 1, wet: 1, chill: [2, 3], scentWash: 1, fireDamp: 1 },
     },
   },
+  // Scent (step 18, systems/scent.js): you leave a trail, zombies smell it.
+  scent: {
+    fadeTicks: 45,                   // a trail loses a level every 1.5 hours (3 levels: gone in 4.5 h; faster in rain outdoors)
+    minLevelBySmell: [99, 3, 2, 1],  // faintest scent level noticed by smell 0-3 (0: no sense of smell)
+  },
+  // Tracks (step 18, systems/tracks.js): snow and mud on the ground, and prints in them.
+  tracks: {
+    snowPerLevel: 60,                // snow settles a level every 2 h of snowfall
+    meltEvery: 3,                    // ...and melts a tick per 3 ticks when it isn't snowing (every tick in rain)
+    mudPerLevel: 60,                 // rain makes the ground muddy a level every 2 h
+    dryEvery: 4,                     // ...and it dries a tick per 4 ticks otherwise
+    life: 720,                       // a print lasts 24 h
+    coveredLife: 90,                 // ...but only 3 h while fresh snow falls on it / rain washes it
+  },
   // Needs (step 16, systems/needs.js): hunger, thirst and fatigue, counted in ticks (2 min)
   // and shown as levels 0-3 (one level every perLevel ticks).
   needs: {
@@ -327,6 +341,7 @@ export const CONFIG = {
     melee: { damage: 2, hitChance: 0.85, woundChance: 0.7, verb: 'bite' },
     eyesight: 2,                     // poor eyes: half the light range, so you usually see them first
     hearing: 3,                      // good ears: hear your footsteps up to 3 tiles away in the open
+    smell: 2,                        // follows a scent trail of level 2+ (laid in the last 3 h; less in rain)
     footsteps: 0,                    // shuffle quietly (raise to let zombies hear each other)
     wanderChance: 0.5,               // with nothing to chase, chance to shuffle a step
     staggerChance: 0.2,
@@ -342,7 +357,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 9, key: 'zombie-sim-save' },
+  save: { version: 10, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -382,6 +397,9 @@ export const CONFIG = {
     graveStone: '#a8a8a0',
     stairs: '#e8d8a0', stairsText: '#3a2a10',            // stairs < > and ladders H (things on a tile)
     hatch: '#5a4a30', hatchText: '#a89060',              // a pulled-up ladder seen from below
+    snow: ['rgba(255,255,255,0)', 'rgba(235,240,255,0.35)', 'rgba(235,240,255,0.55)', 'rgba(240,245,255,0.75)'], // settled snow by level (step 18)
+    trackSnow: '#5a6070', trackMud: '#2a1e12',          // prints: boots (pairs of dots) and drag marks (streaks)
+    debugScent: '60,220,90',                             // debug overlay: scent trail
     phoneBox: '#c01818', phoneBoxMark: '#f0e0a0',        // red phone box with glazed panes
     allotment: '#4a3626', allotmentMark: '#2e2016',      // dug-over beds in rows
     wallStone: '#8c8678', wallStoneMark: '#5e5a50',      // building walls (neat courses; dry-stone field walls are rougher)

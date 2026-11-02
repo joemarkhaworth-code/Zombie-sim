@@ -18,6 +18,7 @@ export const TUNABLES = [
   { path: 'zombie.searchRadius', label: 'Search radius', step: 1, min: 0, max: 8 },
   { path: 'zombie.eyesight', label: 'Zombie eyesight', step: 1, min: 0, max: 3 },
   { path: 'zombie.hearing', label: 'Zombie hearing', step: 1, min: 0, max: 3 },
+  { path: 'zombie.smell', label: 'Zombie smell', step: 1, min: 0, max: 3 },
   { path: 'light.range', label: 'Light range', step: 1, min: 1, max: 20 },
 ];
 
@@ -71,5 +72,6 @@ export function syncWorld(world) {
     if (z.Health) { z.Health.max = Z.health; z.Health.hp = Math.min(z.Health.hp, Z.health); }
     if (z.Vision) z.Vision.eyesight = Z.eyesight;
     if (z.Hearing) z.Hearing.level = Z.hearing;
+    if (z.Smell) z.Smell.level = Z.smell;
   }
 }

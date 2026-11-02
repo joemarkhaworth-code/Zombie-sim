@@ -199,7 +199,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - What makes noise for now: walking, via a Noisy { move } component (player footsteps level 1, about 3 tiles in the open; zombies 0, shuffling quietly). Waiting is silent. Bumping a wall makes no noise, because it takes no turn and would be a free lure. Later systems (fights, gunshots, doors, sneaking) call makeNoise or change Noisy.
 - Zombies that hear a noise set their goal to its source and walk there, search around it, then give up (noise_investigated). The newest noise wins; seeing prey always wins over hearing. Brain.goal = { x, y, why: 'seen' | 'heard' } replaces lastSeen.
 - No status message for hearing: you see the zombie turn toward you (show, don't tell).
-- Debug: tap the top bar to toggle the noise heatmap (orange overlay with strength numbers, showing noise since your last action, including tiles out of sight). Takes no turn. world.noise holds the heatmap.
+- Debug: tap the top bar to toggle the debug map: the noise heatmap (orange overlay with strength numbers, showing noise since your last action, including tiles out of sight) and the scent trail (green squares with levels, step 18). Takes no turn. world.noise holds the heatmap.
 - Tuning panel (src/sim/tuning.js + main.js): with the debug overlay on, a small orange TUNE button sits at the top right of the map. It opens a panel with -/+ rows for zombie speed, bite hit chance, bite damage, bite bleed chance, zombie health, search length, search radius, zombie eyesight, zombie hearing and light range (TUNABLES lists path, step, min, max). Changed values show yellow; RESET restores config.js defaults; CLOSE. Changes apply at once (syncWorld pushes zombie values into zombies already on the map; vision is recomputed) and are saved in localStorage under 'zombie-sim-tuning', separate from the game save, and applied to CONFIG at every boot. config.js stays the shipped default: when a tuned value feels right, copy it into config.js in a Claude session. Changing tuning mid-run means that run's inputs no longer replay exactly (it's a balance tool).
 - Intentional: in daylight in the open, zombies see you (7 tiles) well before they hear your footsteps (3 tiles). Hearing matters when they can't see you: round corners, behind walls, in the dark. Night (step 15) will shrink sight and make hearing their main sense. Don't "fix" this by tuning.
 - Sneaking (src/sim/systems/stealth.js): toggled by a big SNEAK button in a bottom bar (72 px, full width, yellow "SNEAKING" when on). Toggling takes no turn but is recorded as an input ({ type: 'sneak', on }) so replays match. While sneaking: each step costs 2x energy (zombies get twice the time), footsteps drop from level 1 to 0 (silent), and you can only be noticed from two-thirds of the usual distance (stealth.sneakNoticeFactor 0.67). Waiting costs the same as normal. A sneaking creature is drawn dimmer.
@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (9 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (10 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -538,6 +538,45 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Testing it by hand: the TUNE panel (debug overlay -> TUNE) starts with two world rows. Weather -/+ cycles clear / cloudy / rain / pour / fog / snow and holds it for 24 h (weather.js setWeather). Time -/+ moves the clock an hour, for night, dusk and dawn. Light and sight update at once. Like other tuning, a run changed this way no longer replays exactly.
 - Play-test bot over 40 seeds: deaths unchanged (34 of 40, against 35 before), none from cold. Weather adds pressure (wet, cold nights, black rainy nights, fog) without being a killer by itself.
 - Save version 9 (weather, wet/cold).
+
+## Decisions for step 18 (scent + tracks) - built
+- Scent (src/sim/systems/scent.js): anything with a Scent component (the player) lays scent on its tile every tick.
+  - A tile's scent level is 3 when fresh, one less every scent.fadeTicks (45 ticks = 1.5 h), so a trail is gone in about 4.5 h.
+  - Stored as a stamp per tile (world.scentLaid, saved like the other tile arrays), so nothing updates every tick.
+    - Indoor tiles age by world.tick.
+    - Outdoor tiles age by world.scentClock, which runs 1 + the weather's scentWash per tick (rain 2x, heavy rain 3x, snow 2x). Rain washes trails away outdoors; indoors it lasts.
+  - Water and void never hold scent, so wading the beck breaks your trail.
+- Smell is a 0-3 sense (Smell component), like hearing. scent.minLevelBySmell [never, 3, 2, 1] is the faintest level noticed. Zombies have smell 2 (tunable: Zombie smell in TUNE).
+  - In the zombie brain (shamble.js), after seeing prey and before an old goal: if the zombie has no goal or is only searching, it steps to the freshest walkable neighbour it can smell that's fresher than its own tile.
+  - Its goal becomes that spot with a search. Where the trail ends it searches, then gives up (scent_lost).
+  - Seeing prey and hearing noise still come first.
+  - Unit tests switch smell off in the test helper (as with the weather) unless they test it.
+- Ground (src/sim/systems/tracks.js), one state for the valley like the weather, saved:
+  - world.snowCover: settles a level every 2 h of snow, melts 1 per 3 ticks otherwise, every tick in rain.
+  - world.groundWet: mud builds a level every 2 h of rain and dries 1 per 4 ticks otherwise.
+  - Messages: "Snow settles." / "The snow melts away."
+- Prints: anything with Tracks { mark } moving onto an outdoor tile leaves one if the tile holds snow, or is soft (grass, lanes, paths, fell, bracken, allotments, gates) and muddy. Roads, pavements and floors indoors take no mud prints.
+  - world.tracks: tile -> { mark: 'boots' (you) | 'drag' (zombies), dx, dy (the way it went), t, in: 'snow' | 'mud' }.
+  - A print lasts 24 h, but only 3 h while fresh snow falls on it or rain washes it. Snow prints vanish when the snow melts. Pruned hourly.
+- Tracks are tile state: map memory snapshots them, so remembered prints stay on your map.
+- Inspect: "Footprints in the snow.", "Zombie tracks in the mud." (or ", out of sight").
+- You can follow zombie tracks; zombies follow your scent.
+- Drawn:
+  - settled snow whitens outdoor ground by level (not water) (CONFIG.colours.snow);
+  - prints: boots as a pair of dots, a zombie's drag as a streak, laid along the way it went (dark grey in snow, dark brown in mud; greyed when remembered);
+  - the debug map shows the scent trail.
+- Play-test bot over 40 seeds: 32 of 40 runs died, against 34 before. Zombies following trails doesn't swing the balance by itself. A turn takes about 2.4 ms.
+- Save version 10 (scent stamps, ground state, prints).
+- Tests:
+  - scent is fresh where you stand and fades with time;
+  - heavy rain washes it outdoors but not indoors;
+  - the beck holds none;
+  - a zombie with smell follows your trail to you in the dark while you sneak silently;
+  - snow settles; boot prints in the snow point the way you went; a zombie leaves drag marks;
+  - inspect words; prints remembered; falling snow fills them in;
+  - rain makes mud; no prints on tarmac, prints on grass;
+  - saves keep it all.
+  Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).

@@ -17,6 +17,8 @@ import { tickBleeding } from './systems/bleeding.js';
 import { climb, setLadder } from './systems/floors.js';
 import { tickLight, updateLight } from './systems/light.js';
 import { tickWeather } from './systems/weather.js';
+import { tickScent } from './systems/scent.js';
+import { tickTracks } from './systems/tracks.js';
 import { tickNeeds, needLevel, waterNearby, adjustNeed, wake } from './systems/needs.js';
 import { makeNoise } from './systems/noise.js';
 import { TILE } from './gen/testgrid.js';
@@ -41,6 +43,8 @@ function onTick(world) {
   tickBleeding(world);
   tickLight(world);
   tickNeeds(world);
+  tickScent(world);
+  tickTracks(world, world.weather && world.weather.kind);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),

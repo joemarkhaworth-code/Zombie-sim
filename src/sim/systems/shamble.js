@@ -17,6 +17,7 @@ import { structureAt, isObstacle, damageStructure } from './structures.js';
 import { meleeStats } from './items.js';
 import { makeNoise } from './noise.js';
 import { stairsAt, climb } from './floors.js';
+import { scentStep } from './scent.js';
 
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -61,6 +62,17 @@ export function shamble(world, e) {
     return;
   }
 
+  // Nothing seen, nothing heard (or only searching): follow a scent trail if there is one.
+  if (!brain.goal || brain.goal.search !== undefined) {
+    const step = scentStep(world, e, (x, y) => isPassable(world, x, y));
+    if (step) {
+      if (!brain.goal || brain.goal.why !== 'scent') world.events.emit('scent_followed', { id: e.id, x: step.x, y: step.y });
+      tryMove(world, e, step.dx, step.dy);
+      brain.goal = { x: e.Position.x, y: e.Position.y, why: 'scent', search: CONFIG.zombie.searchActions }; // trail ends here: search
+      return;
+    }
+  }
+
   if (brain.goal) {
     const g = brain.goal;
     if (g.search === undefined) {
@@ -81,7 +93,7 @@ export function shamble(world, e) {
       return;
     }
     brain.goal = null;
-    world.events.emit(g.why === 'seen' ? 'prey_lost' : 'noise_investigated', { id: e.id, x: g.x, y: g.y });
+    world.events.emit(g.why === 'seen' ? 'prey_lost' : g.why === 'scent' ? 'scent_lost' : 'noise_investigated', { id: e.id, x: g.x, y: g.y });
     return;
   }
 

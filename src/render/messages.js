@@ -4,6 +4,7 @@
 import { canSee, visibilityAt } from '../sim/systems/vision.js';
 import { CONFIG } from '../config.js';
 import { needLevel } from '../sim/systems/needs.js';
+import { trackAt } from '../sim/systems/tracks.js';
 import { dayOf, daysSurvived, clockOf } from '../sim/time.js';
 import { rememberedAt } from '../sim/systems/memory.js';
 import { TILE_DESC, TILE_INFO, TILE } from '../sim/gen/testgrid.js';
@@ -151,6 +152,8 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     }[d.to];
     if (t) say(t, PRIORITY.notice);
   });
+  ev.on('snow_settled', () => say('Snow settles.', PRIORITY.info));
+  ev.on('snow_melted', () => say('The snow melts away.', PRIORITY.info));
   // Light (step 15).
   ev.on('ambient_changed', (d) => {
     if (d.to < d.from && d.to <= 1) say('Night falls.', PRIORITY.notice);
@@ -258,14 +261,19 @@ export function describeTile(world, x, y) {
     if (thing) return `A ${thing.Name.name}.`;
     if (world.blood && world.blood[y * world.width + x] && !TILE_INFO[tileAt(world, x, y)].opaque) return 'Blood on the ground.';
     if (world.glass && world.glass[y * world.width + x]) return 'Broken glass.';
+    const tr = trackAt(world, x, y);
+    if (tr) return trackText(tr);
     return TILE_DESC[tileAt(world, x, y)];
   }
   const snap = rememberedAt(world, player, x, y);
   if (!snap) return 'Unexplored.';
   const thing = snap.things[snap.things.length - 1];
-  const what = thing ? `A ${thing.name}.` : snap.blood ? 'Blood on the ground.' : snap.glass ? 'Broken glass.' : TILE_DESC[snap.tile];
+  const what = thing ? `A ${thing.name}.` : snap.blood ? 'Blood on the ground.' : snap.glass ? 'Broken glass.' : snap.track ? trackText(snap.track) : TILE_DESC[snap.tile];
   return `${what.slice(0, -1)}, out of sight.`;
 }
+
+// Prints (step 18): "Footprints in the snow.", "Zombie tracks in the mud."
+const trackText = (tr) => `${tr.mark === 'boots' ? 'Footprints' : 'Zombie tracks'} in the ${tr.in}.`;
 
 // Death screen wording, from world.gameOver + world.stats.
 const CAUSES = {

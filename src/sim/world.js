@@ -20,6 +20,8 @@ import { populateVillage } from './gen/life.js';
 import { updateLight } from './systems/light.js';
 import { installNeeds } from './systems/needs.js';
 import { installWeather } from './systems/weather.js';
+import { installScent } from './systems/scent.js';
+import { installTracks } from './systems/tracks.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -56,6 +58,8 @@ export function createWorld(seed, opts = {}) {
     stats: { kills: 0 }, // run stats for the death page (zombies killed by the player)
   };
   installBleeding(world); // world.blood
+  installScent(world); // world.scentLaid, world.scentClock
+  installTracks(world); // world.tracks, snow and mud
   installStructures(world); // world.structures, world.glass, world.tileHp
   if (map === 'testgrid') buildTestBuilding(world);
   else {
@@ -78,6 +82,8 @@ export function createWorld(seed, opts = {}) {
     Hearing: { level: CONFIG.player.hearing },
     Health: { hp: CONFIG.player.health, max: CONFIG.player.health },
     Needs: { hunger: 0, thirst: 0, fatigue: 0, wet: 0, cold: 0 }, // ticks; levels 0-3 (steps 16, 17)
+    Scent: {},                     // leaves a trail (step 18)
+    Tracks: { mark: 'boots' },     // leaves prints in snow and mud
     Melee: { ...CONFIG.player.melee },
     Inventory: { items: [], capacity: CONFIG.inventory.capacity, wielded: null },
     Keyring: { keys: [] }, // keys don't take bag slots
@@ -116,6 +122,8 @@ export function makeZombie(world, pos) {
     Health: { hp: CONFIG.zombie.health, max: CONFIG.zombie.health },
     Melee: { ...CONFIG.zombie.melee },
     Noisy: { move: CONFIG.zombie.footsteps },
+    Smell: { level: CONFIG.zombie.smell }, // follows scent trails (step 18)
+    Tracks: { mark: 'drag' },
     Brain: { type: 'shamble', goal: null, seesPrey: false, trackingId: null, reacting: 0 }, // goal: { x, y, why: 'seen' | 'heard' }
     Blocks: {},
     Name: { name: 'zombie' },
