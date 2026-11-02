@@ -113,8 +113,18 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
     if (!isPlayer(d.id)) return;
     if (d.reason === 'nothing_to_barricade') say('Nothing here to board up.', PRIORITY.blocked);
     if (d.reason === 'no_gun') say('No gun to load.', PRIORITY.blocked);
+    if (d.reason === 'spent') say("It's spent.", PRIORITY.blocked);
     if (d.reason === 'not_hurt') say("You're not hurt.", PRIORITY.blocked);
   });
+  // Light (step 15).
+  ev.on('ambient_changed', (d) => {
+    if (d.to < d.from && d.to <= 1) say('Night falls.', PRIORITY.notice);
+    else if (d.to < d.from) say("It's getting dark.", PRIORITY.info);
+    else if (d.from <= 1) say('Dawn breaks.', PRIORITY.info);
+  });
+  ev.on('light_on', (d) => { if (isPlayer(d.id)) say(`You light the ${itemName(d.itemId)}.`, PRIORITY.info); });
+  ev.on('light_off', (d) => { if (isPlayer(d.id)) say(`You put out the ${itemName(d.itemId)}.`, PRIORITY.info); });
+  ev.on('light_out', (d) => { if (isPlayer(d.holderId)) say(d.burnsOut ? `Your ${d.name} burns out.` : `Your ${d.name} dies.`, PRIORITY.notice); });
   ev.on('gun_loaded', (d) => { if (isPlayer(d.id)) say(`Loaded. ${d.ammo} rounds.`, PRIORITY.info); });
   ev.on('item_wielded', (d) => { if (isPlayer(d.id)) say(`You wield the ${itemName(d.itemId)}.`, PRIORITY.blocked); });
   ev.on('item_unwielded', (d) => { if (isPlayer(d.id)) say(`You put away the ${itemName(d.itemId)}.`, PRIORITY.blocked); });

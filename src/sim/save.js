@@ -14,6 +14,7 @@ import { CONFIG } from '../config.js';
 import { refreshAllVision } from './systems/vision.js';
 import { buildingInfo } from './gen/building.js';
 import { rebuildLinks } from './systems/floors.js';
+import { updateLight } from './systems/light.js';
 
 const TILE_ARRAYS = ['tiles', 'light', 'blood', 'glass', 'tileHp'];
 // Tile arrays are mostly long runs (village maps are tens of thousands of tiles), so they
@@ -104,6 +105,7 @@ export function deserialize(json, createWorld) {
   world.gameOver = null;
   world.noise.fill(0);
   if (!world.entities.has(world.playerId)) throw new SaveError('no player in save');
-  refreshAllVision(world);
+  world.ambient = undefined; // recompute the light for the loaded time (no "night falls" on load)
+  updateLight(world, true);
   return world;
 }

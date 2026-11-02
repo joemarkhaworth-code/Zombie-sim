@@ -51,9 +51,10 @@ export const TILE_INFO = {
   // A wall blocks sight unless its material is see-through (a greenhouse).
   ...Object.fromEntries(Object.entries({ stone: 'stone wall', brick: 'brick wall', wood: 'wooden wall', corrugatedMetal: 'metal wall', glass: 'glass wall' })
     .map(([m, name]) => [WALL_OF[m], T(name, { blocks: true, opaque: !CONFIG.materials[m].seeThrough, material: m })])),
-  [TILE.FLOOR_WOOD]: T('floorboards'),
-  [TILE.FLOOR_FLAGS]: T('flagstone floor'),
-  [TILE.FLOOR_CONCRETE]: T('concrete floor'),
+  // indoor: under a roof, so darker than outside (light.js).
+  [TILE.FLOOR_WOOD]: T('floorboards', { indoor: true }),
+  [TILE.FLOOR_FLAGS]: T('flagstone floor', { indoor: true }),
+  [TILE.FLOOR_CONCRETE]: T('concrete floor', { indoor: true }),
   [TILE.FLOOR_EARTH]: T('earth floor'),
   [TILE.VOID]: T('void', { blocks: true, opaque: true, silent: true }),
   [TILE.PHONEBOX]: T('phone box'),                                     // you can stand in it; glazed, so you're seen

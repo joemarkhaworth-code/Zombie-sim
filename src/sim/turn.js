@@ -15,6 +15,7 @@ import { structureAt, toggleDoor, damageStructure, isObstacle, hasKeyFor } from 
 import { meleeStats } from './systems/items.js';
 import { tickBleeding } from './systems/bleeding.js';
 import { climb, setLadder } from './systems/floors.js';
+import { tickLight, updateLight } from './systems/light.js';
 
 // Brain type -> system that decides what an actor does with its action.
 const BRAINS = { shamble };
@@ -33,6 +34,7 @@ function act(world, e) {
 // Systems that run every scheduler tick.
 function onTick(world) {
   tickBleeding(world);
+  tickLight(world);
 }
 
 // action: { type: 'move', dx, dy } (dx, dy in -1..1; moving into a creature attacks it),
@@ -116,6 +118,7 @@ export function playerAct(world, action) {
   delete player.Actor.nextCost;
   world.turn++;
   advance(world, act, onTick);
+  updateLight(world); // the hour's light, torches carried about: refreshes vision if changed
   updateSightings(world);
   world.events.emit('turn_ended', { turn: world.turn });
   return true;

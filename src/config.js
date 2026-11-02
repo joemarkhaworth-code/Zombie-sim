@@ -95,6 +95,9 @@ export const CONFIG = {
     ale: { name: 'bottle of ale', char: '!', fg: '#000000', bg: '#c08030', slots: 1, heal: 1 },
     firstAid: { name: 'first aid kit', char: '+', fg: '#ffffff', bg: '#20a040', slots: 1, stanch: true, heal: 1 },
     shells: { name: 'box of shells', char: '"', fg: '#ffffff', bg: '#803000', slots: 1, ammoFor: 'shotgun', rounds: 4 },
+    // Lights (step 15): USE switches them on/off. charge = ticks of light (2 min each).
+    torch: { name: 'torch', char: '(', fg: '#000000', bg: '#f0f080', slots: 1, light: { radius: 6, level: 3 }, charge: 480 }, // ~16 hours of battery
+    candle: { name: 'candle', char: 'i', fg: '#000000', bg: '#f8f0d8', slots: 1, light: { radius: 2, level: 2, burnsOut: true }, charge: 180 }, // ~6 hours, then gone
     pellets: { name: 'tin of pellets', char: '"', fg: '#000000', bg: '#a0a0ff', slots: 1, ammoFor: 'airRifle', rounds: 10 },
   },
   // Loot (step 14d), placed by src/sim/gen/life.js. rooms: by room name, n = [min, max]
@@ -102,27 +105,28 @@ export const CONFIG = {
   // a random room (farmers keep a shotgun). Rooms not listed get nothing.
   loot: {
     rooms: {
-      kitchen: { n: [1, 2], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1 } },
-      scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1 } },
+      kitchen: { n: [1, 2], items: { beans: 4, knife: 2, crisps: 1, chocolate: 1, candle: 2, torch: 1 } },
+      scullery: { n: [0, 1], items: { beans: 2, bandage: 1, planks: 1, torch: 2, candle: 1 } },
       'front room': { n: [0, 1], items: { stick: 2, chocolate: 1, golfClub: 1 } },
       'living room': { n: [0, 2], items: { stick: 2, golfClub: 1, chocolate: 1, ale: 1 } },
       'sitting room': { n: [0, 1], items: { ale: 2, stick: 1 } },
       'front bedroom': { n: [0, 1], items: { bandage: 2, airRifle: 1, pellets: 1 } },
       'back bedroom': { n: [0, 1], items: { bandage: 2, chocolate: 1, golfClub: 1 } },
-      bedroom: { n: [0, 1], items: { bandage: 1, chocolate: 1 } },
+      bedroom: { n: [0, 1], items: { bandage: 1, chocolate: 1, candle: 1 } },
       bathroom: { n: [0, 1], items: { bandage: 2, firstAid: 1 } },
       flat: { n: [0, 1], items: { beans: 1, crisps: 1 } },
       shop: { n: [2, 4], items: { beans: 3, crisps: 3, chocolate: 3, bandage: 1 } },
-      'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2 } },
+      'stock room': { n: [1, 3], items: { beans: 3, crisps: 2, chocolate: 2, torch: 1, candle: 1 } },
       'stock cellar': { n: [1, 3], items: { beans: 3, crisps: 1, planks: 1 } },
       bar: { n: [1, 3], items: { ale: 4, crisps: 3 } },
       store: { n: [1, 2], items: { ale: 2, crisps: 2, planks: 1 } },
       'beer cellar': { n: [1, 3], items: { ale: 4, planks: 1 } },
-      vestry: { n: [0, 1], items: { firstAid: 2, chocolate: 1 } },
+      vestry: { n: [1, 2], items: { firstAid: 2, chocolate: 1, candle: 4 } },
+      nave: { n: [0, 2], items: { candle: 1 } },
       cellar: { n: [0, 2], items: { beans: 2, planks: 2, ale: 1 } },
-      barn: { n: [0, 2], items: { fork: 2, planks: 3 } },
+      barn: { n: [0, 2], items: { fork: 2, planks: 3, torch: 1 } },
       hayloft: { n: [0, 1], items: { planks: 1, shells: 1 } },
-      shed: { n: [0, 1], items: { fork: 3, planks: 2, golfClub: 1 } },
+      shed: { n: [0, 1], items: { fork: 3, planks: 2, golfClub: 1, torch: 1 } },
       greenhouse: { n: [0, 1], items: { fork: 1 } },
     },
     extras: {
@@ -211,11 +215,16 @@ export const CONFIG = {
     actionCost: 100,                 // energy spent per action
     maxTicksPerTurn: 1000,           // safety cap against runaway loops
   },
-  // Light: how far anyone can see in the open, and how well-lit each tile is.
-  // Day/night and weather will lower both later.
+  // Light: how far anyone can see in the open, and how well-lit each tile is (step 15:
+  // systems/light.js). Weather will lower it later.
   light: {
     range: 15,                       // clear day: covers the whole portrait screen (5 across x ~10 up/down each side)
-    ambient: 3,                      // light level 0-3 on every tile
+    ambient: 3,                      // starting light level before the first update
+    // Daylight by the hour (0-23), a November day in the Lakes: dark till 7, dawn, full light
+    // 8-15, dusk at 4, then moonlight (1). Night shrinks noticing distance to a third.
+    byHour: [1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 1, 1],
+    indoorDim: 1,                    // indoors is this much darker: dim by day, pitch black at night
+    falloff: 2,                      // a light is one level weaker for this many tiles past its radius
   },
   vision: {
     // Eyesight 0-3 scales the light range: 3 = sees as far as the light allows.
@@ -289,7 +298,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 6, key: 'zombie-sim-save' },
+  save: { version: 7, key: 'zombie-sim-save' },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,

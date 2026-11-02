@@ -12,8 +12,8 @@
 // player's is screen-shaped, so you never see or remember what the screen can't show.
 // A seen tile's visibility level = its light level (1-3); 0 = unseen (not stored).
 // e.Vision.visible is a Map of tile index -> level. Creatures are only noticed at
-// CONFIG.vision.minLevelToSpot or above. Day/night, weather and stealth will lower
-// light range and light levels later.
+// CONFIG.vision.minLevelToSpot or above (or right next to you, even in the dark).
+// Day and night and light sources set the light levels (light.js); weather will later.
 // A viewer's visible set only changes when it moves (or, later, when tiles or light
 // change), so it's recomputed on entity_moved.
 import { CONFIG } from '../../config.js';
@@ -117,10 +117,11 @@ export function visibilityAt(world, viewer, x, y) {
 // first (walls), then hide.
 export function canSee(world, viewer, target, { tracking = false } = {}) {
   const { x, y } = target.Position;
+  const dx = x - viewer.Position.x, dy = y - viewer.Position.y;
+  // Right next to you, you know it's there even in pitch darkness (you'd bump into it).
+  if (Math.max(Math.abs(dx), Math.abs(dy)) <= 1) return lineClear(world, viewer.Position.x, viewer.Position.y, x, y);
   const lv = visibilityAt(world, viewer, x, y);
   if (lv < CONFIG.vision.minLevelToSpot) return false;
-  const dx = x - viewer.Position.x, dy = y - viewer.Position.y;
-  if (Math.max(Math.abs(dx), Math.abs(dy)) <= 1) return true;
   if (inCover(world, x, y) && !tracking) return false;
   let range = sightRadius(viewer) * CONFIG.vision.noticeByLight[lv];
   if (isSneaking(target) && !tracking) range *= CONFIG.stealth.sneakNoticeFactor;

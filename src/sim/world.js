@@ -17,6 +17,7 @@ import { buildVillage } from './gen/buildings.js';
 import { buildFloors } from './gen/floors.js';
 import { rebuildLinks } from './systems/floors.js';
 import { populateVillage } from './gen/life.js';
+import { updateLight } from './systems/light.js';
 
 // opts.map: 'village' (default from CONFIG.world.map) or 'testgrid' (the phase-1 grid).
 export function createWorld(seed, opts = {}) {
@@ -95,7 +96,7 @@ export function createWorld(seed, opts = {}) {
   installMemory(world);
   installNoise(world);
   installShamble(world);
-  refreshAllVision(world);
+  updateLight(world, true); // the time of day's light (and vision)
   return world;
 }
 

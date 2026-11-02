@@ -1,6 +1,6 @@
 // Headless test run: drive the sim for N turns without rendering.
 // Usage: node tests/headless.js [turns] [seed]
-import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable } from '../src/sim/world.js';
+import { createWorld as createWorldAny, tileAt, inBounds, query, isPassable, makeZombie } from '../src/sim/world.js';
 // Most tests below were written for the phase-1 test grid; default to it. Village tests pass { map: 'village' }.
 const createWorld = (seed, opts = {}) => createWorldAny(seed, { map: 'testgrid', ...opts });
 import { TILE_INFO, TILE, WALL_OF, FLOOR_OF } from '../src/sim/gen/testgrid.js';
@@ -12,6 +12,7 @@ import { makeItem, usedSlots, itemsAt, meleeStats } from '../src/sim/systems/ite
 import { validTargets } from '../src/sim/systems/ranged.js';
 import { makeDoor, makeWindow, structureAt, hasKeyFor } from '../src/sim/systems/structures.js';
 import { kill } from '../src/sim/systems/combat.js';
+import { ambientAt, updateLight } from '../src/sim/systems/light.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
 import { deathText } from '../src/render/messages.js';
@@ -219,9 +220,11 @@ const range = (e) => sightRadius(e);
   w.light[16 * w.width + 10] = 1; w.light[17 * w.width + 10] = 2; refreshAllVision(w);
   assert(lv(10, 16) === 1 && lv(10, 17) === 2 && lv(10, 18) === 3, 'levels: visibility should equal tile light');
 
-  w.light.fill(0); place(w, z, 11, 14);
+  w.light.fill(0); place(w, z, 12, 14);
   assert(lv(10, 14) === 1, 'levels: you always see your own tile');
-  assert(lv(11, 14) === 0 && !canSee(w, p, z) && !canSee(w, z, p), 'levels: in pitch dark nobody sees anybody');
+  assert(lv(12, 14) === 0 && !canSee(w, p, z) && !canSee(w, z, p), 'levels: in pitch dark nobody sees anybody');
+  place(w, z, 11, 14);
+  assert(canSee(w, p, z) && canSee(w, z, p), 'levels: right next to you, you know it is there even in the dark');
 
   w.light.fill(CONFIG.light.ambient); w.light[17 * w.width + 10] = 1; place(w, z, 10, 17);
   const saved = CONFIG.vision.minLevelToSpot;
@@ -406,6 +409,7 @@ const range = (e) => sightRadius(e);
   assert(heard && heard.x === 5 && heard.y === 11, 'hear: zombie should hear footsteps 3 tiles away');
   assert(z.Brain.goal && z.Brain.goal.why === 'heard', 'hear: zombie should head for the noise');
   assert(w.noise[11 * w.width + 5] === CONFIG.noise.radiusByLevel[CONFIG.player.footsteps], 'hear: heatmap records the noise');
+  place(w, p, 2, 25); // slip away (right next to it, it would know you were there, even in the dark)
   for (let i = 0; i < 80 && !investigated; i++) playerAct(w, { type: 'wait' });
   assert(investigated, 'hear: zombie should reach the noise and give up');
   assert(cheb(z.Position, { x: 5, y: 11 }) <= CONFIG.zombie.searchRadius, 'hear: zombie should end up searching around the noise');
@@ -1472,6 +1476,50 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   assert(!playerAct(w, { type: 'use', itemId: pel.id }), 'life: no air rifle, nothing to load');
 }
 console.log('life: phone box, allotments, loot by room, keys in pockets or by doors, zombies placed away from the start; keys drop, ammo loads OK');
+
+// 20. Day and night, and light sources (step 15).
+{
+  const at = (h) => ambientAt((h - CONFIG.time.startHour) * 60 / CONFIG.time.minutesPerTick + (h < CONFIG.time.startHour ? 720 : 0));
+  assert(at(8) === 3 && at(12) === 3 && at(16) === 2 && at(20) === 1 && at(3) === 1 && at(7) === 2, 'light: full day, dusk at 4, moonlit night, dawn at 7');
+  const w = createWorld(1, { map: 'village' });
+  const p = playerOf(w);
+  for (const z of query(w, 'Brain')) w.entities.delete(z.id); // no interruptions
+  const toHour = (h) => { w.tick = ((h - CONFIG.time.startHour + 24) % 24) * 60 / CONFIG.time.minutesPerTick; updateLight(w); };
+  const indoor = w.tiles.findIndex((t) => t === TILE.FLOOR_WOOD), outdoor = p.Position.y * w.width + p.Position.x;
+  assert(w.light[outdoor] === 3 && w.light[indoor] === 2, 'light: by day, outside is bright and indoors dim');
+  let fell = null; w.events.on('ambient_changed', (d) => { fell = d; });
+  toHour(21);
+  assert(fell && fell.to === 1 && w.light[outdoor] === 1 && w.light[indoor] === 0, 'light: at night, moonlight outside and pitch black indoors');
+  // A torch lights you and the ground around you, so you see, and are seen, from further off.
+  const zid = makeZombie(w, { x: p.Position.x, y: p.Position.y + 6 }); const z = w.entities.get(zid);
+  refreshAllVision(w);
+  assert(!canSee(w, z, p) && !canSee(w, p, z), 'light: on a moonlit road, 6 tiles apart, neither notices the other');
+  const torch = w.entities.get(makeItem(w, 'torch', null, null)); p.Inventory.items.push(torch.id);
+  assert(playerAct(w, { type: 'use', itemId: torch.id }) && torch.Item.lit, 'light: you switch the torch on');
+  assert(w.light[outdoor] === 3 && w.light[(p.Position.y + 4) * w.width + p.Position.x] === 3, 'light: the torch lights around you');
+  assert(canSee(w, z, p) && canSee(w, p, z), 'light: with a torch you see it, and it sees you');
+  // Light stays out of solid walls but spills out of windows.
+  const win = query(w, 'Window', 'Position').find((e) => e.Position.y < w.landHeight);
+  const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: win.Position.x + dx, y: win.Position.y + dy }));
+  const inside = nb.find((q) => TILE_INFO[tileAt(w, q.x, q.y)].indoor), outside = nb.find((q) => !TILE_INFO[tileAt(w, q.x, q.y)].blocks && !TILE_INFO[tileAt(w, q.x, q.y)].indoor);
+  p.Inventory.items.splice(p.Inventory.items.indexOf(torch.id), 1); torch.Position = { ...inside };
+  updateLight(w);
+  assert(w.light[outside.y * w.width + outside.x] >= 2, 'light: a torch left inside shines out of the window');
+  // Burning down: a candle burns away, a torch goes flat.
+  const candle = w.entities.get(makeItem(w, 'candle', null, null)); p.Inventory.items.push(candle.id);
+  playerAct(w, { type: 'use', itemId: candle.id });
+  candle.Item.charge = 2; torch.Item.charge = 2;
+  let out = 0; w.events.on('light_out', () => out++);
+  for (let i = 0; i < 4; i++) playerAct(w, { type: 'wait' });
+  assert(out === 2 && !w.entities.has(candle.id) && !p.Inventory.items.includes(candle.id) && !torch.Item.lit, 'light: the candle burns away, the torch goes flat');
+  p.Inventory.items.push(torch.id); delete torch.Position;
+  assert(!playerAct(w, { type: 'use', itemId: torch.id }), 'light: a flat torch will not switch on');
+  // Saves keep the time and what's lit.
+  torch.Item.charge = 100; playerAct(w, { type: 'use', itemId: torch.id });
+  const back = deserialize(serialize(w), createWorldAny);
+  assert(serialize(back) === serialize(w) && back.light[outdoor] === w.light[outdoor] && back.ambient === w.ambient, 'light: a save keeps the night and the lit torch');
+}
+console.log('light: hourly daylight, dark interiors at night, torches light you up (both ways), light out of windows, burning down, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

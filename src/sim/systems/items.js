@@ -15,6 +15,7 @@
 import { CONFIG } from '../../config.js';
 import { addEntity, isPassable, query } from '../world.js';
 import { adjacentStructures, addBarricade } from './structures.js';
+import { toggleLight } from './light.js';
 import { TILE_INFO } from '../gen/testgrid.js';
 
 // extra: { lockId, name } override the type's (a key to a particular building).
@@ -24,7 +25,7 @@ export function makeItem(world, type, x, y, extra = {}) {
   const lockId = extra.lockId || def.lockId;
   return addEntity(world, {
     ...(x === null ? {} : { Position: { x, y } }),
-    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(lockId ? { lockId } : {}) },
+    Item: { type, slots: def.slots, ...(def.ammo !== undefined ? { ammo: def.ammo } : {}), ...(lockId ? { lockId } : {}), ...(def.light ? { lit: false, charge: def.charge } : {}) },
     Glyph: { char: def.char, fg: def.fg, bg: def.bg },
     Name: { name: extra.name || def.name },
   });
@@ -86,6 +87,7 @@ export function useItem(world, carrier, itemId) {
     world.events.emit(inv.wielded ? 'item_wielded' : 'item_unwielded', { id: carrier.id, itemId });
     return true;
   }
+  if (def.light) return toggleLight(world, carrier, item); // torch, candle: on / off
   if (def.ammoFor) {
     // Load a carried gun of the right type (the emptiest one).
     const guns = inv.items.map((id) => world.entities.get(id)).filter((g) => g.Item.type === def.ammoFor);

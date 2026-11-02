@@ -203,7 +203,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Tuning panel (src/sim/tuning.js + main.js): with the debug overlay on, a small orange TUNE button sits at the top right of the map. It opens a panel with -/+ rows for zombie speed, bite hit chance, bite damage, bite bleed chance, zombie health, search length, search radius, zombie eyesight, zombie hearing and light range (TUNABLES lists path, step, min, max). Changed values show yellow; RESET restores config.js defaults; CLOSE. Changes apply at once (syncWorld pushes zombie values into zombies already on the map; vision is recomputed) and are saved in localStorage under 'zombie-sim-tuning', separate from the game save, and applied to CONFIG at every boot. config.js stays the shipped default: when a tuned value feels right, copy it into config.js in a Claude session. Changing tuning mid-run means that run's inputs no longer replay exactly (it's a balance tool).
 - Intentional: in daylight in the open, zombies see you (7 tiles) well before they hear your footsteps (3 tiles). Hearing matters when they can't see you: round corners, behind walls, in the dark. Night (step 15) will shrink sight and make hearing their main sense. Don't "fix" this by tuning.
 - Sneaking (src/sim/systems/stealth.js): toggled by a big SNEAK button in a bottom bar (72 px, full width, yellow "SNEAKING" when on). Toggling takes no turn but is recorded as an input ({ type: 'sneak', on }) so replays match. While sneaking: each step costs 2x energy (zombies get twice the time), footsteps drop from level 1 to 0 (silent), and you can only be noticed from two-thirds of the usual distance (stealth.sneakNoticeFactor 0.67). Waiting costs the same as normal. A sneaking creature is drawn dimmer.
-- Noticing (vision.js canSee) combines line of sight, light and distance: the target's tile must be in sight with light >= minLevelToSpot, and within sight radius x noticeByLight[light level] (1 / 0.67 / 0.34 for light 3/2/1) x stealth.sneakNoticeFactor if sneaking. Adjacent creatures are always noticed if there's any light. The same rule works both ways: you don't see zombies you haven't noticed (they aren't drawn).
+- Noticing (vision.js canSee) combines line of sight, light and distance: the target's tile must be in sight with light >= minLevelToSpot, and within sight radius x noticeByLight[light level] (1 / 0.67 / 0.34 for light 3/2/1) x stealth.sneakNoticeFactor if sneaking. Adjacent creatures are always noticed, even in pitch darkness (you'd bump into them; step 15), as long as no wall is between. The same rule works both ways: you don't see zombies you haven't noticed (they aren't drawn).
 - Hiding spots: bush tiles (TILE_INFO cover: true) are walkable and see-through, but anything standing in one can only be noticed from an adjacent tile. Works for zombies too: a zombie in a bush is invisible until you're next to it. Creatures in a bush are drawn with leaf marks over them. Test grid scatters a few bush clumps (config testGrid).
 - Bottom bar (action bar) holds big buttons side by side, split evenly: SNEAK (toggle) and SHOVE (one-shot). The map area shrinks to fit between the status bar and it. Add future actions here rather than new UI.
 - Sneaking and bushes stop you being noticed; they don't shake off a zombie that already has you in view (it watched you duck into the bush). A zombie that saw you on its last look keeps tracking you at its normal range, ignoring sneak and cover, while you stay in line of sight. To lose a pursuer, break line of sight with walls first, then hide.
@@ -245,7 +245,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 - Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
 - Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
 - Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (6 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
+- Save version: CONFIG.save.version (7 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
 - New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
 - Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
 - Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
@@ -410,6 +410,39 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
   - the zombie count, none near the start, residents indoors, nothing sees you at the start;
   - a resident's key drops where it dies and opens its building;
   - shells load a shotgun, and pellets with no air rifle are refused.
+  Checked on 150 seeds.
+
+## Decisions for step 15 (day/night + light sources) - built
+- src/sim/systems/light.js owns world.light (0-3 per tile), which vision already reads: a tile's visibility = its light level, and noticing distance x noticeByLight (1 / 0.67 / 0.34).
+- Ambient light by the hour (CONFIG.light.byHour, a November day in the Lakes): 1 (moonlight) until 07:00, 2 at 07:00 (dawn), 3 from 08:00 to 15:59, 2 at 16:00 (dusk), 1 from 17:00. A run starts at 08:00, so night falls after about 270 turns.
+  - Indoor floors (TILE_INFO indoor: floorboards, flagstones, concrete; not the greenhouse's earth) are indoorDim (1) darker: dim by day, pitch black at night.
+  - The void band follows the same rule.
+- Light sources: any item with a light property (CONFIG.items) that's lit (Item.lit), with Item.charge in ticks.
+  - torch: radius 6, level 3, about 16 hours of battery.
+  - candle: radius 2, level 2, about 6 hours, then gone (burnsOut).
+  - USE in the bag switches it ON / OFF; the bag shows on/off/spent. A spent torch won't switch on ("It's spent.").
+  - Carried, it lights from its carrier's tile; dropped or thrown, from where it lies. So a lit torch thrown down the street lights it up.
+  - It lights every tile it has a clear line to (like sight: through windows, not walls): its level within radius, one less for falloff (2) tiles more. Lit tiles only ever get brighter (max with ambient).
+  - A lit tile makes a lit target: carrying a torch, zombies notice you from their full sight range (7 tiles) instead of about 2 in moonlight, and you see them too. Darkness hides you; light shows you.
+  - Lit things burn down every tick (tickLight, in the scheduler's onTick). At 0 they go out ("Your torch dies." / "Your candle burns out.").
+- Loot: torches in kitchens, sculleries, stock rooms, sheds and barns; candles in kitchens, bedrooms, the nave and plenty in the vestry.
+- Noticing in the dark: anything right next to you is noticed even at light 0 (if no wall is between), both ways. So zombies still bite in a pitch-black house, and you know they're there. Two tiles away in the dark, nothing is seen; hearing is all you have.
+- Updating:
+  - updateLight runs at the end of every player turn. It only recomputes when the hour's light changed or a light moved, came on or went out (key of light positions).
+  - world.lightBase (the hour's light per tile) is only rebuilt when the hour changes; lights are laid over a copy.
+  - On a change of hour, everyone's vision is refreshed; otherwise only creatures near a light that changed. About 2.5 ms a turn carrying a lit torch with 35 zombies about.
+  - Loading a save recomputes the light for the saved time.
+- Messages: "It's getting dark." (dusk), "Night falls." (night), "Dawn breaks.", "You light the torch." / "You put out the torch."
+- Play-test bot (it never uses lights or sneaks), 40 seeds x 1500 turns, now including a night: deaths rose from ~33% to ~55%. It walks into zombies it can't see. Intended: night is when hearing and light matter. The knobs are light.byHour, indoorDim, the item radii and charge, and vision.noticeByLight.
+- Save version 7 (items carry lit/charge).
+- Tests:
+  - the hourly levels;
+  - by day outside bright and indoors dim; at night moonlit outside and pitch black indoors ("Night falls." event);
+  - 6 tiles apart on a moonlit road neither notices the other; with a torch both do, and the torch lights 4 tiles off;
+  - a torch left inside lights the tile outside its window;
+  - a candle burns away and a torch goes flat; a flat torch won't switch on;
+  - saves keep the night and the lit torch;
+  - adjacent creatures are noticed in pitch darkness.
   Checked on 150 seeds.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
