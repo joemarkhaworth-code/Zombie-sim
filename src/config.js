@@ -426,6 +426,12 @@ export const CONFIG = {
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
   save: { version: 14, key: 'zombie-sim-save' },
+  // Death replay (step 21): the run again from above, sped up to about this many seconds.
+  replay: {
+    seconds: 25,
+    minRate: 12,                     // inputs a second at least: a short run still plays at a watchable pace
+    darkByLight: [0.6, 0.45, 0.2, 0], // dim the valley by the light level (night, storms)
+  },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -508,6 +514,8 @@ export const CONFIG = {
     ice: '#b8d0e0', iceMark: '#ffffff', iceThin: '#7fa4c4', // ice: pale, cracks; thin ice darker
     fallenTree: '#4a5a2a', fallenTrunk: '#6a4a2a', fallenLeaf: '#203f14', stump: '#3c5a28', stumpMark: '#7a5a36',
     silt: '#6a5a40', siltMark: '#4e4230',
+    deathNewBg: '#8a1a1a',
+    replayFire: '#ff7a1a', replayTrail: 'rgba(255,255,0,0.5)', replayZombie: '#40e040', replayCorpse: '#7a1010',
     alertSeen: '#ffd000', alertHeard: '#e0e0e0', // zombie alerts: ! has seen you, ? coming to look
     shore: '#9a917c',
     wall: '#707070',

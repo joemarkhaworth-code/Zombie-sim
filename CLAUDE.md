@@ -21,6 +21,7 @@ Look: simple 8-bit, inspired by old RPGs and UK Teletext. Until the art pass, ev
 - Deploys to GitHub Pages on every push to main. Play it at https://joemarkhaworth-code.github.io/Zombie-sim/ - when a change is done and live, always give the user this link.
 - Touch-first controls: tap anywhere to step one tile in that direction (8-way), tap on yourself to wait, long-press any tile to inspect it. Big tiles with the camera following the player. Portrait orientation.
 - One system per session. Before finishing, the game must load and be playable, the headless test run must pass, and the change must be committed.
+- Fun check (asked for after step 20: "we're losing the concept of fun"): before building a step, ask what it adds to the fun - a clever trick that works, a choice, or a story you see on the map. Systems that wear you down (needs, illness, weather damage) stay in the background: slow, quiet, rarely the thing that kills you. Revisit the fun-pass ideas (rare odd moments from Phase 8, a better first hour) between steps.
 
 ## Architecture rules
 - Simulation is separate from rendering. src/sim/ never touches the DOM or canvas. src/render/ only reads world state.
@@ -732,6 +733,19 @@ Play-testing: "we're losing the concept of fun". Steps 16-20 kept adding ways to
   So you can tell who's hunting you, whether sneaking worked, and whether your thrown tin drew them off.
 - Play-test bot over 40 seeds: 33 of 40 died, but now almost all from zombies (bites, bleeding). Starving and cold deaths are gone (8 and 1 before).
 - Next ideas for fun, not built: bring a few cheap rare moments forward from Phase 8 (ringing phone box at night, drunk zombies from the pub, zombies keeping old habits), and pacing (something interesting to find in the first hour).
+
+## Decisions for step 21 (death replay) - built
+- The death page has two big buttons: REPLAY (blue) and NEW GAME (red), from ui.js deathButtons(). It still ignores taps for the first second.
+- src/sim/replay.js: createReplay(createWorld, { seed, map, inputs }) rebuilds the world from the seed and steps through the recorded inputs ({ world, step(n), index, total, done }). The seeded RNG makes the run play out exactly as it did (tested on both maps, to the same tick, death, creatures and map).
+- TUNE world changes (weather, time, give, beck, ice) now go through applyDebug(), which records them as { turn, debug } inputs, so a replay matches. Changing tuning numbers mid-run still isn't recorded, so such a run may not replay exactly. turn.js replay() uses the same applyInput().
+- src/render/replay.js draws it from above: the whole land (not the void band) scaled to fit the screen, one pixel per tile through an ImageData, cheap every frame.
+  - Fire shows orange. Zombies are green dots, corpses dark red, you a big yellow square (red once dead).
+  - Your path is a yellow trail. Upstairs, cellars and lofts show at their building's middle, and you blink on the roof.
+  - Night and dark weather dim the valley (replay.darkByLight).
+  - Header: REPLAY, the day and clock, and a progress bar. Footer: "Tap to skip" / "Tap to go back". Any tap returns to the death page.
+- Speed is time-based: long runs take about replay.seconds (25), short ones play at least replay.minRate (12) inputs a second. A 1,700-input village run costs ~0.75 s of compute in total (worst frame ~16 ms, a long sleep).
+- The save is still deleted on death; the replay uses the dead run's inputs in memory.
+- Tests: a run with TUNE changes in it replays step by step to exactly the same end, on the test grid and the village.
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).

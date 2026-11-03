@@ -16,7 +16,7 @@ import { indoorAt } from '../sim/systems/weather.js';
 import { iceLevel } from '../sim/systems/water.js';
 
 const C = CONFIG.colours;
-const TILE_COLOUR = {
+export const TILE_COLOUR = {
   [TILE.FLOOR]: C.floor, [TILE.WALL]: C.wall, [TILE.BUSH]: C.bush,
   [TILE.GRASS]: C.grass, [TILE.LANE]: C.lane, [TILE.STREAM]: C.stream, [TILE.BRIDGE]: C.bridge,
   [TILE.DRYSTONE]: C.drystone, [TILE.HEDGE]: C.hedge, [TILE.TREE]: C.tree, [TILE.POND]: C.pond,

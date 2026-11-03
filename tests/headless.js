@@ -20,6 +20,7 @@ import { trackAt, snowLevel, mudLevel } from '../src/sim/systems/tracks.js';
 import { flammability, ignite } from '../src/sim/systems/fire.js';
 import { tickWater, beckLevel, iceLevel, findBridges, setWaterLevel } from '../src/sim/systems/water.js';
 import { tickStorm, fellTree } from '../src/sim/systems/storm.js';
+import { createReplay, applyDebug } from '../src/sim/replay.js';
 import { indoorAt } from '../src/sim/systems/weather.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
@@ -2023,6 +2024,29 @@ console.log('water: dirty water makes you ill later (thirstier, sick, fever), co
   assert(serialize(back) === serialize(w) && back.weather.wind, 'storm: saved');
 }
 console.log('storm: long floods spread into houses and cellars, float things off, breach walls, leave silt (slow, prints); spates widen the beck; gales fell trees (stumps, knocked flat, fallen trunks) and strip roofs; saved OK');
+
+// 27. Death replay (step 21): a run rebuilt from seed + inputs, step by step, ends the same.
+{
+  for (const map of ['testgrid', 'village']) {
+    const seed = 31;
+    const w = createWorldAny(seed, { map }); const rng = createRng(5);
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    for (let t = 0; t < 900 && !w.gameOver; t++) {
+      if (t === 50) applyDebug(w, { kind: 'weather', to: 'heavyRain' });
+      if (t === 80) applyDebug(w, { kind: 'give', type: 'torch' });
+      if (t === 120) applyDebug(w, { kind: 'time', hours: 6 });
+      if (t === 150) applyDebug(w, { kind: 'water', what: 'beck', level: 3 });
+      const [dx, dy] = dirs[rng.int(dirs.length)];
+      playerAct(w, rng.chance(0.15) ? { type: 'wait' } : { type: 'move', dx, dy });
+    }
+    const r = createReplay(createWorldAny, { seed, map: w.map, inputs: w.inputs });
+    let steps = 0; while (!r.done) { r.step(7); steps++; }
+    assert(r.index === w.inputs.length && steps > 1, 'replay: steps through every input');
+    assert(r.world.tick === w.tick && r.world.turn === w.turn && JSON.stringify(r.world.gameOver) === JSON.stringify(w.gameOver), `replay (${map}): ends exactly as the run did (tick ${w.tick}, ${w.gameOver ? w.gameOver.cause : 'alive'})`);
+    assert(JSON.stringify([...r.world.entities.keys()]) === JSON.stringify([...w.entities.keys()]) && r.world.tiles.every((t, i) => t === w.tiles[i]), `replay (${map}): same creatures, same map (TUNE changes recorded)`);
+  }
+}
+console.log('replay: a run with TUNE changes replays step by step to exactly the same end, test grid and village OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

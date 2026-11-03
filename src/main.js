@@ -3,18 +3,19 @@ import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
 import { playerAct } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
-import { drawStatus, drawButtons, drawDeath, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout, drawMapButton, mapButtonRect } from './render/ui.js';
+import { drawReplay, landSpot } from './render/replay.js';
+import { drawStatus, drawButtons, drawDeath, deathButtons, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout, drawMapButton, mapButtonRect } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
 import { TUNABLES, getPath, nudge, applyOverrides, currentOverrides, resetAll, syncWorld, defaultOf } from './sim/tuning.js';
 import { refreshAllVision } from './sim/systems/vision.js';
 import { stairsAt } from './sim/systems/floors.js';
-import { setWeather, WEATHER_KINDS } from './sim/systems/weather.js';
-import { setWaterLevel, beckLevel, iceLevel } from './sim/systems/water.js';
+import { WEATHER_KINDS } from './sim/systems/weather.js';
+import { beckLevel, iceLevel } from './sim/systems/water.js';
+import { applyDebug, createReplay } from './sim/replay.js';
 import { updateLight } from './sim/systems/light.js';
 import { clockOf } from './sim/time.js';
-import { makeItem, usedSlots } from './sim/systems/items.js';
 import { canDrinkHere, canSleep } from './sim/turn.js';
 
 const canvas = document.getElementById('game');
@@ -138,7 +139,31 @@ function currentButtons() {
   return ids.map((id, i) => ({ id, x: pad + i * (bw + pad), y: h - barH + pad, w: bw, h: barH - pad * 2 }));
 }
 
+// Death replay (step 21): the run rebuilt from seed + inputs and played back from above.
+let replaying = null; // { r, trail, perFrame }
+function startReplay() {
+  const r = createReplay(createWorld, { seed: world.seed, map: world.map, inputs: world.inputs.slice() });
+  // Time-based: long runs fit in about replay.seconds; short ones play no faster than minRate.
+  const rate = Math.max(CONFIG.replay.minRate, r.total / CONFIG.replay.seconds); // inputs a second
+  replaying = { r, trail: [] };
+  let last = performance.now(), owed = 0;
+  const frame = (now) => {
+    if (!replaying || replaying.r !== r) return;
+    owed += Math.min(0.1, (now - last) / 1000) * rate; last = now;
+    const n = Math.floor(owed); owed -= n;
+    r.step(n);
+    const p = r.world.entities.get(r.world.playerId) || r.world.fallenPlayer;
+    const at = p && p.Position && landSpot(r.world, p.Position.x, p.Position.y);
+    const prev = replaying.trail[replaying.trail.length - 1];
+    if (at && (!prev || prev.x !== at.x || prev.y !== at.y)) replaying.trail.push({ x: at.x, y: at.y });
+    render();
+    if (!r.done) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame((t) => { last = t; frame(t); });
+}
+
 function render() {
+  if (replaying) { drawReplay(ctx, layout, replaying.r.world, { trail: replaying.trail, index: replaying.r.index, total: replaying.r.total, flash: blink }); return; }
   updateCamera();
   layout.buttons = currentButtons();
   ctx.fillStyle = CONFIG.colours.background;
@@ -205,8 +230,12 @@ canvas.addEventListener('pointerup', (e) => {
   const d = down;
   down = null;
   clearTimeout(d.timer);
+  if (replaying) { replaying = null; render(); return; } // any tap leaves the replay
   if (world.gameOver) {
-    if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) restart(); // a moment to read the page
+    if (performance.now() - diedAt < CONFIG.ui.deathTapDelayMs) return; // a moment to read the page
+    const B = deathButtons(layout), hit = (b) => e.clientX >= b.x && e.clientX < b.x + b.w && e.clientY >= b.y && e.clientY < b.y + b.h;
+    if (hit(B.replay)) startReplay();
+    else if (hit(B.newGame)) restart();
     return;
   }
   if (d.longPressed || d.moved) return;
@@ -263,28 +292,23 @@ function onTuneTap(px, py) {
     const dir = inRect(L.rows[i].plus, px, py) ? 1 : -1;
     if (i === 0) { // weather: the next / previous kind, held for a day
       const kinds = WEATHER_KINDS(), at = kinds.indexOf(world.weather.kind);
-      setWeather(world, kinds[(at + dir + kinds.length) % kinds.length]);
-      updateLight(world, true);
+      applyDebug(world, { kind: 'weather', to: kinds[(at + dir + kinds.length) % kinds.length] }); // recorded, so replays match
       persist(); render(); return;
     }
     if (i === 2) { // give: '-' picks the next item type, '+' puts one in your bag (or at your feet)
       const types = Object.keys(CONFIG.items).filter((k) => k !== 'key');
       if (dir < 0) { giveType = types[(types.indexOf(giveType) + 1) % types.length]; render(); return; }
-      const p = world.entities.get(world.playerId);
-      const id = makeItem(world, giveType, p.Position.x, p.Position.y);
-      if (usedSlots(world, p) + CONFIG.items[giveType].slots <= p.Inventory.capacity) { delete world.entities.get(id).Position; p.Inventory.items.push(id); messages.show(`Given: ${CONFIG.items[giveType].name}.`); }
+      if (applyDebug(world, { kind: 'give', type: giveType }) === 'bag') messages.show(`Given: ${CONFIG.items[giveType].name}.`);
       else messages.show('Bag full: left at your feet.');
       persist(); render(); return;
     }
     if (i === 3 || i === 4) { // beck / ice: a level up or down now
       const what = i === 3 ? 'beck' : 'ice';
-      setWaterLevel(world, what, (what === 'beck' ? beckLevel(world) : iceLevel(world)) + dir);
-      updateLight(world, true);
+      applyDebug(world, { kind: 'water', what, level: (what === 'beck' ? beckLevel(world) : iceLevel(world)) + dir });
       persist(); render(); return;
     }
     if (i === 1) { // time: an hour on or back
-      world.tick = Math.max(0, world.tick + dir * 60 / CONFIG.time.minutesPerTick);
-      updateLight(world, true);
+      applyDebug(world, { kind: 'time', hours: dir });
       persist(); render(); return;
     }
     nudge(TUNABLES[i - WORLD_ROWS], dir);

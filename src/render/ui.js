@@ -122,12 +122,20 @@ export function drawDeath(ctx, layout, t, flash) {
     ctx.fillStyle = '#ffffff';
     ctx.fillText(String(value), w * 0.86, y);
   });
-  if (flash) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = C.buttonOnBg;
-    ctx.font = `bold ${Math.floor(w / 18)}px monospace`;
-    ctx.fillText('Tap for a new game', w / 2, h * 0.75);
+  // Two big buttons: watch the run again from above (step 21), or start a new game.
+  const B = deathButtons(layout);
+  ctx.font = `bold ${Math.floor(w / 16)}px monospace`;
+  ctx.textAlign = 'center';
+  for (const [b, label, bg] of [[B.replay, 'REPLAY', C.statusBg], [B.newGame, 'NEW GAME', C.deathNewBg]]) {
+    ctx.fillStyle = bg; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
   }
+}
+
+// The death page's buttons (pure layout, so main.js hit-tests the same rects).
+export function deathButtons(layout) {
+  const { width: w, height: h } = layout, bw = (w - 48) / 2, bh = 64, y = h * 0.76;
+  return { replay: { x: 16, y, w: bw, h: bh }, newGame: { x: 32 + bw, y, w: bw, h: bh } };
 }
 
 // Inventory panel ("BAG"): an 8-bit list filling the map area. Header with slots used and

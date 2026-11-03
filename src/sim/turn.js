@@ -9,6 +9,7 @@ import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
 import { tickWater, drinkFrom, DRINKABLE } from './systems/water.js';
 import { tickStorm } from './systems/storm.js';
+import { applyInput } from './replay.js';
 import { attack } from './systems/combat.js';
 import { shove } from './systems/shove.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
@@ -176,6 +177,6 @@ export const canSleep = (e) => !!(e.Needs && needLevel(e, 'fatigue') >= 1);
 // Rebuild a run exactly from its seed and recorded inputs.
 export function replay(createWorld, seed, inputs) {
   const world = createWorld(seed);
-  for (const { action } of inputs) playerAct(world, action);
+  for (const rec of inputs) applyInput(world, rec); // actions and recorded TUNE changes (replay.js)
   return world;
 }
