@@ -109,7 +109,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('barricade_broken', (d) => { if (!isPlayer(d.by)) say('A barricade gives way!', PRIORITY.danger); });
   ev.on('glass_crunched', (d) => { if (isPlayer(d.id)) say('Glass crunches underfoot.', PRIORITY.info); });
   ev.on('ground_noise', (d) => {
-    if (!isPlayer(d.id) || d.tile === d.fromTile) return; // said once as you step onto it, not every step
+    if (!isPlayer(d.id)) return;
     const t = { [TILE.STREAM]: 'You splash through the beck.', [TILE.HEDGE]: 'You push through the hedge.', [TILE.BRACKEN]: 'Bracken rustles.', [TILE.SCREE]: 'Scree clatters underfoot.', [TILE.SHORE]: 'Shingle crunches.', [TILE.GATE]: 'The gate creaks.', [TILE.ICE]: 'The ice creaks.', [TILE.FLOODWATER]: 'You wade through floodwater.', [TILE.FLOOD_IN]: 'You wade through floodwater.', [TILE.FALLEN_TREE]: 'You clamber over the tree.', [TILE.SILT]: 'Silt squelches underfoot.', [TILE.SILT_FLOOR]: 'Silt squelches underfoot.', [TILE.RUBBLE]: 'Rubble shifts underfoot.' }[d.tile];
     say(t || 'Noisy ground.', PRIORITY.info);
   });
@@ -138,8 +138,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   };
   ev.on('need_changed', (d) => {
     if (isPlayer(d.id) && d.need === 'ill' && d.level === 0 && d.from > 0) { say('You feel better.', PRIORITY.notice); return; }
-    if (!isPlayer(d.id) || d.level <= d.from) return; // only say it when it gets worse...
-    if (d.level < 2 && d.need !== 'ill') return; // ...and only once it matters: the letter in the top bar shows level 1
+    if (!isPlayer(d.id) || d.level <= d.from) return; // only say it when it gets worse
     say(NEED_WORDS[d.need][d.level], d.level >= 3 ? PRIORITY.danger : PRIORITY.notice);
   });
   ev.on('drank', (d) => { if (isPlayer(d.id)) say('You drink from the water.', PRIORITY.info); });

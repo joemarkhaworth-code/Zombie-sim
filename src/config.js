@@ -338,7 +338,7 @@ export const CONFIG = {
   water: {
     // Dirty water: drinking from the beck, the lake, a pond or floodwater may make you ill,
     // some hours later. A corpse lying in or by the water (within corpseReach) fouls it.
-    dirty: { stream: 0.08, lake: 0.15, pond: 0.25, flood: 0.3 }, // chance each drink makes you ill (halved in the fun pass)
+    dirty: { stream: 0.15, lake: 0.3, pond: 0.45, flood: 0.5 }, // chance each drink makes you ill
     corpseFoul: 0.5, corpseReach: 6,  // + this chance with a corpse in or by the water
     onset: [60, 150],                // ticks (2-5 h) before you fall ill
     illDose: 2, foulDose: 3,         // how ill (level): dirty water / water fouled by a corpse
@@ -382,8 +382,7 @@ export const CONFIG = {
   // Needs (step 16, systems/needs.js): hunger, thirst and fatigue, counted in ticks (2 min)
   // and shown as levels 0-3 (one level every perLevel ticks).
   needs: {
-    // Fun pass: slowed from 12 h / 8 h / 6 h so needs sit in the background, not on every turn.
-    perLevel: { hunger: 540, thirst: 360, fatigue: 240, wet: 40, cold: 90, ill: 120 }, // 18 h, 12 h, 8 h awake; wet/cold (step 17); ill (step 20) 4 h a level
+    perLevel: { hunger: 360, thirst: 240, fatigue: 180, wet: 40, cold: 90, ill: 120 }, // ill (step 20): 4 h a level // 12 h, 8 h, 6 h awake; wet/cold (step 17) per level
     starveEvery: 360,                // starving (hunger 3, after 36 h): lose 1 health every 12 hours
     parchedEvery: 180,               // parched (thirst 3, after 24 h): lose 1 health every 6 hours
     exhaustedCost: 1.5,              // exhausted (fatigue 3): every action takes 1.5x as long
@@ -516,7 +515,6 @@ export const CONFIG = {
     silt: '#6a5a40', siltMark: '#4e4230',
     deathNewBg: '#8a1a1a',
     replayFire: '#ff7a1a', replayTrail: 'rgba(255,255,0,0.5)', replayZombie: '#40e040', replayCorpse: '#7a1010',
-    alertSeen: '#ffd000', alertHeard: '#e0e0e0', // zombie alerts: ! has seen you, ? coming to look
     shore: '#9a917c',
     wall: '#707070',
     memoryFloor: '#1c1c1c',          // remembered but out of sight: greyed out

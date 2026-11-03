@@ -28,7 +28,7 @@ export function installNoise(world) {
     // Ground that makes noise when stepped on (stream splash, hedge rustle); sneaking: one less.
     const step = TILE_INFO[tileAt(world, d.to.x, d.to.y)].stepNoise - (e && e.Stealth && e.Stealth.sneaking ? 1 : 0);
     if (step > 0) {
-      world.events.emit('ground_noise', { id: d.id, x: d.to.x, y: d.to.y, tile: tileAt(world, d.to.x, d.to.y), fromTile: tileAt(world, d.from.x, d.from.y) });
+      world.events.emit('ground_noise', { id: d.id, x: d.to.x, y: d.to.y, tile: tileAt(world, d.to.x, d.to.y) });
       makeNoise(world, d.to.x, d.to.y, step, d.id);
     }
   });
