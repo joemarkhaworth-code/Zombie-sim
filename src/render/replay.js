@@ -67,7 +67,7 @@ export function drawReplay(ctx, layout, world, { trail = [], index = 0, total = 
   for (const e of world.entities.values()) {
     if (!e.Position || !(e.Corpse || (e.Health && e.Brain))) continue;
     const at = landSpot(world, e.Position.x, e.Position.y);
-    if (at) dot(at.x, at.y, Math.max(2, ts * (e.Corpse ? 1 : 1.4)), e.Corpse ? C.replayCorpse : C.replayZombie);
+    if (at) dot(at.x, at.y, Math.max(2, ts * (e.Corpse ? 1 : 1.4)), e.Corpse ? C.replayCorpse : e.Animal ? e.Glyph.bg : C.replayZombie); // animals in their own colour
   }
   const p = world.entities.get(world.playerId) || world.fallenPlayer;
   if (p && p.Position) {

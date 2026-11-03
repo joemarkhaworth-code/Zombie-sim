@@ -53,7 +53,7 @@ export function installWater(world) {
     if (world.water.moving) return; // being put back on land
     const e = world.entities.get(d.id);
     const i = d.to.y * world.width + d.to.x;
-    if (!e || world.tiles[i] !== TILE.ICE) return;
+    if (!e || e.Flies || world.tiles[i] !== TILE.ICE) return; // birds don't break the ice
     if (!world.rng.chance(W.iceBreak[iceLevel(world)])) return;
     breakIce(world, i);
     fallIn(world, e, d.from);
@@ -255,7 +255,7 @@ function restore(world, kind) {
 // Tiles that just became deep water: anyone in them is swept ashore, things in them float off.
 function clearWater(world, kind) {
   for (const e of [...world.entities.values()]) {
-    if (!e.Position || world.tiles[e.Position.y * world.width + e.Position.x] !== kind) continue;
+    if (!e.Position || e.Flies || world.tiles[e.Position.y * world.width + e.Position.x] !== kind) continue; // birds just fly off
     if (e.Item || e.Corpse) { world.entities.delete(e.id); world.events.emit('washed_away', { id: e.id, x: e.Position.x, y: e.Position.y }); continue; }
     if (!e.Health) continue;
     world.events.emit('swept', { id: e.id, x: e.Position.x, y: e.Position.y });
@@ -292,7 +292,7 @@ function setIce(world, from, to) {
     }
   }
   if (to === 0) { // thawed: whoever's on the ice goes in
-    const onIce = [...world.entities.values()].filter((e) => e.Health && e.Position && world.tiles[e.Position.y * world.width + e.Position.x] === TILE.ICE);
+    const onIce = [...world.entities.values()].filter((e) => e.Health && e.Position && !e.Flies && world.tiles[e.Position.y * world.width + e.Position.x] === TILE.ICE);
     restore(world, TILE.ICE);
     for (const e of onIce) fallIn(world, e, null);
     for (const e of [...world.entities.values()]) if ((e.Item || e.Corpse) && e.Position && TILE_INFO[world.tiles[e.Position.y * world.width + e.Position.x]].blocks) world.entities.delete(e.id); // sinks

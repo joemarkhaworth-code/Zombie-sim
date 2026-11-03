@@ -401,6 +401,44 @@ export const CONFIG = {
     coldTiresFrom: 2,                // shivering (cold 2+): fatigue rises twice as fast
     freezeEvery: 240,                // freezing (cold 3): lose 1 health every 8 hours, and you can't sleep
   },
+  // Animals (step 23, src/sim/systems/animals.js). Every species is data; one brain runs them all.
+  //   speed: energy a tick (100 = your speed); fleeCost: a fleeing step costs this x the time (bolting)
+  //   prey: zombies (and dog packs) go after it; flies: over walls and water, never indoors, blocks nothing
+  //   sight: tiles it notices things at in daylight (x light, cover, sneaking); hearing 0-3
+  //   fears: what it runs from on sight; startle: a heard noise at least this strong scares it (0 = never)
+  //   flee: tiles it runs before calming; stampede: a fleeing herd knocks over what's in its way (no damage)
+  //   herd: keeps within this of its group's middle; range: wanders within this of its home spot
+  //   active: 'day' | 'night' | 'any' (otherwise it rests: still runs from danger)
+  //   call: [chance a turn, noise level]; alarm: noise level when it sees something it fears (geese honk)
+  //   hunts: species it hunts as a pack (when not fed); fed: ticks a kill lasts; fightsBack: hits back when hit
+  //   nose: smells prey (and bodies) this close, through walls; scavenges: goes to bodies it can see;
+  //   circles: stays 1-2 tiles off a body, round and round (crows)
+  animals: {
+    species: {
+      sheep: { name: 'sheep', char: 's', fg: '#202020', bg: '#e6e6da', speed: 50, fleeCost: 0.5, health: 2, prey: true, sight: 6, hearing: 2, fears: ['player', 'zombie', 'dog'], startle: 5, flee: 8, stampede: true, herd: 3, range: 10, active: 'day', call: [0.01, 1], tracks: 'hoof' },
+      deer: { name: 'deer', char: 'd', fg: '#000000', bg: '#a8743c', speed: 100, fleeCost: 0.5, health: 3, prey: true, sight: 10, hearing: 3, fears: ['player', 'zombie', 'dog'], startle: 2, flee: 14, stampede: true, herd: 3, range: 14, active: 'any', tracks: 'hoof' },
+      goose: { name: 'goose', char: 'g', fg: '#000000', bg: '#f0f0e8', speed: 50, health: 2, melee: { damage: 1, hitChance: 0.6, woundChance: 0, verb: 'peck' }, sight: 6, hearing: 2, fears: ['player', 'zombie', 'dog', 'fox'], startle: 7, flee: 3, herd: 2, range: 6, active: 'any', alarm: 2, fightsBack: true },
+      fox: { name: 'fox', char: 'f', fg: '#000000', bg: '#e07a20', speed: 100, health: 2, melee: { damage: 1, hitChance: 0.7, woundChance: 0.3, verb: 'bite' }, sight: 8, hearing: 3, fears: ['player', 'zombie', 'dog'], startle: 3, flee: 10, range: 20, active: 'night', call: [0.004, 2], hunts: ['goose'], fed: 720, nose: 8, scavenges: true, tracks: 'paw' },
+      dog: { name: 'dog', char: 'D', fg: '#ffffff', bg: '#5e4630', speed: 100, health: 3, melee: { damage: 1, hitChance: 0.75, woundChance: 0.4, verb: 'bite' }, prey: true, sight: 12, hearing: 3, fears: ['zombie'], startle: 0, flee: 6, herd: 3, range: 45, active: 'any', alarm: 2, hunts: ['sheep', 'deer', 'goose'], fed: 1080, nose: 10, fightsBack: true, announce: true, tracks: 'paw' },
+      crow: { name: 'crow', char: 'c', fg: '#ffffff', bg: '#1a1a22', speed: 100, health: 1, flies: true, sight: 20, hearing: 2, fears: ['player', 'zombie', 'dog', 'fox'], fearRange: 2, startle: 6, flee: 4, range: 40, active: 'day', call: [0.02, 1], scavenges: true, circles: true },
+    },
+    fearRange: 4,                    // most fear things this close (crows only 2; geese honk at alarmRange)
+    alarmRange: 5,                   // geese and dogs give the alarm at things they fear this close
+    callCooldown: 20,                // ticks between alarm calls (and barks on a hunt)
+    stuckTicks: 15,                  // an animal that found no way round waits this long before looking again
+    fireFear: 3,                     // every animal runs from fire this close
+    // Where they live (village only): groups of [min, max], somewhere matching `where`, at least
+    // minDistance from where you start.
+    spawn: [
+      { species: 'sheep', groups: 3, size: [5, 8], where: 'fields' },
+      { species: 'deer', groups: 1, size: [3, 5], where: 'wood' },
+      { species: 'goose', groups: 2, size: [3, 5], where: 'water' },
+      { species: 'fox', groups: 2, size: [1, 1], where: 'wild' },
+      { species: 'dog', groups: 1, size: [2, 4], where: 'farm' },
+      { species: 'crow', groups: 2, size: [3, 6], where: 'any' },
+    ],
+    minDistance: 18,
+  },
   zombie: {
     speed: 50,                       // half player speed: acts every other turn
     health: 4,
@@ -424,7 +462,7 @@ export const CONFIG = {
   time: { minutesPerTick: 2, startHour: 8 },
   // Save/load. Bump `version` whenever the saved state's shape changes in a way old
   // saves can't be read with; an older save is then discarded for a fresh game.
-  save: { version: 14, key: 'zombie-sim-save' },
+  save: { version: 15, key: 'zombie-sim-save' },
   // Death replay (step 21): the run again from above, sped up to about this many seconds.
   replay: {
     seconds: 25,

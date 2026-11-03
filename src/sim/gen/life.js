@@ -19,6 +19,7 @@ import { makeItem, itemsAt } from '../systems/items.js';
 import { makeZombie, isPassable, query, tileAt } from '../world.js';
 import { structureAt } from '../systems/structures.js';
 import { stairsAt } from '../systems/floors.js';
+import { makeAnimal } from '../systems/animals.js';
 
 const weighted = (rng, table) => {
   const entries = Object.entries(table);
@@ -101,4 +102,41 @@ export function populateVillage(world) {
       if (open(f.x, f.y)) makeItem(world, 'key', f.x, f.y, extra);
     }
   });
+}
+
+// Animals (step 23): groups of each species where they'd live (CONFIG.animals.spawn), away
+// from where you start. Each group is a herd; its spot is every member's home.
+export function populateAnimals(world) {
+  const rng = world.rng, AN = CONFIG.animals, W = world.width, H = world.landHeight || world.height;
+  const t = (x, y) => tileAt(world, x, y);
+  const near = (x, y, r, set) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && set.has(t(xx, yy))) return true; } return false; };
+  const inVillage = (y) => Math.abs(y - world.bridgeRow) <= CONFIG.village.streetRows[1] + 6;
+  const inFarm = (x, y) => (world.farms || []).some((f) => x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h);
+  const TREES = new Set([TILE.TREE]), WATER = new Set([TILE.LAKE, TILE.STREAM]);
+  const WHERE = {
+    fields: (x, y) => t(x, y) === TILE.GRASS && !inVillage(y) && !near(x, y, 2, new Set([TILE.ROAD])),
+    wood: (x, y) => t(x, y) === TILE.GRASS && near(x, y, 2, TREES) && !inVillage(y),
+    water: (x, y) => (t(x, y) === TILE.SHORE || t(x, y) === TILE.GRASS) && near(x, y, 2, WATER),
+    wild: (x, y) => [TILE.BRACKEN, TILE.FELL].includes(t(x, y)) || (t(x, y) === TILE.GRASS && near(x, y, 1, TREES)),
+    farm: (x, y) => inFarm(x, y) && [TILE.YARD, TILE.LANE, TILE.GRASS].includes(t(x, y)),
+    any: (x, y) => [TILE.GRASS, TILE.FELL].includes(t(x, y)),
+  };
+  const far = (x, y) => Math.max(Math.abs(x - world.start.x), Math.abs(y - world.start.y)) >= AN.minDistance;
+  let herds = 0;
+  for (const sp of AN.spawn) {
+    const ok = WHERE[sp.where];
+    const spots = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ok(x, y) && far(x, y) && isPassable(world, x, y)) spots.push({ x, y });
+    if (!spots.length) continue;
+    for (let g = 0; g < sp.groups; g++) {
+      const a = spots[rng.int(spots.length)];
+      const n = sp.size[0] + rng.int(sp.size[1] - sp.size[0] + 1), herd = n > 1 ? `${sp.species}-${++herds}` : null;
+      for (let i = 0, tries = 0; i < n && tries < 60; tries++) {
+        const x = a.x + rng.int(7) - 3, y = a.y + rng.int(7) - 3;
+        if (x < 0 || y < 0 || x >= W || y >= H || !ok(x, y) || !isPassable(world, x, y)) continue;
+        makeAnimal(world, sp.species, x, y, herd);
+        i++;
+      }
+    }
+  }
 }

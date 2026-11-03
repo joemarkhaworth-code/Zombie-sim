@@ -66,7 +66,7 @@ export function resetAll() {
 // Push zombie values into zombies already in the world (they copied them at creation).
 export function syncWorld(world) {
   const Z = CONFIG.zombie;
-  for (const z of query(world, 'Brain')) {
+  for (const z of query(world, 'Brain').filter((b) => b.Brain.type === 'shamble')) { // zombies only, not animals
     if (z.Actor) z.Actor.speed = Z.speed;
     if (z.Melee) Object.assign(z.Melee, { damage: Z.melee.damage, hitChance: Z.melee.hitChance, woundChance: Z.melee.woundChance });
     if (z.Health) { z.Health.max = Z.health; z.Health.hp = Math.min(z.Health.hp, Z.health); }

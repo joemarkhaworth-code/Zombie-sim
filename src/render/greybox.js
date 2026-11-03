@@ -179,6 +179,9 @@ function drawTrack(ctx, tr, px, py, s, memory) {
   const ax = tr.dx || 0, ay = tr.dy || 0, nx = -ay, ny = ax; // along / across the way it went
   if (tr.mark === 'boots') {
     for (const [a, n] of [[-0.18, -0.15], [0.18, 0.15]]) ctx.fillRect(cx + (ax * a + nx * n) * s - d / 2, cy + (ay * a + ny * n) * s - d / 2, d, d);
+  } else if (tr.mark === 'hoof' || tr.mark === 'paw') { // animals: a little cluster of small prints
+    const q = Math.max(2, d - 1);
+    for (const [a, n] of [[-0.2, -0.1], [-0.2, 0.1], [0.15, -0.1], [0.15, 0.1]]) ctx.fillRect(cx + (ax * a + nx * n) * s - q / 2, cy + (ay * a + ny * n) * s - q / 2, q, q);
   } else {
     for (let k = -2; k <= 2; k++) ctx.fillRect(cx + ax * k * 0.1 * s - d / 2, cy + ay * k * 0.1 * s - d / 2, d, d);
   }

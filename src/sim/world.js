@@ -16,7 +16,8 @@ import { buildTestBuilding } from './gen/building.js';
 import { buildVillage } from './gen/buildings.js';
 import { buildFloors } from './gen/floors.js';
 import { rebuildLinks } from './systems/floors.js';
-import { populateVillage } from './gen/life.js';
+import { populateVillage, populateAnimals } from './gen/life.js';
+import { installAnimals } from './systems/animals.js';
 import { updateLight } from './systems/light.js';
 import { installNeeds } from './systems/needs.js';
 import { installWeather } from './systems/weather.js';
@@ -100,7 +101,7 @@ export function createWorld(seed, opts = {}) {
 
   world.start = { x: start.x, y: start.y };
   world.entities.get(world.playerId).Memory = createMemory(world); // snapshots of tiles as last seen
-  if (map === 'village') populateVillage(world); // step 14d: loot, keys and zombies
+  if (map === 'village') { populateVillage(world); populateAnimals(world); } // step 14d: loot, keys and zombies; step 23: animals
   else {
     makeZombie(world, spawnTile(world, start, CONFIG.zombie.spawnMinDistance, CONFIG.zombie.spawnMaxDistance));
     scatterTestItems(world);
@@ -113,6 +114,7 @@ export function createWorld(seed, opts = {}) {
   installWeather(world);
   installWater(world); // the beck's level, ice, bridges (step 20)
   installStorm(world); // gales: wind direction, fallen trees, lost roofs
+  installAnimals(world); // animals react to noise, blows and kills (step 23)
   updateLight(world, true); // the time of day's light (and vision)
   return world;
 }
@@ -163,8 +165,8 @@ export function tileAt(world, x, y) {
 export function blockerAt(world, x, y) {
   if (!inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].blocks) return { tile: true };
   // (entities never stand on blocking tiles, so checking the tile first is safe)
-  for (const e of query(world, 'Position', 'Blocks')) {
-    if (e.Position.x === x && e.Position.y === y) return { entity: e };
+  for (const e of world.entities.values()) { // (a plain loop: this runs a lot)
+    if (e.Blocks && e.Position && e.Position.x === x && e.Position.y === y) return { entity: e };
   }
   return null;
 }

@@ -32,12 +32,15 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   const playerSeesTile = (x, y) => { const p = world.entities.get(world.playerId); return !!(p && visibilityAt(world, p, x, y) > 0 && onScreen(x, y)); };
   const VERB_S = { bite: 'bites', hit: 'hits' };
   const verbs = (id) => VERB_S[world.entities.get(id)?.Melee?.verb] || 'hits';
+  // Zombies, and animals that matter (dogs), get "comes into view" / "next to you"; a flock of
+  // sheep wandering about is just seen on the map.
+  const worthSaying = (e) => !e.Animal || !!CONFIG.animals.species[e.Animal.species].announce;
   const adjacentActors = () => {
     const p = world.entities.get(world.playerId);
     const out = new Set();
     if (!p) return out;
     for (const e of world.entities.values()) {
-      if (e.id !== p.id && e.Actor && e.Position && cheb(e.Position, p.Position) <= 1) out.add(e.id);
+      if (e.id !== p.id && e.Actor && e.Position && worthSaying(e) && cheb(e.Position, p.Position) <= 1) out.add(e.id);
     }
     return out;
   };
@@ -155,6 +158,16 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   ev.on('coughed', (d) => { if (isPlayer(d.id)) say('You choke on the smoke.', PRIORITY.danger); });
   ev.on('explosion', (d) => say(playerSeesTile(d.x, d.y) ? 'BOOM!' : 'An explosion!', PRIORITY.danger));
   ev.on('petrol_spilled', () => say('Petrol splashes about.', PRIORITY.info));
+  // Animals (step 23).
+  ev.on('animal_alarm', (d) => {
+    if (!near(d.x, d.y, 10)) return;
+    if (d.species === 'goose') say('Geese honk!', PRIORITY.notice);
+    else if (d.species === 'dog') say('A dog barks!', PRIORITY.notice);
+  });
+  ev.on('hunt_started', (d) => { const e = world.entities.get(d.id); if (e && near(e.Position.x, e.Position.y, 14)) say('Dogs bay nearby.', PRIORITY.notice); });
+  ev.on('animal_fled', (d) => { if (d.stampede && playerSeesTile(d.x, d.y)) say(`The ${d.species === 'deer' ? 'deer bolt' : 'sheep stampede'}!`, PRIORITY.notice); });
+  ev.on('trampled', (d) => { if (isPlayer(d.id)) say(`The ${name(d.by)} knock you flat!`, PRIORITY.danger); });
+  ev.on('animal_call', (d) => { const e = world.entities.get(d.id); if (e && d.species === 'fox' && near(e.Position.x, e.Position.y, 12)) say('A fox screams.', PRIORITY.info); });
   // Water (step 20).
   ev.on('beck_changed', (d) => {
     const t = d.to === 3 ? ['The beck floods its banks!', PRIORITY.danger] : d.to === 2 && d.from < 2 ? ['The beck is in spate.', PRIORITY.notice]
@@ -246,7 +259,7 @@ export function createMessageLog(world, { onScreen = () => true } = {}) {
   const actorsInView = () => {
     const out = new Set();
     for (const e of world.entities.values()) {
-      if (e.Actor && e.Position && !isPlayer(e.id) && playerCanSee(e.id)) out.add(e.id);
+      if (e.Actor && e.Position && !isPlayer(e.id) && worthSaying(e) && playerCanSee(e.id)) out.add(e.id);
     }
     return out;
   };
@@ -312,7 +325,7 @@ export function describeTile(world, x, y) {
 }
 
 // Prints (step 18): "Footprints in the snow.", "Zombie tracks in the mud."
-const trackText = (tr) => `${tr.mark === 'boots' ? 'Footprints' : 'Zombie tracks'} in the ${tr.in}.`;
+const trackText = (tr) => `${{ boots: 'Footprints', drag: 'Zombie tracks', hoof: 'Hoof prints', paw: 'Paw prints' }[tr.mark] || 'Tracks'} in the ${tr.in}.`;
 
 // Death screen wording, from world.gameOver + world.stats.
 const CAUSES = {
@@ -329,6 +342,7 @@ const CAUSES = {
   explosion: () => 'Blown up',
   smoke: () => 'Choked on smoke',
   drowned: () => 'Drowned',
+  peck: (k) => `Pecked to death by a ${k || 'goose'}`,
   illness: () => 'Died of a fever',
 };
 export function deathText(world) {

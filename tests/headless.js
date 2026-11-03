@@ -22,6 +22,7 @@ import { tickWater, beckLevel, iceLevel, findBridges, setWaterLevel } from '../s
 import { tickStorm, fellTree } from '../src/sim/systems/storm.js';
 import { createReplay, applyDebug } from '../src/sim/replay.js';
 import { runWorld, removePlayer } from '../src/sim/turn.js';
+import { makeAnimal } from '../src/sim/systems/animals.js';
 import { indoorAt } from '../src/sim/systems/weather.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
@@ -51,7 +52,8 @@ function checkPositions(world, seed) {
   for (const e of query(world, 'Position')) {
     const { x, y } = e.Position;
     assert(inBounds(world, x, y), `seed ${seed}: entity ${e.id} out of bounds at ${x},${y}`);
-    assert(!TILE_INFO[tileAt(world, x, y)].blocks, `seed ${seed}: entity ${e.id} inside a wall`);
+    const drowned = e.Corpse && [TILE.LAKE, TILE.POND].includes(tileAt(world, x, y)); // a body that went through the ice stays in the water
+    assert(e.Flies || drowned || !TILE_INFO[tileAt(world, x, y)].blocks, `seed ${seed}: entity ${e.id} inside a wall`); // crows fly over walls (step 23)
     if (e.Blocks) {
       const k = `${x},${y}`;
       assert(!seen.has(k), `seed ${seed}: two blocking entities on ${k}`);
@@ -61,7 +63,8 @@ function checkPositions(world, seed) {
 }
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-const zombieOf = (world) => query(world, 'Brain')[0];
+const zombiesOf = (world) => query(world, 'Brain').filter((e) => e.Brain.type === 'shamble'); // not animals (step 23)
+const zombieOf = (world) => zombiesOf(world)[0];
 const playerOf = (world) => world.entities.get(world.playerId);
 
 // 0. Event bus basics.
@@ -1209,7 +1212,7 @@ console.log('save: exact round trip, loaded games play on identically OK');
   assert(getPath('zombie.melee.hitChance') === hit.max, 'tune: values clamp to their range');
   const w = createWorld(3);
   syncWorld(w);
-  const z = query(w, 'Brain')[0];
+  const z = zombiesOf(w)[0];
   assert(z.Actor.speed === def + speed.step && z.Melee.hitChance === hit.max, 'tune: syncWorld updates zombies already on the map');
   resetAll();
   assert(getPath('zombie.speed') === defaultOf('zombie.speed') && Object.keys(currentOverrides()).length === 0, 'tune: reset restores defaults');
@@ -1461,7 +1464,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   const lockIds = new Set(query(w, 'Door').filter((d) => d.Door.locked).map((d) => d.Door.lockId));
   const keys = query(w, 'Item').filter((i) => i.Item.type === 'key');
   assert(keys.length > 0 && keys.every((k) => lockIds.has(k.Item.lockId)), `life ${seed}: keys fit locked buildings`);
-  const zombies = query(w, 'Brain', 'Position');
+  const zombies = zombiesOf(w).filter((e) => e.Position);
   const carried = keys.filter((k) => !k.Position);
   assert(carried.every((k) => zombies.some((z) => z.Inventory && z.Inventory.items.includes(k.id))), `life ${seed}: carried keys are in zombies' pockets`);
   // Zombies: the configured number, none near the start, some indoors.
@@ -1475,7 +1478,7 @@ for (const seed of [1, 5, 11, 42, 2024]) {
   let w, z, key;
   for (let seed = 1; seed < 40 && !key; seed++) {
     w = createWorld(seed, { map: 'village' });
-    z = query(w, 'Brain').find((e) => e.Inventory && e.Inventory.items.length);
+    z = zombiesOf(w).find((e) => e.Inventory && e.Inventory.items.length);
     key = z && w.entities.get(z.Inventory.items[0]);
   }
   const p = playerOf(w);
@@ -2054,10 +2057,10 @@ console.log('replay: a run with TUNE changes replays step by step to exactly the
   // A village with nobody in it: a day goes by, zombies wander, nothing breaks.
   const w = createWorldAny(8, { map: 'village' }); removePlayer(w);
   let moves = 0; w.events.on('entity_moved', () => moves++);
-  const pos0 = JSON.stringify(query(w, 'Brain').map((z) => z.Position));
+  const pos0 = JSON.stringify(zombiesOf(w).map((z) => z.Position));
   runWorld(w, 720);
   assert(w.tick === 720 && w.watchOnly && !w.entities.has(w.playerId), 'watch: a day passes in a village with nobody in it');
-  assert(moves > 100 && JSON.stringify(query(w, 'Brain').map((z) => z.Position)) !== pos0, 'watch: the zombies wander about');
+  assert(moves > 100 && JSON.stringify(zombiesOf(w).map((z) => z.Position)) !== pos0, 'watch: the zombies wander about');
   assert(w.ambient !== undefined && w.weather.kind, 'watch: the light and weather carry on');
   // After you die the world goes on: a fire you left keeps burning, time passes.
   const v = openWorld(); const p = playerOf(v); v.entities.delete(zombieOf(v).id);
@@ -2068,6 +2071,95 @@ console.log('replay: a run with TUNE changes replays step by step to exactly the
   assert(v.gameOver && v.tick === t0 + 60 && ash > 5, `watch: after you die the world goes on (the fire burnt ${ash} tiles)`);
 }
 console.log('watch: a village with nobody in it runs for a day (zombies wander, light and weather go on); after death the world carries on OK');
+
+// 29. Animals (step 23).
+{
+  const field = () => { const w = openWorld(); const p = playerOf(w); w.entities.delete(zombieOf(w).id); place(w, p, 2, 2); return { w, p }; };
+  const D = (a, b) => Math.max(Math.abs(a.Position.x - b.Position.x), Math.abs(a.Position.y - b.Position.y));
+  const waits = (w, n) => { for (let i = 0; i < n && !w.gameOver; i++) playerAct(w, { type: 'wait' }); };
+  // Sheep run from you, and the flock runs with the one that saw you.
+  let { w, p } = field();
+  const flock = [[10, 10], [11, 10], [10, 11], [11, 11], [12, 10]].map(([x, y]) => w.entities.get(makeAnimal(w, 'sheep', x, y, 'flock')));
+  place(w, p, 8, 10); let fled = 0; w.events.on('animal_fled', () => fled++);
+  const d0 = flock.map((s) => D(s, p)); waits(w, 8);
+  assert(fled > 0 && flock.every((s, i) => D(s, p) >= d0[i]) && flock.some((s, i) => D(s, p) > d0[i] + 1), 'animals: a flock runs from you');
+  // A stampede knocks a zombie in its way flat, unhurt.
+  ({ w, p } = field());
+  for (let x = 4; x <= 17; x++) { w.tiles[10 * w.width + x] = TILE.WALL; w.tiles[12 * w.width + x] = TILE.WALL; } // a one-wide lane
+  const herd = [[8, 11], [9, 11]].map(([x, y]) => w.entities.get(makeAnimal(w, 'sheep', x, y, 'h')));
+  const z = w.entities.get(makeAnimal(w, 'goose', 10, 11)); z.Actor.speed = 0; const zhp = z.Health.hp; // in the way (sheep don't fear geese)
+  let trampled = 0; w.events.on('trampled', (d) => { if (d.id === z.id) trampled++; });
+  place(w, p, 5, 11);
+  for (const s of herd) s.Animal.flee = { x: 5, y: 11, left: 6 };
+  waits(w, 6);
+  assert(trampled > 0 && z.Health.hp === zhp, 'animals: a stampede knocks over what is in its way, unhurt');
+  // A loud noise (a gunshot) startles deer far off.
+  ({ w, p } = field());
+  const deer = w.entities.get(makeAnimal(w, 'deer', 9, 4));
+  for (let y = 0; y < w.height; y++) w.tiles[y * w.width + 7] = TILE.WALL; // a wall between: it can't see you
+  makeNoise(w, 3, 3, 3, p.id);
+  assert(deer.Animal.flee, 'animals: a gunshot startles deer that cannot see you');
+  // Zombies go after sheep (they're prey): with you far off, a zombie kills one.
+  ({ w, p } = field());
+  const lamb = w.entities.get(makeAnimal(w, 'sheep', 15, 20)); lamb.Actor.speed = 0;
+  const z2 = w.entities.get(makeZombie(w, { x: 15, y: 16 })); z2.Smell.level = 0;
+  place(w, p, 1, 1); waits(w, 60);
+  assert(!w.entities.has(lamb.id) && query(w, 'Corpse').some((c) => c.Name.name === 'sheep corpse'), 'animals: a zombie hunts down a sheep');
+  // A dog pack hunts a sheep down together, then is fed and leaves the rest alone.
+  ({ w, p } = field());
+  const dogs = [[3, 20], [4, 21], [3, 22]].map(([x, y]) => w.entities.get(makeAnimal(w, 'dog', x, y, 'pack')));
+  const ewe = w.entities.get(makeAnimal(w, 'sheep', 12, 20)); ewe.Actor.speed = 25;
+  place(w, p, 18, 2); let fed = 0; w.events.on('animal_fed', () => fed++);
+  waits(w, 80);
+  assert(!w.entities.has(ewe.id) && fed === 1 && dogs.every((d) => d.Animal.fedUntil > w.tick), 'animals: a dog pack hunts a sheep down and is fed');
+  const ewe2 = w.entities.get(makeAnimal(w, 'sheep', dogs[0].Position.x + 3, dogs[0].Position.y)); waits(w, 10);
+  assert(w.entities.has(ewe2.id) && dogs.every((d) => d.Animal.target == null), 'animals: a fed pack leaves the next sheep be');
+  // Crows find a body and circle it.
+  ({ w, p } = field());
+  const crows = [[2, 25], [3, 25], [4, 25]].map(([x, y]) => w.entities.get(makeAnimal(w, 'crow', x, y, 'murder')));
+  kill(w, w.entities.get(makeAnimal(w, 'sheep', 15, 12)));
+  const body = query(w, 'Corpse')[0]; place(w, p, 18, 2);
+  waits(w, 40);
+  assert(crows.every((c) => D(c, body) <= 2 && D(c, body) >= 1), 'animals: crows find a body and circle it');
+  // Geese honk at you (zombies hear it), and one you hit pecks back.
+  ({ w, p } = field());
+  const goose = w.entities.get(makeAnimal(w, 'goose', 10, 10));
+  let honks = 0; w.events.on('animal_alarm', (d) => { if (d.id === goose.id) honks++; });
+  place(w, p, 6, 10); waits(w, 4);
+  assert(honks > 0, 'animals: geese honk at you');
+  place(w, p, 9, 10); goose.Position = { x: 10, y: 10 }; goose.Animal.flee = null; goose.Actor.energy = 0;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(goose.Animal.target === p.id || !w.entities.has(goose.id), 'animals: a goose you hit goes for you');
+  // Everything runs from fire.
+  ({ w, p } = field());
+  const sheep = w.entities.get(makeAnimal(w, 'sheep', 10, 10));
+  for (let y = 9; y <= 11; y++) { w.tiles[y * w.width + 12] = TILE.BRACKEN; ignite(w, 12, y); }
+  place(w, p, 1, 25); waits(w, 2);
+  assert(sheep.Animal.flee || sheep.Position.x < 10, 'animals: they run from fire');
+  // Foxes hunt by night, not by day.
+  ({ w, p } = field());
+  const fox = w.entities.get(makeAnimal(w, 'fox', 5, 15)); const g1 = w.entities.get(makeAnimal(w, 'goose', 9, 15));
+  g1.Actor.speed = 0; place(w, p, 18, 2); waits(w, 10);
+  assert(fox.Animal.target == null && w.entities.has(g1.id), 'animals: a fox rests by day');
+  w.tick = 14 * 30; updateLight(w, true); waits(w, 30);
+  assert(!w.entities.has(g1.id), 'animals: and hunts by night');
+  // Killing a sheep isn't a zombie kill.
+  ({ w, p } = field());
+  const tup = w.entities.get(makeAnimal(w, 'sheep', 3, 2)); tup.Health.hp = 1; tup.Actor.speed = 0;
+  playerAct(w, { type: 'move', dx: 1, dy: 0 }); playerAct(w, { type: 'move', dx: 1, dy: 0 });
+  assert(w.stats.kills === 0, 'animals: killing a sheep does not count as a zombie kill');
+  // The village has its animals, away from where you start, and saves keep them.
+  for (const seed of [3, 9, 21]) {
+    const v = createWorldAny(seed, { map: 'village' });
+    const kinds = new Set(query(v, 'Animal').map((e) => e.Animal.species));
+    assert(['sheep', 'goose', 'dog', 'crow', 'fox'].every((k) => kinds.has(k)), `animals: village ${seed} has sheep, geese, dogs, crows, foxes (${[...kinds]})`);
+    assert(query(v, 'Animal').every((e) => D(e, { Position: v.start }) >= CONFIG.animals.minDistance), 'animals: none start near you');
+    for (let i = 0; i < 30; i++) playerAct(v, { type: 'wait' });
+    const back = deserialize(serialize(v), createWorldAny);
+    assert(serialize(back) === serialize(v), 'animals: saved');
+  }
+}
+console.log('animals: flocks flee and stampede (knocking things over, unhurt), gunshots startle deer, zombies hunt sheep, dog packs hunt then are fed, crows circle bodies, geese honk and peck back, fire scares them, foxes hunt by night, sheep are not zombie kills, village spawns, saved OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

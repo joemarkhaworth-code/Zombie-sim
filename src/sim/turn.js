@@ -4,6 +4,7 @@ import { tryMove, blockerAt, tileAt } from './world.js';
 import { TILE_INFO } from './gen/testgrid.js';
 import { advance, spend, tick } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
+import { animal } from './systems/animals.js';
 import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 import { setSneaking, moveCost } from './systems/stealth.js';
@@ -29,7 +30,7 @@ import { TILE } from './gen/testgrid.js';
 import { CONFIG } from '../config.js';
 
 // Brain type -> system that decides what an actor does with its action.
-const BRAINS = { shamble };
+const BRAINS = { shamble, animal };
 
 function act(world, e) {
   if (e.Staggered && e.Staggered.actions > 0) { // staggered: this action is lost

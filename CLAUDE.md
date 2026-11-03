@@ -750,6 +750,64 @@ Harsh weather now leaves lasting marks on the map, not just a temporary tile swa
   - a village with nobody in it runs for a day: zombies wander, light and weather go on;
   - after you die the world carries on (a fire you left burns on).
 
+## Decisions for step 23 (animals) - built
+- src/sim/systems/animals.js: one brain ('animal') runs every species; what each does is data in CONFIG.animals.species.
+  - Each animal is an entity: Animal { species, herd, home, flee, target, fedUntil }, Actor, Health, Hearing, Glyph, Name, maybe Melee, Prey, Tracks; Blocks, or Flies for crows.
+  - Species: sheep s, deer d, goose g, fox f, dog D, crow c.
+- What they do, in order, each action:
+  1. Danger. Fire within 3 tiles, or something they fear (fears: player / zombie / dog / fox) that they notice.
+     - Noticing is line of sight, light, cover and sneaking, like vision; always when next to it.
+     - Within fearRange (4; crows 2) they run.
+     - Geese and dogs give the alarm first (alarm: noise 2, so zombies hear it; callCooldown).
+     - A heard noise at least `startle` strong scares them too (deer 2: a gunshot far off; sheep 5). Animals' own calls don't.
+     - The herd nearby runs with the one that was scared (panic spreads).
+  2. Running: away from the danger for `flee` steps.
+     - Deer and sheep bolt (fleeCost 0.5: quick steps).
+     - A stampede (stampede: true) that's hemmed in barges whoever is in the way: pushed (pushEntity), or knocked flat (staggered) if it can't be. Never hurt. "The sheep knock you flat!"
+     - A stampede is a flock fleeing with more than 2 of them ("The sheep stampede!", "The deer bolt!").
+  3. A target: one that hit it (geese and dogs fight back; the rest run), or the hunt.
+     - Dog packs (hunts sheep, deer, geese) and foxes (geese) hunt when not fed. They pick prey they see or smell (nose: through walls, 10 / 8 tiles), and the pack shares one target.
+     - The pack bays when it sets off (noise, "Dogs bay nearby.").
+     - A kill feeds the whole pack (fed 18 h dogs, 12 h foxes).
+  4. Bodies: crows and foxes go to bodies they can see (crows from the air, 20 tiles). Crows circle 1-2 tiles off and caw, so a ring of crows marks the dead.
+  5. Otherwise, while awake (active: day / night / any; foxes come out at night, sheep and crows by day; resting animals still run from danger):
+     - keep within `herd` of the herd's middle;
+     - keep within `range` of home;
+     - wander a little;
+     - call now and then (sheep bleat, crows caw, foxes scream at night: "A fox screams.").
+- Moving: a greedy step. If that's stuck against a wall, the first step of the shortest way round within ~14 tiles (a small path search, not tried again for 15 ticks if it fails).
+  - Animals never step into fire.
+  - Crows fly over walls, water and ice: anywhere outdoors but the void. They make no ground noise, don't break ice, and floods and thaws leave them alone.
+  - Walkers can go through thin ice and drown like anything else.
+- Zombies and animals: sheep, deer and dogs have Prey, so zombies go after them. A flock in a field can pull zombies off you, and leaves bodies for the crows. Dogs fear zombies and bark at them, so a barking dog is a warning.
+- Only zombies count as kills (world.stats.kills), and only zombies get TUNE's zombie numbers. The messages "comes into view" / "next to you" are for zombies and dogs only (species announce), not every sheep.
+- Prints: hoof (sheep, deer) and paw (dogs, foxes) marks, a little cluster of dots ("Hoof prints in the mud."). Death: "Pecked to death by a goose".
+- Where they live (life.js populateAnimals, village only, at least 18 tiles from the start):
+  - 3 flocks of 5-8 sheep in the fields;
+  - deer in the wood;
+  - 2 gaggles of geese by the lake and beck;
+  - 2 foxes on the fell or by trees;
+  - a pack of 2-4 dogs at a farm;
+  - 2 groups of crows anywhere.
+  About 60 animals. The test grid has none.
+- Seen from above (replay and watch) in their own colours.
+- Speed: blockerAt now loops plainly instead of building a list (it runs a lot), and path searches note who stands where once. A tick costs ~2 ms with 35 zombies and ~60 animals, the same as before animals.
+- Measured over 5 villages x 2 days with nobody in them: ~50-130 flights, ~5-35 stampedes, a few kills each (dogs and zombies take sheep, foxes take geese). Flocks thin out but aren't wiped out.
+- Play-test bot over 40 seeds: 36 of 40 died (36 before), none from animals.
+- Save version 15.
+- Tests:
+  - a flock runs from you;
+  - a stampede in a lane knocks what's in its way over, unhurt;
+  - a gunshot startles deer behind a wall;
+  - a zombie hunts a sheep down;
+  - a dog pack kills a sheep, is fed and leaves the next one be;
+  - crows circle a body;
+  - geese honk at you and peck back when hit;
+  - sheep run from fire;
+  - a fox rests by day and hunts by night;
+  - a dead sheep isn't a zombie kill;
+  - villages have their animals, none near the start, and saves keep them.
+
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).
 - Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.
