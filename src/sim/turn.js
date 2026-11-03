@@ -2,7 +2,7 @@
 // player has enough energy to act again.
 import { tryMove, blockerAt, tileAt } from './world.js';
 import { TILE_INFO } from './gen/testgrid.js';
-import { advance, spend } from './scheduler.js';
+import { advance, spend, tick } from './scheduler.js';
 import { shamble } from './systems/shamble.js';
 import { updateSightings } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
@@ -168,6 +168,23 @@ function endTurn(world, player, cost) {
   updateLight(world, weatherChanged); // the hour's light, weather, torches carried about: refreshes vision if changed
   updateSightings(world);
   world.events.emit('turn_ended', { turn: world.turn });
+}
+
+// Watch mode (step 22): the world runs on by itself for n ticks - after you've died, or in
+// a world with no player at all. The same systems run as in play (weather, light, fire,
+// water, storms, zombies); nothing is recorded, it's just to watch.
+export function runWorld(world, n = 1) {
+  for (let i = 0; i < n; i++) {
+    clearNoise(world);
+    tick(world, act, onTick);
+    updateLight(world, tickWeather(world));
+  }
+}
+
+// A world with nobody in it: the player is taken out (for watch mode from the start).
+export function removePlayer(world) {
+  world.entities.delete(world.playerId);
+  world.watchOnly = true;
 }
 
 const isWater = (t) => DRINKABLE.has(t); // the beck (even in spate), the lake, ponds, floodwater; not ice

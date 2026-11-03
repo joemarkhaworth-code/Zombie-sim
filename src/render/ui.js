@@ -124,9 +124,9 @@ export function drawDeath(ctx, layout, t, flash) {
   });
   // Two big buttons: watch the run again from above (step 21), or start a new game.
   const B = deathButtons(layout);
-  ctx.font = `bold ${Math.floor(w / 16)}px monospace`;
+  ctx.font = `bold ${Math.floor(w / 20)}px monospace`;
   ctx.textAlign = 'center';
-  for (const [b, label, bg] of [[B.replay, 'REPLAY', C.statusBg], [B.newGame, 'NEW GAME', C.deathNewBg]]) {
+  for (const [b, label, bg] of [[B.replay, 'REPLAY', C.statusBg], [B.watch, 'WATCH', C.deathWatchBg], [B.newGame, 'NEW', C.deathNewBg]]) {
     ctx.fillStyle = bg; ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = '#ffffff'; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
   }
@@ -134,8 +134,9 @@ export function drawDeath(ctx, layout, t, flash) {
 
 // The death page's buttons (pure layout, so main.js hit-tests the same rects).
 export function deathButtons(layout) {
-  const { width: w, height: h } = layout, bw = (w - 48) / 2, bh = 64, y = h * 0.76;
-  return { replay: { x: 16, y, w: bw, h: bh }, newGame: { x: 32 + bw, y, w: bw, h: bh } };
+  // REPLAY the run (step 21), WATCH the world go on without you (step 22), NEW game.
+  const { width: w, height: h } = layout, bw = (w - 56) / 3, bh = 64, y = h * 0.76;
+  return { replay: { x: 16, y, w: bw, h: bh }, watch: { x: 28 + bw, y, w: bw, h: bh }, newGame: { x: 40 + 2 * bw, y, w: bw, h: bh } };
 }
 
 // Inventory panel ("BAG"): an 8-bit list filling the map area. Header with slots used and
@@ -344,8 +345,11 @@ export function mapButtonRect(layout) {
   const t = tuneButtonRect(layout);
   return { x: t.x, y: t.y + t.h + 6, w: t.w, h: t.h };
 }
-export function drawMapButton(ctx, layout, current) {
-  const b = mapButtonRect(layout);
+export function watchButtonRect(layout) {
+  const m = mapButtonRect(layout);
+  return { x: m.x, y: m.y + m.h + 6, w: m.w, h: m.h };
+}
+export function drawMapButton(ctx, layout, current, b = mapButtonRect(layout), label = null) {
   ctx.fillStyle = '#000';
   ctx.fillRect(b.x, b.y, b.w, b.h);
   ctx.strokeStyle = CONFIG.colours.statusTurn;
@@ -355,5 +359,5 @@ export function drawMapButton(ctx, layout, current) {
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(current === 'village' ? 'TO GRID' : 'TO VILL.', b.x + b.w / 2, b.y + b.h / 2 + 1);
+  ctx.fillText(label || (current === 'village' ? 'TO GRID' : 'TO VILL.'), b.x + b.w / 2, b.y + b.h / 2 + 1);
 }

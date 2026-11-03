@@ -733,6 +733,23 @@ Harsh weather now leaves lasting marks on the map, not just a temporary tile swa
 - The save is still deleted on death; the replay uses the dead run's inputs in memory.
 - Tests: a run with TUNE changes in it replays step by step to exactly the same end, on the test grid and the village.
 
+## Decisions for step 22 (watch mode) - built
+- Two ways in:
+  - From the death page: it now has three buttons, REPLAY (blue), WATCH (green) and NEW (red). WATCH carries on the world you died in, with your body where you fell: fires keep burning, zombies wander off, the weather and floods go on.
+  - A village with nobody in it: ?watch=1 (with ?seed=N if you like), or the WATCH button under TUNE / TO GRID in the debug overlay. It never reads or writes the save, so leaving it (any tap) goes back to your game.
+- Sim: scheduler.js tick() is one tick of the world (per-tick systems, then every actor but the player acts). advance() uses it for play.
+  - turn.js runWorld(world, n) runs n ticks with no player: noise cleared, tick, weather, light. So the same systems run as in play.
+  - removePlayer(world) takes the player out and marks world.watchOnly.
+  - Nothing is recorded; it's just to watch.
+- Drawn with the replay's view from above (render/replay.js drawReplay with title 'WATCH' and a speed instead of a progress bar). Footer: "Tap to leave. Top bar: speed."
+- Speed: tap the top bar to cycle x1 / x4 / x16 (CONFIG.watch.speeds 10 / 40 / 160 ticks a second; x1 is 20 game minutes a second).
+  - Each frame spends at most watch.frameBudgetMs (25 ms) on the world, so a slow phone just runs slower rather than freezing.
+  - A tick costs ~2 ms with 35 zombies.
+- The camera falls back to the middle of the map when there's no player.
+- Tests:
+  - a village with nobody in it runs for a day: zombies wander, light and weather go on;
+  - after you die the world carries on (a fire you left burns on).
+
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).
 - Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.

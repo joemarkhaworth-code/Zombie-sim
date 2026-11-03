@@ -21,6 +21,7 @@ import { flammability, ignite } from '../src/sim/systems/fire.js';
 import { tickWater, beckLevel, iceLevel, findBridges, setWaterLevel } from '../src/sim/systems/water.js';
 import { tickStorm, fellTree } from '../src/sim/systems/storm.js';
 import { createReplay, applyDebug } from '../src/sim/replay.js';
+import { runWorld, removePlayer } from '../src/sim/turn.js';
 import { indoorAt } from '../src/sim/systems/weather.js';
 import { serialize, deserialize, SaveError } from '../src/sim/save.js';
 import { dayOf, daysSurvived, clockOf } from '../src/sim/time.js';
@@ -2047,6 +2048,26 @@ console.log('storm: long floods spread into houses and cellars, float things off
   }
 }
 console.log('replay: a run with TUNE changes replays step by step to exactly the same end, test grid and village OK');
+
+// 28. Watch mode (step 22): the world runs on by itself.
+{
+  // A village with nobody in it: a day goes by, zombies wander, nothing breaks.
+  const w = createWorldAny(8, { map: 'village' }); removePlayer(w);
+  let moves = 0; w.events.on('entity_moved', () => moves++);
+  const pos0 = JSON.stringify(query(w, 'Brain').map((z) => z.Position));
+  runWorld(w, 720);
+  assert(w.tick === 720 && w.watchOnly && !w.entities.has(w.playerId), 'watch: a day passes in a village with nobody in it');
+  assert(moves > 100 && JSON.stringify(query(w, 'Brain').map((z) => z.Position)) !== pos0, 'watch: the zombies wander about');
+  assert(w.ambient !== undefined && w.weather.kind, 'watch: the light and weather carry on');
+  // After you die the world goes on: a fire you left keeps burning, time passes.
+  const v = openWorld(); const p = playerOf(v); v.entities.delete(zombieOf(v).id);
+  for (let y = 12; y <= 18; y++) for (let x = 3; x <= 16; x++) v.tiles[y * v.width + x] = TILE.BRACKEN;
+  ignite(v, 9, 15); kill(v, p, { cause: 'bite' });
+  const t0 = v.tick; runWorld(v, 60);
+  let ash = 0; for (const t of v.tiles) if (t === TILE.ASH) ash++;
+  assert(v.gameOver && v.tick === t0 + 60 && ash > 5, `watch: after you die the world goes on (the fire burnt ${ash} tiles)`);
+}
+console.log('watch: a village with nobody in it runs for a day (zombies wander, light and weather go on); after death the world carries on OK');
 
 { // Ground: hedges slow (x3), streams slow (x2) and splash, walls/hedges/trees block sight, pond doesn't.
   const w = openWorld([[12, 5]]);

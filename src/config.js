@@ -431,6 +431,12 @@ export const CONFIG = {
     minRate: 12,                     // inputs a second at least: a short run still plays at a watchable pace
     darkByLight: [0.6, 0.45, 0.2, 0], // dim the valley by the light level (night, storms)
   },
+  // Watch mode (step 22): the world runs on by itself, seen from above.
+  watch: {
+    speeds: [10, 40, 160],           // ticks a second (x1 = 20 game minutes a second); tap the top bar to cycle
+    labels: ['x1', 'x4', 'x16'],
+    frameBudgetMs: 25,               // never spend longer than this on the world in one frame (phones)
+  },
   ui: {
     barHeight: 72,                   // bottom button bar (SNEAK) in CSS px: thumb-sized
     blinkMs: 400,
@@ -513,7 +519,7 @@ export const CONFIG = {
     ice: '#b8d0e0', iceMark: '#ffffff', iceThin: '#7fa4c4', // ice: pale, cracks; thin ice darker
     fallenTree: '#4a5a2a', fallenTrunk: '#6a4a2a', fallenLeaf: '#203f14', stump: '#3c5a28', stumpMark: '#7a5a36',
     silt: '#6a5a40', siltMark: '#4e4230',
-    deathNewBg: '#8a1a1a',
+    deathNewBg: '#8a1a1a', deathWatchBg: '#1a6a2a',
     replayFire: '#ff7a1a', replayTrail: 'rgba(255,255,0,0.5)', replayZombie: '#40e040', replayCorpse: '#7a1010',
     shore: '#9a917c',
     wall: '#707070',

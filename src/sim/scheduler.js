@@ -13,21 +13,28 @@ export function advance(world, act, onTick = () => {}) {
   for (let i = 0; i < maxTicksPerTurn; i++) {
     if (!world.entities.has(world.playerId)) return; // player died
     if (player && player.Actor.energy >= actionCost) return;
-    world.tick++;
-    onTick(world);
-    const actors = query(world, 'Actor').sort((a, b) => a.id - b.id); // fixed order = deterministic
-    for (const e of actors) e.Actor.energy += e.Actor.speed;
-    for (const e of actors) {
-      if (e.id === world.playerId || !world.entities.has(e.id)) continue;
-      while (e.Actor.energy >= actionCost && world.entities.has(e.id)) {
-        delete e.Actor.nextCost;
-        act(world, e);
-        spend(e, e.Actor.nextCost || actionCost); // a slow step (hedge, stream) costs more
-        delete e.Actor.nextCost;
-      }
-    }
+    tick(world, act, onTick);
   }
   throw new Error(`Scheduler ran ${maxTicksPerTurn} ticks without the player getting a turn`);
+}
+
+// One tick of the world: per-tick systems, then every actor but the player gains energy
+// and acts. Also used on its own by watch mode (step 22), with no player at all.
+export function tick(world, act, onTick = () => {}) {
+  const { actionCost } = CONFIG.scheduler;
+  world.tick++;
+  onTick(world);
+  const actors = query(world, 'Actor').sort((a, b) => a.id - b.id); // fixed order = deterministic
+  for (const e of actors) e.Actor.energy += e.Actor.speed;
+  for (const e of actors) {
+    if (e.id === world.playerId || !world.entities.has(e.id)) continue;
+    while (e.Actor.energy >= actionCost && world.entities.has(e.id)) {
+      delete e.Actor.nextCost;
+      act(world, e);
+      spend(e, e.Actor.nextCost || actionCost); // a slow step (hedge, stream) costs more
+      delete e.Actor.nextCost;
+    }
+  }
 }
 
 export function spend(e, cost = CONFIG.scheduler.actionCost) {

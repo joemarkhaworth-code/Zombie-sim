@@ -1,10 +1,10 @@
 // Boot, input and render loop.
 import { CONFIG } from './config.js';
 import { createWorld } from './sim/world.js';
-import { playerAct } from './sim/turn.js';
+import { playerAct, runWorld, removePlayer } from './sim/turn.js';
 import { drawWorld } from './render/greybox.js';
 import { drawReplay, landSpot } from './render/replay.js';
-import { drawStatus, drawButtons, drawDeath, deathButtons, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout, drawMapButton, mapButtonRect } from './render/ui.js';
+import { drawStatus, drawButtons, drawDeath, deathButtons, drawBag, bagLayout, drawTuneButton, tuneButtonRect, drawTuning, tuningLayout, drawMapButton, mapButtonRect, watchButtonRect } from './render/ui.js';
 import { createMessageLog, describeTile, deathText } from './render/messages.js';
 import { validTargets, wieldedGun } from './sim/systems/ranged.js';
 import { serialize, deserialize } from './sim/save.js';
@@ -52,6 +52,11 @@ function chosenMap() {
 }
 
 function boot() {
+  if (params.has('watch')) { // watch mode from the start: a fresh village with nobody in it (your save is left alone)
+    const w = createWorld(params.has('seed') ? Number(params.get('seed')) >>> 0 : Math.floor(Math.random() * 1e9), { map: chosenMap() });
+    removePlayer(w);
+    return w;
+  }
   if (params.has('seed')) return createWorld(Number(params.get('seed')) >>> 0, { map: chosenMap() });
   const saved = readSave();
   if (saved) {
@@ -69,6 +74,7 @@ window.world = world; // handy for debugging from the console
 
 // Save after every action (dead runs aren't kept: reopening after death starts fresh).
 function persist() {
+  if (world.watchOnly) return; // a watch-only world is never saved (and never touches your save)
   if (world.gameOver) { clearSave(); return; }
   try { localStorage.setItem(CONFIG.save.key, serialize(world)); } catch (e) { /* storage full/blocked: play on */ }
 }
@@ -114,7 +120,8 @@ function resize() {
 
 // Keep the player centred; stop at the map edges when the map is bigger than the view.
 function updateCamera() {
-  const p = (world.entities.get(world.playerId) || world.fallenPlayer).Position;
+  const who = world.entities.get(world.playerId) || world.fallenPlayer;
+  const p = who ? who.Position : { x: world.width >> 1, y: (world.landHeight || world.height) >> 1 }; // watch mode: nobody to follow
   const clamp = (v, size, view) => (size <= view ? Math.floor((size - view) / 2) : Math.max(0, Math.min(v, size - view)));
   layout.camX = clamp(p.x - (layout.cols >> 1), world.width, layout.cols);
   layout.camY = clamp(p.y - (layout.rows >> 1), world.height, layout.rows);
@@ -162,7 +169,24 @@ function startReplay() {
   requestAnimationFrame((t) => { last = t; frame(t); });
 }
 
+// Watch mode (step 22): the world runs on by itself (after you died, or with nobody in it).
+let watching = null; // { speed: index into CONFIG.watch.speeds }
+function startWatch() {
+  const me = watching = { speed: 0 };
+  let last = performance.now(), owed = 0;
+  const frame = (now) => {
+    if (watching !== me) return;
+    owed = Math.min(owed + ((now - last) / 1000) * CONFIG.watch.speeds[me.speed], CONFIG.watch.speeds[me.speed]); last = now;
+    const until = performance.now() + CONFIG.watch.frameBudgetMs;
+    while (owed >= 1 && performance.now() < until) { runWorld(world, 1); owed--; }
+    render();
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame((t) => { last = t; frame(t); });
+}
+
 function render() {
+  if (watching) { drawReplay(ctx, layout, world, { title: 'WATCH', speed: CONFIG.watch.labels[watching.speed], flash: blink }); return; }
   if (replaying) { drawReplay(ctx, layout, replaying.r.world, { trail: replaying.trail, index: replaying.r.index, total: replaying.r.total, flash: blink }); return; }
   updateCamera();
   layout.buttons = currentButtons();
@@ -171,7 +195,7 @@ function render() {
   drawWorld(ctx, world, layout, inspect, debug, aim ? aim.targets : null);
   drawStatus(ctx, world, layout, messages.message, blink);
   if (bagOpen) drawBag(ctx, world, layout, { confirmNew });
-  if (debug.noise && !tuneOpen) { drawTuneButton(ctx, layout); drawMapButton(ctx, layout, world.map); }
+  if (debug.noise && !tuneOpen) { drawTuneButton(ctx, layout); drawMapButton(ctx, layout, world.map); drawMapButton(ctx, layout, world.map, watchButtonRect(layout), 'WATCH'); }
   if (tuneOpen) drawTuning(ctx, layout, tuneRows());
   drawButtons(ctx, world, layout, { armed, bagOpen, ammo: gunAmmo() });
   if (world.gameOver) {
@@ -231,10 +255,17 @@ canvas.addEventListener('pointerup', (e) => {
   down = null;
   clearTimeout(d.timer);
   if (replaying) { replaying = null; render(); return; } // any tap leaves the replay
+  if (watching) {
+    if (e.clientY < layout.statusHeight) { watching.speed = (watching.speed + 1) % CONFIG.watch.speeds.length; render(); return; } // top bar: speed
+    watching = null;
+    if (world.watchOnly) { location.href = location.pathname; return; } // back to your game (the save was left alone)
+    render(); return;
+  }
   if (world.gameOver) {
     if (performance.now() - diedAt < CONFIG.ui.deathTapDelayMs) return; // a moment to read the page
     const B = deathButtons(layout), hit = (b) => e.clientX >= b.x && e.clientX < b.x + b.w && e.clientY >= b.y && e.clientY < b.y + b.h;
     if (hit(B.replay)) startReplay();
+    else if (hit(B.watch)) startWatch();
     else if (hit(B.newGame)) restart();
     return;
   }
@@ -244,6 +275,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (tuneOpen) { onTuneTap(e.clientX, e.clientY); return; }
   if (debug.noise && inRect(tuneButtonRect(layout), e.clientX, e.clientY)) { tuneOpen = true; render(); return; }
   if (debug.noise && inRect(mapButtonRect(layout), e.clientX, e.clientY)) { switchMap(); return; }
+  if (debug.noise && inRect(watchButtonRect(layout), e.clientX, e.clientY)) { location.href = `${location.pathname}?watch=1`; return; } // a village with nobody in it
   if (bagOpen) { onBagTap(e.clientX, e.clientY); return; }
   if (aim) { onAimTap(e.clientX, e.clientY); return; }
   onTap(e.clientX, e.clientY);
@@ -485,6 +517,7 @@ function onTap(px, py) {
   render(); // even a failed move (bump) shows a message
 }
 
+if (world.watchOnly) startWatch(); // ?watch=1: watch a village with nobody in it
 window.addEventListener('resize', resize);
 resize();
 if (bootNote) { messages.show(bootNote); render(); }

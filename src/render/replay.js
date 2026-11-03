@@ -30,7 +30,8 @@ export function landSpot(world, x, y) {
   return null;
 }
 
-export function drawReplay(ctx, layout, world, { trail, index, total, flash }) {
+// Also the view for watch mode (step 22): no trail or progress, a speed shown instead.
+export function drawReplay(ctx, layout, world, { trail = [], index = 0, total = null, flash = false, title = 'REPLAY', speed = null }) {
   const C = CONFIG.colours, R = CONFIG.replay;
   const W = world.width, H = world.landHeight || world.height;
   const head = layout.statusHeight;
@@ -81,10 +82,16 @@ export function drawReplay(ctx, layout, world, { trail, index, total, flash }) {
   ctx.font = `bold ${Math.floor(head * 0.5)}px monospace`;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.fillStyle = C.statusTurn;
-  ctx.fillText(`REPLAY  D${dayOf(world.tick)} ${clockOf(world.tick)}`, 8, head / 2);
-  const bw = layout.width * 0.3, bx = layout.width - bw - 10, by = head * 0.35;
-  ctx.fillStyle = C.statusDim; ctx.fillRect(bx, by, bw, head * 0.3);
-  ctx.fillStyle = C.statusTurn; ctx.fillRect(bx, by, bw * (total ? index / total : 1), head * 0.3);
+  ctx.fillText(`${title}  D${dayOf(world.tick)} ${clockOf(world.tick)}`, 8, head / 2);
+  if (total !== null) { // replay: progress bar
+    const bw = layout.width * 0.3, bx = layout.width - bw - 10, by = head * 0.35;
+    ctx.fillStyle = C.statusDim; ctx.fillRect(bx, by, bw, head * 0.3);
+    ctx.fillStyle = C.statusTurn; ctx.fillRect(bx, by, bw * (total ? index / total : 1), head * 0.3);
+  } else if (speed) { // watch: the speed (tap the top bar to change it)
+    ctx.textAlign = 'right'; ctx.fillStyle = C.statusDanger;
+    ctx.fillText(speed, layout.width - 10, head / 2);
+  }
   ctx.textAlign = 'center'; ctx.fillStyle = C.statusDim;
-  ctx.fillText(index >= total ? 'Tap to go back' : 'Tap to skip', layout.width / 2, layout.height - head / 2);
+  const foot = total === null ? 'Tap to leave. Top bar: speed.' : index >= total ? 'Tap to go back' : 'Tap to skip';
+  ctx.fillText(foot, layout.width / 2, layout.height - head / 2);
 }
