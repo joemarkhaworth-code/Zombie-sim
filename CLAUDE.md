@@ -448,8 +448,7 @@ Phases 1–2: one village, survive as many days as you can. When that's fun in g
 
 ## Decisions for step 16 (hunger, thirst, fatigue) - built
 - src/sim/systems/needs.js. The player has Needs { hunger, thirst, fatigue }, counted in ticks (2 min). Each shows as a level 0-3: ticks / CONFIG.needs.perLevel, capped at 3 (pillar 4: coarse levels on screen).
-  - hunger: a level every 12 h; thirst every 8 h; fatigue every 6 h awake.
-  - From 08:00 you're thirsty and tired by mid-afternoon, hungry by evening.
+  - hunger: a level every 18 h; thirst every 12 h; fatigue every 8 h awake (slowed in the fun pass, below; first built as 12 / 8 / 6 h).
   - Exhausted by about 02:00 if you don't sleep; parched after a day without drinking; starving after a day and a half without food.
 - Effects (all from world.tick, so runs replay exactly):
   - Starving (hunger 3): lose 1 health every 12 h. Parched (thirst 3): every 6 h. You can die of either ("Starved to death", "Died of thirst").
@@ -718,6 +717,21 @@ Harsh weather now leaves lasting marks on the map, not just a temporary tile swa
   - a tree falls downwind leaving a stump and knocks a zombie flat, unhurt; fallen trees block sight, are slow and burn;
   - a gale fells trees and strips a roof open, and the wind itself never hurts you;
   - saves keep it.
+
+## Fun pass (after storms) - built
+Play-testing: "we're losing the concept of fun". Steps 16-20 kept adding ways to be worn down (hunger, thirst, fatigue, wet, cold, illness, floods) without making the moment-to-moment game more fun. The fun is outwitting zombies with the world (lures, fire, ice, ladders) and odd stories on the map. Before step 21, two changes:
+- Fewer chores:
+  - Needs build up more slowly (hunger 18 h a level, thirst 12 h, fatigue 8 h awake).
+  - Dirty water makes you ill half as often (beck 8%, lake 15%, pond 25%, floodwater 30%).
+  - Need messages only come at level 2 and 3; level 1 is just the letter changing colour in the top bar. Illness still says "You feel sick." at 1, because it comes on hours after the drink.
+  - Ground-noise messages ("You splash through the beck.") show once as you step onto that kind of ground, not on every step (ground_noise carries fromTile).
+- Readable zombies (render only, greybox.js 3a): every zombie you can see wears a small badge, drawn on top of the night darkening.
+  - Yellow ! = it can see you right now (canSee).
+  - White ? = it's coming to look: it heard or smelt something, or is searching where it lost you (Brain.goal).
+  - No badge = it's just wandering.
+  So you can tell who's hunting you, whether sneaking worked, and whether your thrown tin drew them off.
+- Play-test bot over 40 seeds: 33 of 40 died, but now almost all from zombies (bites, bleeding). Starving and cold deaths are gone (8 and 1 before).
+- Next ideas for fun, not built: bring a few cheap rare moments forward from Phase 8 (ringing phone box at night, drunk zombies from the pub, zombies keeping old habits), and pacing (something interesting to find in the first hour).
 
 ## Decisions for step 14 (village) - recorded now, built in 14b-14d
 - Upstairs, cellars and lofts: built in 14c (above).

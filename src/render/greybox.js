@@ -273,6 +273,7 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
   // Draw order: things (corpses, items) first, then creatures, then the player on top.
   const layer = (e) => (e.id === world.playerId ? 2 : e.Actor ? 1 : 0);
   const drawables = query(world, 'Position', 'Glyph').sort((a, b) => layer(a) - layer(b));
+  const alerts = []; // ! has seen you, ? heard or smelt something: drawn on top after the darkening
   for (const e of drawables) {
     const { x, y } = e.Position;
     if (!onScreen(x, y) || !levelAt(x, y)) continue;
@@ -288,6 +289,9 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
     }
     const under = world.tiles[y * world.width + x];
     if (under === TILE.BUSH || under === TILE.HEDGE) drawBushMark(ctx, px, py, s); // in cover / pushing through: leaves over it
+    const br = e.Brain;
+    if (br && player && e.id !== player.id && canSee(world, e, player)) alerts.push({ px, py, mark: '!' }); // it can see you right now
+    else if (br && br.goal) alerts.push({ px, py, mark: '?' }); // coming to look: heard or smelt something, or searching where it lost you
   }
 
   // 3. Darken dimly seen tiles (levels 1-2), entities included
@@ -302,6 +306,18 @@ export function drawWorld(ctx, world, layout, inspect = null, debug = {}, aimTar
       ctx.fillRect(ox + vx * s, oy + vy * s, s - 1, s - 1);
     }
   }
+
+  // 3a. Zombie alerts: what each one you can see is up to (show, don't tell).
+  ctx.save();
+  ctx.font = `bold ${Math.floor(s * 0.45)}px monospace`;
+  for (const a of alerts) {
+    const bx = a.px + s * 0.74, by = a.py + s * 0.24, r = s * 0.24;
+    ctx.fillStyle = a.mark === '!' ? C.alertSeen : C.alertHeard;
+    ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.fillText(a.mark, bx, by + 1);
+  }
+  ctx.restore();
 
   // 3b. Weather over the outdoor tiles you can see: rain streaks, snowflakes, fog haze.
   // The marks shift each turn (seeded by tile and turn), so it reads as falling.
