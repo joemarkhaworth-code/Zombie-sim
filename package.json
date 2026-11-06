@@ -1,8 +1,0 @@
-{
-  "name": "zombie-sim",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node tests/headless.js"
-  }
-}

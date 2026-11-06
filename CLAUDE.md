@@ -1,814 +1,137 @@
-# Zombie Survival Sim — Project Guide for Claude
+# Zombie Survival — Project Guide for Claude
 
 ## The game
-A 2D, turn-based, tile-based zombie survival game set in a procedurally generated UK Lake District: villages, woodland, fells, lakes, tarns, streams, roads and bridges. After the player takes a turn, the world and everything in it takes its turn. The goal is lots of simple systems that interact, so interesting and often funny stories emerge on their own (in the spirit of Dwarf Fortress and Brogue).
+A free-roam, turn-based zombie survival game in the style of the original Zelda, set in a Yorkshire market town in the early 1990s. You explore a large world made of screens, scavenge by day, and get back to safety before night. After the player takes a turn, everything else takes its turn.
 
 Goal: survive as many days as you can.
 
-Look: simple 8-bit, inspired by old RPGs and UK Teletext. Until the art pass, everything is greybox: plain coloured squares and letters.
+Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is greybox: plain coloured squares and letters.
 
 ## Design pillars
-1. Systems over scripts. Behaviour comes from rules interacting, never from one-off special cases. Feuds, affairs and murders are never scripted; they emerge from needs, traits, relationships, memory and ownership.
-2. Every action has consequences. Noise, smell, light, fire, water and time spread through the world and other things react.
-3. Show, don't tell. Stories come from what the player sees on the map, not lore or text. Keep on-screen text minimal.
-4. 8-bit simple. Every system must be readable as a tile, a colour, a blink or a one-line status message. If it can't be, simplify the system; don't add UI. Use coarse values (levels 0–3, not percentages). NPCs get a few traits from a short list.
-5. It must make sense. The world has ended: no services, deliveries or working infrastructure unless something in the simulation explains it. Comedy comes from people, animals and zombies keeping old habits, never from things that couldn't plausibly still be running.
+1. A game, not a simulation. Add a system only if it makes exploring or surviving more fun. A new idea should plug into an existing system; if it needs a new one, it must earn its place.
+2. The daily rhythm. Go out by day, get home by night. Hunger, thirst, tiredness and darkness push you to plan your trips.
+3. Explore to progress. Key items open new areas with better loot, like Zelda.
+4. Numbers, not variety. There is only one zombie type, the slow shambler. One is manageable; a crowd is deadly.
+5. Every action has a cost. Noise draws zombies, running tires you, looted places stay looted.
+6. Readable on a phone. Everything shows as a tile, a colour or a one-line status message. Use coarse values (levels 0–3).
+
+## Setting and tone
+- A fictional Yorkshire market town inspired by Knaresborough and Wetherby (not a copy). Early 1990s, so no mobile phones. The outbreak starts on the August bank holiday weekend. Days shorten as the run goes on, towards winter.
+- Tone: dry, understated British humour, never slapstick. Danger stays real; humour lives in small details.
+- Humour goes in: one-line inspect text ("Tin of mushy peas. Desperate times."), deadpan cause-of-death lines ("Died of thirst next to a full kettle."), British items, and NPCs as familiar British types (market trader, publican, vicar, dog walker, retired major, farmer). No brand names.
+- Tea: drinking tea reduces tiredness by one level; boiling a kettle whistles (noise). No morale system.
+- Rare odd sightings, still normal shamblers: a zombie Morris dancer (ankle bells make noise as he moves), zombies queueing outside the post office.
+
+## The world
+- The town layout is the same every run: generated from a fixed world seed in config.js, with hand-placed overrides for key landmarks (market square, castle, church, pubs, bridges).
+- Each run uses a separate run seed for what varies: loot, zombie positions, NPCs, and which bridges are blocked.
+- Flip-screen world: a 10×10 grid of screens. Walk off an edge to go to the next screen.
+- Districts, in rings from the centre:
+  1. Town centre: market square, high street, pubs, shops, bank, post office, parish church, castle ruins on a hill, snickets and ginnels. Most zombies, best loot.
+  2. River through town in a gorge: old stone bridge, weir, railway viaduct, riverside paths. Some bridges blocked by crashed cars. Fishing here.
+  3. Inner town: Victorian stone terraces with back alleys and yards, school, park with bandstand, allotments.
+  4. Suburbs: 1930s semis, 1970s estates and cul-de-sacs, leisure centre, garden centre. Fewer zombies, good safe-house territory.
+  5. Edge of town: industrial estate, supermarket, golf course, racecourse, then farmland, woods and farms. Quiet, sparse supplies, good for foraging and farming.
+- Danger and loot are highest in the centre and drop towards the edges.
+- Building interiors are separate screens. Entering through a door switches to the interior; stairs and ladders lead to upstairs and cellar screens. Buildings keep their footprint on the street map; interiors use larger tiles to fill the screen, with room layouts roughly matching the building's size. Doors and windows link inside and outside: noise passes both ways, zombies can follow you in through open or broken doors and windows, barricades are placed from inside, and looking out of a window briefly shows the street. The outside world keeps running while you're indoors.
 
 ## Platform and workflow
 - Offline, single player only. No servers or accounts.
-- Built entirely from a phone with Claude Code. Play-tested in a mobile browser.
-- Stack: plain JavaScript (ES modules), HTML canvas, rot.js (scheduler, FOV, pathfinding, noise, map gen). No build step unless needed.
-- Deploys to GitHub Pages on every push to main. Play it at https://joemarkhaworth-code.github.io/Zombie-sim/ - when a change is done and live, always give the user this link.
-- Touch-first controls: tap anywhere to step one tile in that direction (8-way), tap on yourself to wait, long-press any tile to inspect it. Big tiles with the camera following the player. Portrait orientation.
-- One system per session. Before finishing, the game must load and be playable, the headless test run must pass, and the change must be committed.
-- Fun check (asked for after step 20: "we're losing the concept of fun"): before building a step, ask what it adds to the fun - a clever trick that works, a choice, or a story you see on the map. Systems that wear you down (needs, illness, weather damage) stay in the background: slow, quiet, rarely the thing that kills you. Ideas from that discussion, for later: fewer chores (slower needs, fewer messages), readable zombies (a ! / ? badge), rare odd moments from Phase 8, a better first hour. (A first fun pass with the first two was built and then taken out, to stick to the roadmap.)
+- Built entirely from a phone with Claude Code. Play-tested in a mobile browser, portrait orientation.
+- Stack: plain JavaScript (ES modules), HTML canvas, rot.js (scheduler, FOV, pathfinding). No build step unless needed.
+- Deploys to GitHub Pages on every push to main. Work directly on main.
+- One step per session. Before finishing, the game must load and be playable, the headless test must pass, and the change must be committed.
+
+## Controls
+- Tap an adjacent tile to move or act (attack, open a door). Tap your own tile to wait.
+- Long-press any tile to inspect it in the status bar.
+- A thumb-friendly action bar at the bottom: sneak toggle, shove, inventory, and later sleep.
+- Tiles must be big enough to tap easily with a thumb.
 
 ## Architecture rules
 - Simulation is separate from rendering. src/sim/ never touches the DOM or canvas. src/render/ only reads world state.
-- Entities + components. Everything (player, zombie, sheep, door, tin of beans, fire) is an entity with data components (Position, Health, Flammable, Noisy, Hunger, Blocks, Owner...). Systems act on any entity with the right components.
-- Interactions come from shared properties: fire burns anything Flammable, zombies follow any Noise, herds flee any Fear source. No "X vs Y" special cases.
+- Entities + components. Everything (player, zombie, door, tin of beans) is an entity with data components. Systems act on any entity with the right components. No "X vs Y" special cases.
 - Energy/speed turn scheduler, so slow things act less often.
-- Event bus: systems emit events (noise_made, entity_bitten, door_broken, theft_seen...) and others subscribe. Internal plumbing only, not player-facing text.
-- Seeded RNG for everything. Record all player inputs per turn, so any run can be replayed exactly from seed + inputs.
-- All tuning numbers and rarity chances in src/config.js.
-- Debug overlay: turn, seed, selected entity's components, and heatmaps for noise/scent.
-- Headless test runner: the sim can run N turns without rendering to catch crashes and runaway behaviour.
+- Event bus: systems emit events and others subscribe. Internal only, not player-facing text.
+- Seeded RNG for everything. Record player inputs per turn so a run can be replayed.
+- All tuning numbers in src/config.js. A hidden tuning panel (from the debug overlay) lets values be changed in-game and saved locally.
+- Debug overlay (tap the top bar): turn, day, seeds, selected entity's components, noise heatmap.
+- Headless test runner: the sim can run N turns without rendering to catch crashes.
+- Save version number: an incompatible old save starts a fresh game instead of crashing.
+- Only simulate nearby screens in full; distant screens are simulated roughly.
 
-## Folder layout
-- index.html
-- src/main.js (boot, input, loop)
-- src/config.js
-- src/sim/world.js, scheduler.js, events.js
-- src/sim/systems/ (one file per system)
-- src/sim/gen/ (procedural generation)
-- src/render/greybox.js (later: teletext/8-bit)
-- src/render/ui.js (status bar, HUD)
-- src/render/messages.js (turns events into status-bar text)
-- src/lib/ (vendored third-party code, when needed)
-- tests/headless.js
-- docs/interactions.md
+## Lessons from the first prototype (follow these)
+- Line of sight and light are separate. Walls block sight. Light range sets how far you see in the open: long by day, short at night. Each visible tile has a visibility level 0–3 from light.
+- Map memory stores a snapshot of each tile as it was last seen (terrain, damage, doors, items), not the live tile. Creatures are not remembered.
+- Zombies must feel dangerous when they reach you: most attacks land, about 3–4 bites kill a healthy player, and they search the last known position for a while before giving up.
+- The player must be able to get the drop on zombies: a zombie that steps next to the player lets the player act first; attacking an unaware creature does heavy bonus damage; a zombie that has just noticed you spends a turn reacting.
+- Shove: one-shot action; pushes an adjacent creature one tile and staggers it (loses its next turn); bumping into something blocked does minor damage.
 
 ## Scale
-Use this everywhere: generation, buildings, objects, and anything placed on the map. The numbers live in CONFIG.scale (src/config.js); code reads them from there, never hard-codes sizes.
-- 1 tile is about 1.5 m, about one person. Walls take up whole tiles.
-- Objects and buildings are true scale. The countryside is compressed: fields are 10–20 tiles across, and villages are 60–120 tiles apart (region map, step 37).
-- Sizes are width × length in tiles. A building's size is its outside, walls included. Width is the frontage (the side facing the street or yard) and length runs back from it. The generator may turn a building to fit (the church lies along the street).
-- Objects:
-  - bed 1×2, sofa 1×2
-  - table 1×1 or 2×1
-  - car 3×2, van 4×2, tractor 3×2, caravan 4×2
-- Buildings:
-  - shed 3×3, greenhouse 3×4
-  - terraced cottage 5×7
-  - detached cottage 7×9, farmhouse 7×9
-  - corner shop 6×8
-  - pub 10×12
-  - church 9×18
-  - barn 8×12
-- Ways (widths):
-  - ginnel 1, pavement 1
-  - lane 2–3, main road 4–5 (picked per map from the seed)
-  - bridge 3 (narrower than the road; the road pinches onto it)
-  - beck 2–3
-  - wall 1, hedge 1
+1 tile ≈ 1.5 m, about one person. Walls occupy tiles.
+- Objects: bed 1×2, sofa 1×2, table 1×1 or 2×1, car 3×2, van 4×2, tractor 3×2.
+- Buildings (outside, incl. walls): shed 3×3, greenhouse 3×4, terraced house 5×7, semi or farmhouse 7×9, corner shop 6×8, pub 10×12, church 9×18, barn 8×12.
+- Paths: snicket/ginnel 1, pavement 1, lane 2–3, main road 4–5, bridge 3, river 4–6, wall/hedge 1.
+- Buildings and objects are true scale. Open countryside at the edge of town is compressed.
+
+## Materials
+Stone, slate, brick, wood, glass, corrugated metal. Each has HP, flammability, see-through, and noise when hit or broken. Sheds can be wood or corrugated metal.
+
+## Weapons
+- Melee like the Zelda sword: every weapon hit damages and knocks the zombie back 1 tile, staggering it (loses its next turn). Unarmed hits are weak with no knockback (shove still available). One zombie is easy with a weapon; several at once is the danger.
+- Melee: walking stick (starting weapon, weak, quick), cricket bat (all-rounder), garden fork (reach 2, light knockback), spade (heavy, big knockback, slow), golf club (strong, noisy), fire axe (best, rare). Light durability: weapons wear out and break.
+- Ranged, distinctly British, no armouries: catapult with stones/marbles (main ranged weapon, quiet, weak), pub darts (thrown, recoverable), bow and arrows from a scout hut or archery club (quiet, arrows recoverable), air rifle (rare, quiet, few pellets), one rare farmer's shotgun (devastating, very loud, few cartridges). No other guns.
+- Fireworks: a lure, not a weapon; zombies head to them.
+- Throwables: bricks, bottles, tins (small damage or distraction).
+
+## Food and water (about 12 food types)
+1. Scavenging: tins, packets, biscuits, bottled water in buildings. Finite; looted places stay looted. Fresh food (bread, milk, fruit) goes off after a few days; tins keep.
+2. Foraging: blackberries, apples, nettles, mushrooms in hedgerows and woods; amounts depend on season and thin out towards winter. Some mushrooms make you ill unless you have the mushroom guide. Fishing in the river with a rod: slow, quiet, exposed.
+3. Light farming: seed potatoes and seed packets from sheds, allotments and the garden centre; plant in a veg patch near the safe house; crops grow over several days; zombies trample crops and desperate NPCs steal them.
+- Water: bottled water → river water (boil it or risk illness) → rain collector.
+- Cooking: raw fish, potatoes and mushrooms must be cooked on a stove or campfire; fires give off light visible at night.
 
 ## Roadmap (build in order; keep it playable after each step)
 
-Phase 1 — Core loop (plain test grid)
-1. Grid + player moves by tap + turn loop
+Phase 1 — Core loop (one test screen)
+1. One screen grid that fits a phone in portrait, player moves by tap, turn loop
 2. Scheduler + one zombie that shambles toward the player
-3. Event bus + one-line status bar
-4. Field of view / line of sight
-5. Map memory (seen tiles stay drawn, greyed out) + long-press to inspect a tile
-6. Noise: actions make noise, zombies investigate
-7. Stealth: sneak mode (slower, quieter) and hiding spots
-8. Health, wounds, bleeding, simple melee (any creature can attack any other)
-9. Items and inventory
-10. Ranged and thrown weapons; gunshots are very loud
-11. Materials: walls, doors, windows, barricades with HP
-12. Save/load: autosave to localStorage every turn; resume on reopen
-13. Game over: Teletext-style death screen (Ceefax page) showing days survived, cause of death, kills and seed
+3. Status bar + long-press inspect
+4. Line of sight + light, visibility levels 0–3
+5. Map memory (snapshot as last seen, greyed out)
+6. Noise: actions make noise, walls muffle it, zombies investigate the source
+7. Stealth: sneak toggle (slower, quieter) and hiding spots
+8. Combat: health, bleeding, melee with knockback, sneak attacks, shove
+9. Items and inventory: pick up, drop, use; weapons change damage; bandages stop bleeding
+10. Throwing: any item can be thrown; it makes noise where it lands (distraction)
+11. Save/load (autosave every turn) + game over screen (days survived, deadpan cause of death, seed)
 
-Phase 2 — One village (the MVP)
-14. Generate one small village: pub, corner shop, church, cottages, phone box, allotments, lane, stream, bridge, trees, hedges, dry-stone walls
-    - 14a. Land, generated in layers: valley + beck + fellside, main road + stone bridge, high street (pavements, terraced plots), ginnels + back lanes + walled yards, green + church graveyard, outskirts (farms, walled fields, footpaths, trees, a wood); buildings left as empty plots
-    - 14b. Buildings on the plots: cottage, pub, shop, church, shed, greenhouse - walls, doors, windows, rooms; materials chosen per building
-    - 14c. Upstairs and cellars: small separate maps reached by stairs or ladders; ladders can be pulled up
-    - 14d. Village life: phone box, allotments, loot by building type, zombies placed around the village, play-test and tune
-15. Day/night + light sources
-16. Hunger, thirst, fatigue
-17. Weather (rain, fog, snow) + getting wet and cold; weather affects sight, noise, scent and fire
-18. Scent + tracks in mud/snow (you can track and be tracked)
-19. Fire, smoke and explosions (gas bottles, car fuel)
-20. Water: dirty water makes you ill, streams flood and wash out bridges, lakes freeze and ice can break
-21. Death replay: on death, replay the whole run sped up from above
-22. Watch mode: run the world with no player
+Phase 2 — The town
+12. Flip-screen world: 10×10 screens from the fixed world seed, walking between screens
+13. Districts: generate the town centre, river, inner town, suburbs and edge of town as described in The world
+14. Building interiors as separate screens, with doors (open/close/lock), windows (see-through, smashable, loud), barricades and upstairs/cellars, using the materials table
 
-Phase 3 — Living world
-23. Animals: sheep herds, deer, foxes, dog packs, geese, crows. Herds stampede when scared; packs hunt; crows circle the dead
-24. Plants, foraging, fishing, cooking (simple two-ingredient recipes)
-25. Days since outbreak: food rots, power fails, gardens overgrow, livestock goes feral
-26. Seasons: autumn, winter snow and ice, spring lambs; affect food, weather and animals
-27. Zombie traits: return to old haunts (home, pub, church), rot and slow over time, sluggish in cold, form wandering hordes
-28. Noise makers: car alarms, church bells, generators, barking dogs, beehives
-29. Building and crafting: barricades, traps, veg patches, rain collectors (short recipe list)
+Phase 3 — Surviving
+15. Day/night: light range shrinks at night; more zombies come out and wander; dawn pushes them back
+16. Needs: hunger, thirst and tiredness (0–3). Empty hunger/thirst drains health. Tiredness rises with time awake, faster when running or fighting; warnings as it rises (edges dim, slower movement). At max tiredness you pass out where you stand, Stardew-style. Outcome depends on safety: barricaded safe house = wake fine; inside but unsecured = chance zombies find you; outside = high danger (lose items, wake badly hurt, rarely die). Choosing to sleep anywhere uses the same rules. Sleeping passes time to morning
+17. Scavenging and water (Food and water, stage 1)
+18. Safe house: claim a building, barricade it, sleep safely, store items in a chest
 
-Phase 4 — People
-30. NPCs: 2–3 traits from a short list (brave, greedy, kind, drunk, paranoid, nosy, honest), needs, a home, a goal
-31. Relationships, memory, ownership and witnesses (stealing seen = grudge)
-32. NPC violence: NPCs fight, flee or surrender based on traits, morale and grudges; they defend against zombies, fight each other over grudges, theft or food, and can kill. Witnessed violence creates grudges and changes faction reputation
-33. Hidden infection: bitten NPCs may hide it; suspicion and accusations
-34. Factions: villagers, bandits (bridge tolls, raids), church cult (rings bells for the dead); reputation with the player
-35. Morale and drink: NPCs can break down or get drunk; booze as trade goods
-36. Legacy: when you die, continue as another survivor in the same world
+Phase 4 — Depth
+19. Zombie numbers: numbers rise as the days pass, noise draws them into crowds, night brings more out
+20. Key items, Zelda-style: bolt cutters (padlocked gates), torch (dark cellars, night), crowbar (boarded doors), bike (fast travel, can't fight while riding, carries less), wellies (wade the river shallows), mushroom guide. Locked areas hold better loot
+21. Weapons: the full melee and British ranged set from Weapons
+22. Foraging, fishing and cooking (Food and water, stage 2)
+23. Light farming (Food and water, stage 3)
+24. NPC survivors: NPCs follow the same rules as the player — they scavenge, eat, drink, sleep, avoid zombies and compete for the same finite loot. Each has one attitude: friendly (gets on with their own day), wary (keeps distance, fights if cornered) or hostile (attacks for your stuff). Desperation: when an NPC's hunger or thirst is low, they may steal or attack, even if friendly; giving them food or tea calms them. NPCs only remember whether the player attacked or helped them. No relationships, factions or gossip
+25. Rare odd sightings from Setting and tone
 
-Phase 5 — The region
-37. Region map: fells, valleys, lakes, tarns, woods and villages joined by roads and bridges; travel between areas; hordes and herds move between them
-38. Simulation LOD: nearby areas simulate fully, distant areas are simulated roughly
-39. Daily seed: date-based seed so each day has its own world; shareable result text (offline)
+Phase 5 — Polish
+26. Juice and sound: screen shake, hit flashes, simple 8-bit sound effects
+27. Art pass: 8-bit tiles and UI
 
-Phase 6 — Polish
-40. Sound: simple 8-bit sound effects
-41. Art pass: 8-bit tiles + Teletext UI (blocky font, 8-colour palette)
-
-Phase 7 — Moonshot systems
-42. Zombie evolution: zombies have inherited hearing/sight/smell stats (0–3); bites pass the biter's stats on with small mutations, so populations adapt to the player's tactics
-43. Pre-simulated history: before the player spawns, run the world headless for ~30 days so it starts with existing damage, factions, feuds and camps
-44. Flowing water: tile-by-tile flow; rain fills tarns, streams overflow; dams can be built and broken
-45. Avalanches and rockfalls: snow builds on fells in winter; loud noises or stampedes trigger slides
-46. Food chain: grass, herds, predators, zombies, scavengers; populations boom and crash
-47. Living villages: NPC groups farm, fortify, trade, raid and collapse without the player
-48. Knowledge: skills learnt by doing and taught to others; lost if no one learnt them
-49. Inheritance: homes, items and grudges pass to family when someone dies
-
-Phase 8 — Fun moonshots
-Rule: the core game is grim survival. Comedy comes from rare events and odd sightings, not constant gags. Rarity chances live in config.js.
-
-Rare (small chance per run or per area):
-- Zombie ice cream van: chime stuck on, roams lanes as a moving noise source; player can drive it to lure hordes
-- Zombie Morris dancers: ankle bells make noise as they move, warning the player
-- Village fête: villagers hold it anyway; band and crowd make huge noise
-- Furious goose: most geese just honk (noise) and keep their distance; the odd one has a "furious" trait and chases anything nearby. Geese can't be infected
-- Ringing phone box: rings at night (noise), drawing nearby zombies
-- Bonfire Night: if a run reaches 5 Nov, villagers light a bonfire; fireworks found in sheds act as noise/light distractions and can start fires
-- Carol singers: at Christmas a choir does its rounds, making noise at each door
-- Caravan jam: a caravan blocks a narrow lane; can be looted or used as a tiny base
-
-Occasional:
-- Fell walkers: hikers ignore the apocalypse and keep walking the fells; later appear as zombies
-- Drunk zombies: zombies infected at the pub stagger randomly
-- Queueing: NPCs and zombie shoppers sometimes queue outside shops (habits)
-- Curtain twitchers: "nosy" NPCs watch from windows and act as witnesses
-- Honesty box farm stalls: honest NPCs pay, greedy ones don't; taking without paying while seen creates grudges
-- Allotment feuds: NPCs compete for plots and sheds as a food source
-- Sunday roast: villagers gather on Sundays; the cooking smell draws zombies
-- Foxes knock over bins at night (noise, false alarms)
-
-Always available (player tools):
-- Tea: restores NPC morale; kettles whistle (noise); running out of tea crashes village morale
-- Gut disguise: zombies ignore you while covered; rain washes it off
-- Brolly: keeps rain off (protects gut disguise), weak weapon
-- Decoys: scarecrows and gnomes fool zombies with poor sight
-- Weapons: cricket bat, garden fork, walking stick, golf club
-
-Interaction check: every new system must read from or affect at least one existing system. Keep the list in docs/interactions.md.
-
-## MVP scope
-Phases 1–2: one village, survive as many days as you can. When that's fun in greybox, carry on.
+## Not doing (keep it a game)
+Other zombie types, morale, factions, NPC relationships, simulated history, zombie evolution, flowing water, complex ecosystems, crafting trees, procedurally generated towns. Only revisit after the game is finished and fun.
 
 ## Decisions
-- Larger tiles for thumb-friendly tapping.
-- The camera follows the player and scrolls the map.
-- Scheduler is our own small energy scheduler (src/sim/scheduler.js), not rot.js's: rot.js uses its own global RNG, which would break seed + inputs replay. Each tick every Actor gains `speed` energy; acting costs 100. Player speed 100 (one action per turn), zombie speed 50 (acts every other turn). Actors act in entity-id order so runs are deterministic.
-- Zombie movement is a greedy step toward the nearest entity with a Prey component (not just "the player"), with a small random stagger chance. Proper pathfinding waits until it's needed.
-- Event bus (src/sim/events.js) is synchronous and lives on the world. Event types and payloads are listed at the top of that file. Events carry data only; all player-facing wording lives in src/render/messages.js, which subscribes to the bus.
-- Status bar: one line at the top. Turn number (T12) on the left, then the latest message. A new player action clears the line; if several things happen in one turn, the most important message wins (danger > blocked > bump > info). Danger messages are yellow. With no message, the seed shows dimmed on the right.
-- Messages for now: "You wait.", "A wall blocks the way.", "The zombie is in the way.", "The zombie is next to you!" (when any actor newly ends a turn adjacent to the player). Keep messages under ~30 characters so they fit a phone screen.
-- Field of view is our own strict line-of-sight check (src/sim/systems/vision.js), not rot.js: rot.js's shadowcasting let you see through diagonal gaps between walls and round corners. A tile is visible if the straight line between tile centres hits no wall; a line squeezing between two diagonal walls is blocked. Sight is symmetric: if you can see a zombie's tile, it could see yours given the range. Wall faces next to visible floor are shown so walls don't look patchy. rot.js stays available for later (pathfinding, map gen) but nothing is vendored until it's used.
-- Vision has two separate parts. (1) Line of sight: blocked by opaque tiles (walls, later obstacles like hedges and trees); it has no distance limit of its own. (2) Light: CONFIG.light.range sets how far anyone can see in the open (clear day = 15, enough to cover the whole portrait screen), and world.light holds a 0–3 light level per tile (all 3 on a clear day). Day/night and weather will lower both. Every creature has eyesight 0–3 that scales the light range (factors in config): player 3 = full range, zombie 2 = half, so you usually see them first.
-- Zombies only chase what they can see. Out of sight, a zombie walks to where it last saw you, then gives up and shuffles about at random.
-- Until map memory (step 5), anything outside your view is drawn black.
-- New messages: "A zombie comes into view." and "The zombie has seen you!" Both only fire for zombies on your screen: light range reaches past the sides of the portrait screen, so the message log (render side) checks the camera, not just the sim's line of sight.
-- Visibility is a level per tile (0–3), not on/off, and it comes from light, not distance: a tile in line of sight and within range has visibility = its light level; otherwise 0. On a clear day everything in sight is level 3. A creature is only noticed if its tile is at or above vision.minLevelToSpot (1 for now); stealth can raise this later. You always see your own tile.
-- Greybox rendering of visibility: level 3 full colour, 2 and 1 slightly darker (black overlay, alpha in config), 0 black. The art pass will use dithering for levels 2 and 1 instead of plain darkening.
-- Map memory lives in the sim (src/sim/systems/memory.js), not the renderer. A Memory component (on the player for now) keeps a snapshot of each tile as it looked when last seen: terrain plus any non-creature things on it (items, doors...), and later damage, door state and barricade HP (add new tile state in snapshotTile()). Never the live tile. A snapshot only updates while the tile is in view (whenever the viewer's sight changes, and at the end of every turn), so the remembered map can be out of date: beans someone moved are still where you last saw them until you look again. Creatures are never remembered. Snapshots are plain data so they can be saved (step 12).
-- Rendering memory: tiles out of sight are drawn from their snapshot, greyed out (own grey colours in config), with remembered things as grey letters. Never-seen tiles are black.
-- Long-press (hold still for input.longPressMs = 450 ms) inspects the tile under your finger: a one-line description in the status bar plus a white outline on the tile, and a short phone vibration where supported. Inspecting takes no turn and isn't recorded as input. The next action clears it.
-- Inspect wording (src/render/messages.js describeTile): in sight shows the creature there if noticed ("A zombie."), else the top thing on the tile ("A tin of beans."), else the terrain ("A wall.", "Open ground."); your own tile is "That's you.". Out of sight shows the remembered snapshot, never the live tile, plus ", out of sight". Never seen is "Unexplored."
-- Noise (src/sim/systems/noise.js): makeNoise(x, y, level 0–3) is the one entry point. Level sets starting strength (radiusByLevel 0/4/8/12 in config); strength drops 1 per tile (8 directions) and by noise.wallCost (3) when passing through a wall, so walls muffle rather than block; the map edge blocks. Quiet noises die in a wall, loud ones carry through.
-- Hearing is a 0–3 level per creature (Hearing component), like eyesight: it sets the weakest strength still heard (noise.minStrengthToHear). Zombies have good ears (3) and poor eyes (2); the player hears at 2.
-- What makes noise for now: walking, via a Noisy { move } component (player footsteps level 1, about 3 tiles in the open; zombies 0, shuffling quietly). Waiting is silent. Bumping a wall makes no noise, because it takes no turn and would be a free lure. Later systems (fights, gunshots, doors, sneaking) call makeNoise or change Noisy.
-- Zombies that hear a noise set their goal to its source and walk there, search around it, then give up (noise_investigated). The newest noise wins; seeing prey always wins over hearing. Brain.goal = { x, y, why: 'seen' | 'heard' } replaces lastSeen.
-- No status message for hearing: you see the zombie turn toward you (show, don't tell).
-- Debug: tap the top bar to toggle the debug map: the noise heatmap (orange overlay with strength numbers, showing noise since your last action, including tiles out of sight) and the scent trail (green squares with levels, step 18). Takes no turn. world.noise holds the heatmap.
-- Tuning panel (src/sim/tuning.js + main.js): with the debug overlay on, a small orange TUNE button sits at the top right of the map. It opens a panel with -/+ rows for zombie speed, bite hit chance, bite damage, bite bleed chance, zombie health, search length, search radius, zombie eyesight, zombie hearing and light range (TUNABLES lists path, step, min, max). Changed values show yellow; RESET restores config.js defaults; CLOSE. Changes apply at once (syncWorld pushes zombie values into zombies already on the map; vision is recomputed) and are saved in localStorage under 'zombie-sim-tuning', separate from the game save, and applied to CONFIG at every boot. config.js stays the shipped default: when a tuned value feels right, copy it into config.js in a Claude session. Changing tuning mid-run means that run's inputs no longer replay exactly (it's a balance tool).
-- Intentional: in daylight in the open, zombies see you (7 tiles) well before they hear your footsteps (3 tiles). Hearing matters when they can't see you: round corners, behind walls, in the dark. Night (step 15) will shrink sight and make hearing their main sense. Don't "fix" this by tuning.
-- Sneaking (src/sim/systems/stealth.js): toggled by a big SNEAK button in a bottom bar (72 px, full width, yellow "SNEAKING" when on). Toggling takes no turn but is recorded as an input ({ type: 'sneak', on }) so replays match. While sneaking: each step costs 2x energy (zombies get twice the time), footsteps drop from level 1 to 0 (silent), and you can only be noticed from two-thirds of the usual distance (stealth.sneakNoticeFactor 0.67). Waiting costs the same as normal. A sneaking creature is drawn dimmer.
-- Noticing (vision.js canSee) combines line of sight, light and distance: the target's tile must be in sight with light >= minLevelToSpot, and within sight radius x noticeByLight[light level] (1 / 0.67 / 0.34 for light 3/2/1) x stealth.sneakNoticeFactor if sneaking. Adjacent creatures are always noticed, even in pitch darkness (you'd bump into them; step 15), as long as no wall is between. The same rule works both ways: you don't see zombies you haven't noticed (they aren't drawn).
-- Hiding spots: bush tiles (TILE_INFO cover: true) are walkable and see-through, but anything standing in one can only be noticed from an adjacent tile. Works for zombies too: a zombie in a bush is invisible until you're next to it. Creatures in a bush are drawn with leaf marks over them. Test grid scatters a few bush clumps (config testGrid).
-- Bottom bar (action bar) holds big buttons side by side, split evenly: SNEAK (toggle) and SHOVE (one-shot). The map area shrinks to fit between the status bar and it. Add future actions here rather than new UI.
-- Sneaking and bushes stop you being noticed; they don't shake off a zombie that already has you in view (it watched you duck into the bush). A zombie that saw you on its last look keeps tracking you at its normal range, ignoring sneak and cover, while you stay in line of sight. To lose a pursuer, break line of sight with walls first, then hide.
-- When a zombie loses you (or reaches a noise), it goes to the last known spot and searches: shuffles about within 3 tiles of it for 12 moves (zombie.searchActions / searchRadius, ~24 of your turns) before giving up, so it can stumble onto you hiding nearby. Any new noise it hears (mid-search or not) replaces its goal and restarts the hunt there.
-- Health is a whole number (Health { hp, max }): player 6, zombie 4. Shown in the top bar as one red block per point (dark when lost), between the turn number and the message. The blocks blink while you're bleeding.
-- Melee (src/sim/systems/combat.js): moving into any creature with Health attacks it instead of moving; it takes a turn. Any creature with a Melee component can attack any creature with Health. Melee { damage, hitChance, woundChance, verb }: player hit 1 dmg 80%, zombie bite 2 dmg 85% (see balance targets below). Rolls use the seeded RNG. The input is recorded as a plain move, so replays re-derive the attack. Zombies attack prey they can see when adjacent. Every swing makes noise level 2 (about 8 tiles), so fights draw other zombies.
-- Wounds and bleeding (src/sim/systems/bleeding.js): a hit may wound, raising Bleeding level by 1 (max 3). Bleeding drains 1 health every 12/7/4 ticks (by level), drips blood each time, and may clot down a level (30% per drip). Runs per scheduler tick via an onTick hook. Zombies bleed too.
-- Blood: world.blood is a 0–3 level per tile, drawn as red spots (more for higher levels). It's tile state, so memory snapshots record it (greyed spots out of sight). Inspect: "Blood on the ground."
-- Death: the creature is removed and leaves a corpse (a non-creature thing named "<name> corpse", walkable, remembered, inspectable). If the player dies, world.gameOver = { cause, killerName, turn } and the scheduler stops (world.fallenPlayer keeps the last view for the camera), and the death screen shows (see Game over below).
-- Headless tests: the random-play runs now often end in death, so there's also a stress run per seed with an unkillable player for crash/runaway coverage.
-- Draw order: things (corpses, items) first, then creatures, then the player on top, so you're never hidden under something you're standing on.
-- Zombie balance targets (tested in headless.js): most attacks land (bite hitChance >= 0.8, now 0.85); 3-4 bites kill a healthy player (bite damage 2 vs 6 health = 3 bites, more like 3 with bleeding); bites usually draw blood (woundChance >= 0.6, now 0.7, higher than the player's). Zombies stay slow (half speed), so one-on-one with bare hands you still usually win (about 98% in a 300-fight sim) but lose ~2 health plus whatever the bleeding takes; the danger is numbers, being caught bleeding, and noise drawing more of them.
-- Who strikes first: moving uses a creature's action, so a zombie that steps next to you can't also attack; at half speed you get two actions before its next one (checked in tests). If you step into reach of a zombie that's already watching you, it may swing first - fair, it was waiting for you.
-- Reacting: when a zombie first notices prey (or is hit by something it hadn't noticed), its next action is a reaction (zombie.reactActions = 1): it stays put and groans (noise level zombie.groanNoise = 1, which other zombies can hear). So a zombie can never strike on the same action it notices you.
-- Sneak attacks: attacking a creature that hadn't noticed you (a zombie that wasn't tracking you on its last look) always hits (melee.sneakAttackHitChance = 1) and adds melee.sneakAttackBonus = 3 damage, so a 4-health zombie dies in one blow. If it survives, it reacts before it can strike back. Status: "Sneak attack!". The player counts as aware of anything they can see.
-- Shove (src/sim/systems/shove.js): tap SHOVE (turns orange, "armed"), then tap toward an adjacent creature; the direction works like movement (8-way, forgiving). Tapping yourself, tapping SHOVE again, or a direction with nothing shoveable cancels it, with no turn spent. The input is { type: 'shove', dx, dy } and takes a normal turn. The creature is pushed one tile directly away; if that tile is blocked (wall, creature, map edge) it slams into it instead and takes shove.slamDamage = 1 (the thing behind is unhurt). Either way it's staggered and loses its next action (shove.staggerActions = 1). Shoving makes noise level 1 and the target notices who shoved it. No damage bonus for shoving an unaware creature (that's what sneak attacks are for).
-- Staggered { actions } is a general component: the scheduler still charges the creature's time, but its action is wasted (entity_lost_action). Any future system can stagger things.
-- Forced movement hook: anything moved by force goes through pushEntity(), which emits entity_pushed { id, by, from, to, dx, dy }. Water, fire, ledges and the like subscribe to it and react to the destination tile, without knowing who pushed or why. Slamming emits entity_slammed { id, x, y, blockerId }.
-- Other attack types (ranged, thrown) wait until weapons exist (step 10).
-- Items (src/sim/systems/items.js): an item is an entity with Item { type, slots } + Glyph + Name. On the map it has a Position; carried, it has none and its id is in Inventory.items. Item types live in CONFIG.items as data; effects are properties, not special cases: food / drink (feeds / waters you, step 16), heal (+health), stanch (bandage: stops bleeding, used up, refused if you're not bleeding), weapon (wield/stow; replaces bare-hands melee numbers). Test items: tin of beans (%, food), bandage (+), cricket bat (/, damage 2), scattered on open tiles (CONFIG.testGrid.items).
-- Inventory { items, capacity, wielded }: capacity is in slots (player 6; beans/bandage 1, bat 2). A full bag leaves the item on the tile ("Your bag is full.").
-- Picking up: walking onto an item picks it up as part of the step, free. Tapping yourself while standing on an item picks it up (takes a turn) instead of waiting - for things you dropped or couldn't fit. Inspecting your own tile says "You're on a <item>."
-- BAG is the third action-bar button. It opens an 8-bit list over the map (Teletext blue): header "BAG used/capacity" + CLOSE, one 56 px row per item with a coloured glyph, name, slots, and two big buttons: use (EAT / USE / WIELD / STOW) and DROP. Opening takes no turn. Use and drop take a turn and close the bag so you see what happened. Wielded item is marked "> name, in hand".
-- Inputs: { type: 'pickup' }, { type: 'use', itemId }, { type: 'drop', itemId } are recorded; item ids are deterministic from the seed, so replays match. Random-play tests include them.
-- Melee stats come from meleeStats(): a wielded weapon's numbers override the Melee component's.
-- Your view is screen-shaped: the player's Vision has clip { x: tilesAcross/2 = 5, y: view.sightHalfHeight = 9 }, so you only see, notice and remember tiles the screen can show (light range 15 still sets the limit in the dark/fog later). Without this, you'd remember off-screen tiles and items you were never shown. The box is fixed in config, not measured from the device, so replays don't depend on the phone; taller screens just show a few extra dark rows. Zombies have no box.
-- Throwing (src/sim/systems/ranged.js): any item can be thrown. BAG rows have three buttons (use, THROW, DROP); THROW closes the bag and starts aiming. Range throw.range = 6 (round), the tile must be in sight with a clear line and not solid. The item lands on the tile and clatters there (noise level throw.landNoise = 2, ~8 tiles), so throwing beans is a lure: zombies go to investigate the landing spot. If a creature is on the tile it may be hit (75%): any hit staggers it (loses its next action, throw.staggerActions = 1), and heavy items (slots >= 2: bat, guns) also do 1 damage. So a tin of beans is worth throwing at a zombie to buy a turn. Input { type: 'throw', itemId, x, y }, takes a turn.
-- Guns are items with a `ranged` property and their own ammo (Item.ammo, shown in the bag). Wield one and a FIRE button (showing ammo, e.g. "FIRE 3") joins the action bar. The noise is at the shooter. Air rifle: range 8, 1 damage, quiet (noise 1), 10 pellets. Shotgun: range 4, 4 damage (kills a zombie), very loud (noise 3, ~12 tiles), 4 shells. Both work as clubs when wielded (1 damage). An empty gun clicks ("Click. Out of ammo."), no turn. Input { type: 'fire', x, y }. A shot hits the creature on the target tile; creatures in between are ignored for now. Guns don't get sneak-attack bonuses.
-- Aiming (throw or fire): valid targets come from validTargets() (one rule for the sim and the highlight). Valid tiles get a yellow tint, ones with a creature orange. The action bar becomes one big CANCEL; tapping yourself also cancels; tapping an invalid tile says "Can't aim there." and keeps aiming. If nothing is in range it says so and doesn't enter aiming.
-- Guns come with some ammo, and ammo items (box of shells, tin of pellets: ammoFor + rounds) load a carried gun of their type (USE shows LOAD; the emptiest gun; "No gun to load." otherwise). Found in the village (14d).
-- Materials table (CONFIG.materials): stone, slate, brick, wood, glass, corrugatedMetal, thatch. Each has hp (blows to break at 1 damage), flammability 0-3 (does it catch fire and spread flames), heatDamage 1-3 (how fast fire wears it down even if it never catches - nothing is fireproof: glass shatters, slate splits, metal buckles, stone and brick spall; fire is step 19), seeThrough (does sight pass while intact), hitNoise and breakNoise (0-3), and glass has shards (leaves broken glass). Everything structural reads its numbers from here; nothing hard-codes them. CONFIG.build says what things are made of for now: walls stone, doors wood, windows glass, barricades wood (planks). A structure's material decides its health, whether it blocks sight (a glass door doesn't; a metal-sheet window does) and how loud each blow and the final break are (corrugated metal clangs at 3; thatch is a soft 1). Walls stay tiles with health in world.tileHp (explosions damage them, step 19). Doors and windows are entities (Structure { material, hp, max } + Door { open, locked, broken } or Window { broken }) standing on floor tiles in wall gaps, indexed in world.structures. Barricade { material, hp, max } soaks blows first. Their Blocks/Opaque/glyph/name are recomputed from state and material by refresh(), so memory snapshots record open/shut/broken/boarded automatically.
-- Closed doors block movement and sight; open or broken doors block neither. Intact windows block movement but not sight; broken windows can be climbed through. Anything solid (closed door, window, barricade) also muffles noise like a wall and stops thrown items and shots (lineClear takes a blocking rule). A door or window changing state refreshes everyone's vision.
-- Door controls: walk into a closed, unlocked door to open it (a turn, you don't move). Tap exactly on an adjacent door tile to toggle it open/closed ({ type: 'door', x, y }, a turn); tapping further in that direction walks through. A door can't be closed with someone in the doorway.
-- Bashing is deliberate: tap exactly on an adjacent window, locked door or barricade ({ type: 'bash', x, y }, a turn) to bash it with your melee damage. Walking (tap-anywhere) into one never breaks it: no turn, just a hint ("Tap the window to smash it.", "Locked. Tap it to bash it.", "Boarded up. Tap it to bash."). This stops stray taps smashing windows. Each blow makes the material's hitNoise; the final blow its breakNoise (glass 3, wood 2). Blows hit a barricade before the thing behind it. A destroyed door becomes a broken door (always open); a smashed window scatters broken glass on its tile and maybe beside it.
-- Broken glass is tile state (world.glass 0-3, in memory snapshots, shown as light-blue shards, inspect "Broken glass."). Anything stepping on it makes noise level 1, sneaking or not ("Glass crunches underfoot.").
-- Zombies can't use handles. When their greedy step toward a goal (prey seen, noise heard) is a closed door, window or barricade, they bash it with their bite damage. So a zombie that sees you through a window, or hears you inside, breaks in noisily. If you can't see the zombie but hear the blow: "Something bangs on a door!"
-- Planks (item, 2 slots): use next to a closed door or window to board it up (barricade +6 health, blocks movement and sight, hammering is noise level 2, planks used up). Picks the first adjacent candidate (N, E, S, W, then diagonals).
-- Keys go on a Keyring { keys }, not in the bag: they take no slot and aren't bag rows (the bag shows one "Keys: ..." line). A key opens doors whose Door.lockId matches its Item.lockId (the test building's door and the scattered door key share 'test-building'). No USE button: walking into a locked door you have the key for unlocks and opens it ("You unlock and open the door."); closing a door you have the key for locks it behind you ("You close and lock the door."). The wrong key does nothing. Picking one up: "Door key on your keyring." Old saves with a key in the bag are migrated onto the keyring on load.
-- Test building (CONFIG.testGrid.building, src/sim/gen/building.js): 8x6 stone room with a cleared 1-tile yard, a locked wooden door in the bottom wall, glass windows in the top and right walls, and loot inside (beans, bandage). Planks and the key are scattered outside. Get in by finding the key, bashing the door, or smashing a window.
-- Save/load (src/sim/save.js, pure sim; main.js stores it): the whole game state is serialised to JSON - seed, turn, tick, next entity id, player id, recorded inputs, the RNG's exact state, tile arrays (terrain, light, blood, glass, wall health), the player's sightings, the test building's rect, and every entity with all its components (memory snapshots, inventory, brain, doors, barricades). Not saved, rebuilt on load: visible sets (vision is recomputed), the noise heatmap, event wiring (createWorld installs it, then the save is poured in), world.structures lookup. Tile arrays are run-length encoded and Memory saves only remembered tiles, so saves stay small on big maps. A loaded game plays on exactly like the original (tested).
-- Autosave: main.js saves to localStorage (CONFIG.save.key) after every player action that reaches the sim, including free ones like sneak toggles; on start it loads the save if there is one. ?seed=N in the URL always starts that seed fresh. Dying deletes the save, so reopening after death starts a new run. If storage is blocked or full, the game plays on unsaved.
-- Save version: CONFIG.save.version (11 now). Bump it whenever the saved shape changes in a way old saves can't be read with. A save from another version, or one that fails to load for any reason, is discarded and a fresh game starts with "Old save lost. New game." - never a crash.
-- New game: a small, dim NEW GAME button at the bottom of the BAG panel (out of the way of play), then a confirm screen "Start a new game? This run will be lost." with big YES (red) / NO buttons. YES clears the save and starts a fresh random seed.
-- Time (src/sim/time.js): the clock runs on scheduler ticks, not player turns, so slow actions take longer - a normal step, wait or attack is 1 tick, a sneaking step 2 (anything that costs more energy costs more time). CONFIG.time.minutesPerTick = 2, so a day is 720 ticks and an 8-hour night about 240 steps; a run starts at 08:00 (time.startHour) on day 1 and the day rolls over at midnight. Helpers: dayOf(tick), clockOf(tick) -> "HH:MM", daysSurvived(tick) (full 24 hours since the start). The top bar shows day and clock, e.g. "D1 08:00". world.tick is already saved, so saves carry the time. Day/night (step 15) builds on this.
-- Run stats: world.stats.kills counts zombies (creatures with a Brain) killed by the player. Saved; older saves without stats load with 0 (an additive change, so no save-version bump).
-- Game over (step 13): on death the last view is darkened and a plain prototype-style screen shows "YOU DIED", the cause of death, when you died ("day 3, 22:15"), days survived, zombies killed, turns and the seed, with a flashing "Tap for a new game". It deliberately uses the same greybox look as the rest of the game; the final look (e.g. a Teletext/Ceefax page) is decided at the art pass, step 41, not before.
-- Causes of death come from world.gameOver.cause: bite -> "Bitten by a zombie", bleeding -> "Bled out", hit -> "Beaten by a ...", shot -> "Shot by a ...", thrown, shove ("Slammed into a wall"). Wording lives in src/render/messages.js deathText().
-- Taps are ignored for ui.deathTapDelayMs (1 s) after death so a fast tapper sees the screen; then any tap starts a new game with a fresh seed. The save is deleted on death.
-
-## Decisions for step 14a (village land) - built
-- Maps: CONFIG.world.map picks what a new game uses: 'village' (default) or 'testgrid' (the phase-1 grid, kept for testing). createWorld(seed, { map }). Saves record their map (older saves load as testgrid). Debug overlay (tap the top bar) shows a TO GRID / TO VILL. button under TUNE that switches and starts a new game; ?map=testgrid|village in the URL does the same. The choice is remembered in localStorage ('zombie-sim-map').
-- The village (src/sim/gen/village.js, 112 x 200 tiles, top = valley head) is built at the Scale above and generated in layers, the way real Lakeland villages grew. Each layer claims ("lays") its tiles; later layers only build on unclaimed ground, so nothing overwrites the street. Numbers in CONFIG.village; all sizes and widths from CONFIG.scale. About 20 ms per village.
-  1. Valley: a valley floor (grass) following the road, narrow at the head, wider toward the foot and widest round the village; rising fellside on both sides. The lower fellside (12 tiles) is walled into intake fields under a fell wall; above it is open fell (bracken, rock, scree high up, odd thorn trees). Fellside and bracken are slow going (moveCost 2, scree 3). A beck (2-3 wide) winds down the floor, fed by 1-tile gills off the fell on its own side, into a lake at the foot of the dale with a shingle shore.
-  2. Main road: tarmac (ROAD, 4-5 wide) down the whole valley, wandering gently outside the village and dead straight through it. It crosses the beck once on a 3-wide stone bridge (the road pinches onto it; the pavements stop at the bank). The village centres on this crossing and the player starts on the bridge. The beck runs on one side of the road above the bridge and the other side below it.
-  3. High street (44-48 rows each side of the bridge): pavements (PAVEMENT, 1) both sides. Behind them a street block deep enough for the pub plus a yard (12 + 3 = 15), then a back lane (LANE, 2-3). Terrace rows of plots (TILE.PLOT) front straight onto the pavement: the pub (10x12) first by the bridge on one street, the corner shop (6x8) first on the other street, then 3-5 terraced cottages (5x7) per row. Every street plot has a walled yard (cobbled YARD) filling the block behind it, party walls between yards, and a gate in the back wall. The far end of each street is kept for a detached cottage (7x9) in its own walled garden, with a front gate and path; a few spare rows become a walled garden.
-  4. Ginnels: a 1-tile ginnel (GINNEL) between terrace rows, from the pavement through to the back lane. A lane at each end of every street joins pavement to back lane; at the bridge end it runs along the beck. Beyond the back lane is the beck's bank (with trees) or a field wall, sometimes a hedge.
-  5. Green and church: on one side of one street, by the bridge, an open green (10-12 rows) with a tree or two, then a ginnel, then the church (9x18, lying along the street) in a walled graveyard with 2 rows of graves all round. A lychgate (GATE) on the pavement with a short path to the door, a back gate onto the back lane, gravestones (GRAVE: block walking, not sight) in rows with walkways between.
-  6. Outskirts: a side lane (LANE, lane width, walled; each row starts at that row's own road edge since the road bends) off the main road to a farm or two, one above the village and one below, on the side away from the beck. A farm is a walled farmyard (YARD) with the farmhouse (7x9) and barn (8x12) along the far wall facing the yard, and a lane-wide gate. Walled fields 10-20 tiles across (jittered grid of seeds, nearest seed wins, with a wobble so the walls wander). The main road is walled outside the village. Every field gets a gate (GATE) onto the road, lane or path it borders, most neighbouring fields a gate between them, some a gate onto the open fell. Footpaths (PATH, normal speed even on the fell) run from behind each farm and from the far end of each beck-side back lane, over the beck on a footbridge, up the fellside to the map edge, with a gate wherever they cross a wall. Trees along the beck, a wood (radius 12) on the beck side below the village, field trees.
-  Last, every walkable tile is made reachable from the bridge: the shortest way out of any pocket is knocked through, a dry-stone wall becoming a gate (never through the lake).
-- world.plots = [{ x, y, w, h, kind, building, facing, front, back?, turned? }]: kind is cottage | detached | pub | shop | church | farmhouse | barn; building is its CONFIG.scale.buildings key and the plot is exactly that size (turned if it lies the other way); facing is the side its front faces (N/E/S/W). front is the walkable tile outside the front door (the pavement for street plots). back is the yard/garden tile behind. Also world.green, world.graveyard ({ x, y, w, h }), world.farms ({ x, y, w, h, gate }), world.bridgeRow, world.widths (road/lane/beck/bridge as picked). 14b builds on these.
-- Tiles are properties, not special cases (TILE_INFO in gen/testgrid.js, shared by both maps): blocks, opaque, cover, moveCost (time multiplier for a step onto it), stepNoise (noise level when stepped on; sneaking makes it one less), material. Road, pavement, lane, ginnel, yard, footpath and building plot are all separate tiles so they read differently on screen and in inspect.
-  - Dry-stone walls, trees, rock: block movement and sight. Gravestones block movement only.
-  - Gates: walkable openings in walls; they creak (noise 1, "The gate creaks.").
-  - Hedges: block sight, can be pushed through slowly (moveCost 3) and rustle (noise 1).
-  - Beck and gills: wade slowly (moveCost 2) and noisily (splash 2). Lake: too deep. Shingle crunches (1). Bracken: cover, rustles. Scree clatters (2).
-  - Rough ground slows zombies too (Actor.nextCost).
-- Greybox look: each tile has a colour plus a simple mark.
-  - Road: dark tarmac with one faded centre line down the middle, however wide.
-  - Pavement and ginnel: grey flagstones (the ginnel darker).
-  - Lane: brown gravel dots. Yard: cobble dots. Footpath: worn tan earth.
-  - Building plot: dark bare earth with a dot.
-  - Gate: wooden five-bar gate. Gravestone: a headstone on grass.
-  - Dry-stone walls: stone courses. The bridge is plain pale road surface with dark parapet strips only on its sides facing water, so it never looks like a wall.
-  - Also leaf dots for hedges, a dark round crown for trees, ripples for water, fronds for bracken, a peak for rock, pebbles for scree.
-  - Remembered tiles use a dark grey of each tile's own colour, so they keep their shapes.
-- Save version 4 (14b): the village now has buildings, so older saves start a new game. Saves stay small on the big map: tile arrays are run-length encoded and map memory saves only the remembered tiles (~65 KB, ~2.5 ms per autosave).
-- The test grid still gets its single test zombie (8-20 tiles away) and scattered test items; the village gets its own loot and zombies from 14d (gen/life.js).
-
-## Decisions for step 14b (buildings) - built
-- 14a decides where every building goes: each plot has a size from CONFIG.scale, a facing and a front tile. 14b (src/sim/gen/buildings.js, buildVillage, called by createWorld after the land) builds every plot with one generic builder. Nothing is special-cased per map position.
-- Outbuildings are plots too, reserved in 14a:
-  - a shed (3x3) in some terraced/shop back yards (CONFIG.village.yardShed), in the far corner, using the yard's walls as its own (the yard gate moves to the other side);
-  - a greenhouse (3x4, turned) in every detached cottage's back garden, sometimes a shed in the other corner (gardenShed);
-  - a shed in each farmyard corner by the gate wall.
-  All face their house/yard.
-- Terraced cottages (and the pub/shop at a terrace's end) share party walls: each plot starts on the last row of the one before, so a row of n cottages is 4n+1 long and there are no double walls. Their yard walls are shared the same way.
-- Frame: each building is laid out in its own frame from its facing: u along the front (0..W-1), v back from it (0..L-1). So a turned building (the church along the street, the greenhouse) or one facing a farmyard uses the same layouts. The front door goes where the plot's front tile is (the middle of the front).
-- What a building is: walls round the edge as wall tiles of its material (TILE.WALL_STONE / _BRICK / _WOOD / _METAL / _GLASS: they block, and block sight unless the material is seeThrough, so greenhouses are see-through). A floor inside (FLOOR_WOOD floorboards, _FLAGS flagstones, _CONCRETE, _EARTH). Partition walls between rooms (same material), each with an inside door (wood, starts open 70%: innerDoorOpen). Outside doors and windows are the existing structure entities (Door, Window) standing on floor tiles in gaps in the wall, so everything from step 11 works: bash, lock, smash glass, board up, zombies bashing in, noise muffled by walls. Wall health comes from the wall tile's material (initTileHp reads TILE_INFO material).
-- CONFIG.buildingTypes per type: walls and roof (weighted material choices; roof 'walls' = same as walls), floor, outside door material ('walls' = same: glass greenhouse doors, metal shed doors), lockFront / lockBack chances. Current picks:
-  - terraced/detached cottages: stone or brick, slate or thatch roof, floorboards;
-  - shop: stone or brick, floorboards;
-  - pub: stone or brick, flagstones;
-  - church: stone, flagstones;
-  - farmhouse: stone, flagstones;
-  - barn: stone or corrugated metal, concrete;
-  - shed: wood or corrugated metal, concrete;
-  - greenhouse: glass, earth.
-  Roofs aren't drawn (top-down, you see inside); they're recorded for fire (step 19).
-- Locks: one lockId per building ('building-N'), shared by its front and back doors. Most front doors are locked (cottages 60%, shop 90%, pub 80%, church 30%, barn 10%). Keys are placed with loot in 14d; until then get in by bashing a door or smashing a window, which is noisy.
-- Room layouts (LAYOUTS in buildings.js, in the building's frame):
-  - terraced cottage 5x7: front room and kitchen, an inside door to one side; front door and windows on the street, back door and window onto the yard.
-  - detached cottage / farmhouse 7x9: living room across the front; kitchen and scullery behind; side windows. The back door is into the kitchen.
-  - corner shop 6x8: a shop floor with a wide shop window; stock room behind.
-  - pub 10x12: the bar across the front; kitchen and store behind; back door to the yard.
-  - church 18x9 (lying along the street): nave and vestry; windows every 3 tiles front and back. The front door is at the end of the lychgate path.
-  - barn 8x12: one space, double doors onto the yard, slit windows if stone.
-  - shed, greenhouse: one tiny room and a door.
-- Safety rules in the builder: no back door unless the tile behind is walkable (farm buildings back onto the yard wall: none). No window onto a wall (shared party walls get none). The land's reachability pass (14a) never routes through a building plot, so walls never cut anything off.
-- world.buildings = [{ kind, building, x, y, w, h, facing, walls, roof, floor, lockId, rooms: [{ name, x, y, w, h }] }], in the same order as world.plots. 14c hangs stairs and ladders on rooms; 14d puts loot, keys and zombies in them. Rebuilt from the seed on load; door and window state is saved with the entities.
-- Greybox look:
-  - stone building walls: neat courses (rougher than dry-stone field walls);
-  - brick: red with offset bricks;
-  - wood: brown vertical boards;
-  - corrugated metal: grey ridges;
-  - glass: pale blue with a glazing bar;
-  - floors: floorboards (brown planks), flagstones (grey slabs), concrete (plain grey), earth (dark with specks).
-- Tests: one building per plot; every type appears; materials come from the type's table; the front door sits by the plot's front tile; every room is reachable from the front door; doors and windows on the outer wall open onto walkable ground; some front doors locked; glass walls see-through; wall health from material. Checked on 150 seeds.
-
-## Decisions for step 14c (upstairs, cellars, lofts) - built
-- Each extra floor is a small separate map: a walled pocket in a band of void below the valley.
-  - The village world is CONFIG.village.height (200) land rows plus floorRows (48) band rows; world.landHeight marks where the band starts. 150 seeds use at most ~31 band rows.
-  - VOID tiles (TILE.VOID) block movement and sight, and sound never enters them (TILE_INFO silent). So each floor is cut off from everything else, yet every existing system (sight, noise, memory, items, combat, doors) works there unchanged. No per-map refactor.
-  - Pockets are shelf-packed left to right with 2 tiles of void between them (gen/floors.js).
-- A pocket keeps its building's facing. Its stairs or ladder sits on the same (u, v) in the building's frame as the ground-floor end, so the two line up as if stacked.
-- Plans (PLANS in gen/floors.js, in the building frame: rect covered, link spot, partitions, inside doors, rooms). Links are placed clear of the ground floor's door approaches. Which buildings get which: CONFIG.floors.chance.
-  - terraced cottage: upstairs by stairs (front and back bedrooms).
-  - detached cottage: upstairs by stairs (front bedroom, back bedroom, bathroom).
-  - farmhouse: upstairs by stairs, plus a cellar by ladder half the time.
-  - corner shop: upstairs flat by stairs, plus a stock cellar by ladder half the time.
-  - pub: upstairs by stairs (sitting room, two bedrooms) and a beer cellar under the bar by ladder.
-  - church: a bell loft over the vestry, up a ladder.
-  - barn: a hayloft over the back half, up a ladder (80%).
-  - Upstairs floors are floorboards, cellars flagstones, walls the building's material.
-- No upstairs windows yet: they would look out over the void. A view out of an upstairs window needs sight across maps; that's a later system.
-- Links are pairs of entities, one on each floor: Stairs { kind: 'stairs' | 'ladder', top, link, pulled } (systems/floors.js).
-  - Glyphs: stairs show < going up and > going down; a ladder is H. A pulled-up ladder is = lying on the floor at the top and a ^ hatch out of reach at the bottom.
-  - world.links (tile -> linked tile) and world.stairsAt (tile -> entity) are rebuilt from the entities, after loading too.
-  - Links are things on a tile, so map memory remembers them.
-- Climbing ({ type: 'climb' }, a turn): you move to the other end (blocked if something stands there).
-  - It takes stairsCost (1x) or ladderCost (2x) time and emits entity_climbed, then entity_moved, so sight, footsteps and memory follow.
-  - Pulling up or lowering a ladder ({ type: 'ladder', up }, a turn) only works from the top end. It clatters (noise 1).
-  - A pulled-up ladder can't be climbed from below ("The ladder's pulled up."). From above you must lower it first ("Lower the ladder first.").
-- Controls: standing on stairs or a ladder adds an UP or DOWN button to the action bar, and at the top of a ladder a PULL UP / LOWER button. Stepping onto one names it in the status bar ("A staircase up.").
-- Sound goes through links: noise reaching a link tile continues on the other floor, losing floors.linkNoiseCost (3, like a wall).
-  - Whoever hears it there hears it coming from the stairs: noise_heard x, y is the stairs tile on the listener's floor, with sourceX/sourceY kept.
-  - So a zombie downstairs that hears you upstairs walks to the foot of the stairs.
-- Zombies follow: a zombie that reaches its goal and finds it's stairs or a ladder climbs it, then searches the other side.
-  - Its goal can be stairs because it heard you through them, or because it saw you there last.
-  - A pulled-up ladder stops it: it searches at the bottom instead. That makes lofts with ladders a safe spot.
-  - Stairs can't be pulled up (barricading them comes later).
-- world.floors and each building's floors: [{ building, name, via, x, y, w, h, rooms }] (rooms inside the walls). 14d puts loot and zombies in them.
-- Save version 5. The tiles (with the band), Stairs entities and pulled state are saved; links are rebuilt on load.
-- Tests: every terraced/detached cottage has an upstairs, the pub an upstairs and a cellar, the church a loft. Every pocket is ringed by void and every link pairs up, joining the ground to a floor. Everything walkable is reachable using links.
-  - Climbing takes the ladder's time; upstairs you only see upstairs.
-  - A noise upstairs is heard below as coming from the ladder, and the zombie climbs after you.
-  - A pulled-up ladder stops it, you can't climb down until you lower it, and saves keep pulled ladders.
-  Checked on 150 seeds.
-
-## Decisions for step 14d (village life) - built
-- Phone box (land, gen/village.js): a red phone box on the green by the pavement near the bridge, world.phoneBox. TILE.PHONEBOX: you can step into it, glazed so you're still seen, the line is dead ("A red phone box. The line is dead."). It's there for the ringing phone box later (Phase 8).
-- Allotments (land, gen/village.js), world.allotments:
-  - A hedged site (CONFIG.village.allotments: 2 x 3 plots of 5 x 5) at the far end of one street, beyond its back lane on the side away from the beck. Its gate goes through the field wall onto the back lane.
-  - Plots of dug-over beds (TILE.ALLOTMENT, walkable) between grass paths, with a central path.
-  - About half the plots have a shed (a 3x3 plot built by 14b) facing the central path.
-- Population (src/sim/gen/life.js, populateVillage, run by createWorld after the floors). All from the seed; the test zombie and test items are test grid only now.
-  - Loot by room name (CONFIG.loot.rooms: n = [min, max] items per room, weighted table), on open floor tiles (not on doors, windows or stairs). Upstairs, cellars and lofts count.
-    - kitchens: food and knives;
-    - living/front rooms: walking sticks, golf clubs;
-    - bedrooms: bandages and the odd air rifle and pellets;
-    - bathrooms: first aid;
-    - shop and stock rooms: beans, crisps, chocolate;
-    - the bar, store and beer cellar: ale, crisps, planks;
-    - the vestry: first aid;
-    - cellars: food and planks;
-    - barns and haylofts: forks, planks, shells;
-    - sheds: forks, planks, golf clubs.
-  - Per-building extras (CONFIG.loot.extras): farmhouse shotgun 60% and shells 70%; a cricket bat at the pub; sometimes a bat or air rifle in a detached cottage. About 100 items per village.
-  - New items (CONFIG.items), as data like the rest:
-    - weapons: garden fork (2 dmg), walking stick (1, accurate), golf club (2), kitchen knife (1, bleeds);
-    - food and drink (step 16): bag of crisps, bar of chocolate, bottle of ale; plus bottles of water and cans of pop;
-    - first aid kit: stops bleeding and heals 1; refused if you're not hurt;
-    - box of shells / tin of pellets: ammo.
-    Anything can still be thrown as a lure.
-  - Keys: every building with a locked outside door gets one key (named for the building: "cottage key", "pub key", "shed key"; its lockId opens that building).
-    - If the building has a resident zombie, it usually carries the key (keyResident 0.7), in an Inventory.
-    - Else it's often left on the front tile (keyDoorstep 0.4).
-    - Else it's lost: bash or smash your way in.
-  - Anything a creature carries (Inventory, Keyring) falls where it dies (kill() in combat.js; not the player's). So killing a resident gets you its key.
-  - Zombies (CONFIG.village.zombies), made by makeZombie() in world.js:
-    - 12 residents in rooms of houses, the pub, the shop and the church (upstairs too). Often they're shut in behind locked doors, and they bash their way out when they hear you.
-    - 18 about the streets (road, pavements, lanes, ginnels, yards, green, paths) within the village rows.
-    - 5 out in the fields and on the fell.
-    - None start within 14 tiles of you (off your screen), and nothing sees you at the start.
-- Play-test (a simple bot that fights adjacent zombies, bandages, eats when low, grabs items it sees and otherwise wanders; 60 seeds x 1500 turns, about two days):
-  - With 9/11/4 zombies only 15% of runs died and the first sighting took ~440 turns, too quiet. Raised to 12/18/5.
-  - That gives ~33% deaths over two days, mostly bled out: the bot never gets into the locked houses where the bandages are. Walking down the street you meet zombies within a few dozen steps.
-  - A turn takes ~2 ms with 35 zombies. Tune further by playing: CONFIG.village.zombies and CONFIG.loot are the knobs.
-- Save version 6.
-- Tests:
-  - a phone box you can step into;
-  - allotments with beds and a gate;
-  - plenty of items, none in walls, food in a kitchen;
-  - every key fits a locked building, and carried keys are in zombies' pockets;
-  - the zombie count, none near the start, residents indoors, nothing sees you at the start;
-  - a resident's key drops where it dies and opens its building;
-  - shells load a shotgun, and pellets with no air rifle are refused.
-  Checked on 150 seeds.
-
-## Decisions for step 15 (day/night + light sources) - built
-- src/sim/systems/light.js owns world.light (0-3 per tile), which vision already reads: a tile's visibility = its light level, and noticing distance x noticeByLight (1 / 0.67 / 0.34).
-- Ambient light by the hour (CONFIG.light.byHour, a November day in the Lakes): 1 (moonlight) until 07:00, 2 at 07:00 (dawn), 3 from 08:00 to 15:59, 2 at 16:00 (dusk), 1 from 17:00. A run starts at 08:00, so night falls after about 270 turns.
-  - Indoor floors (TILE_INFO indoor: floorboards, flagstones, concrete; not the greenhouse's earth) are indoorDim (1) darker: dim by day, pitch black at night.
-  - The void band follows the same rule.
-- Light sources: any item with a light property (CONFIG.items) that's lit (Item.lit), with Item.charge in ticks.
-  - torch: radius 6, level 3, about 16 hours of battery.
-  - candle: radius 2, level 2, about 6 hours, then gone (burnsOut).
-  - USE in the bag switches it ON / OFF; the bag shows on/off/spent. A spent torch won't switch on ("It's spent.").
-  - Carried, it lights from its carrier's tile; dropped or thrown, from where it lies. So a lit torch thrown down the street lights it up.
-  - It lights every tile it has a clear line to (like sight: through windows, not walls): its level within radius, one less for falloff (2) tiles more. Lit tiles only ever get brighter (max with ambient).
-  - A lit tile makes a lit target: carrying a torch, zombies notice you from their full sight range (7 tiles) instead of about 2 in moonlight, and you see them too. Darkness hides you; light shows you.
-  - Lit things burn down every tick (tickLight, in the scheduler's onTick). At 0 they go out ("Your torch dies." / "Your candle burns out.").
-- Loot: torches in kitchens, sculleries, stock rooms, sheds and barns; candles in kitchens, bedrooms, the nave and plenty in the vestry.
-- Eyes adjust (fix after play-testing "it all seems bugged at night"): tiles within vision.darkSight (1) are always made out at visibility 1, even at light 0, for everyone (zombies too), so in a pitch-black house you see what's on the tiles around you and can pick it up; further than that you need a torch. Night is also drawn darker (dimAlpha level 1 = 0.6).
-- Noticing in the dark: anything right next to you is noticed even at light 0 (if no wall is between), both ways. So zombies still bite in a pitch-black house, and you know they're there. Two tiles away in the dark, nothing is seen; hearing is all you have.
-- Updating:
-  - updateLight runs at the end of every player turn. It only recomputes when the hour's light changed or a light moved, came on or went out (key of light positions).
-  - world.lightBase (the hour's light per tile) is only rebuilt when the hour changes; lights are laid over a copy.
-  - On a change of hour, everyone's vision is refreshed; otherwise only creatures near a light that changed. About 2.5 ms a turn carrying a lit torch with 35 zombies about.
-  - Loading a save recomputes the light for the saved time.
-- Messages: "It's getting dark." (dusk), "Night falls." (night), "Dawn breaks.", "You light the torch." / "You put out the torch."
-- Play-test bot (it never uses lights or sneaks), 40 seeds x 1500 turns, now including a night: deaths rose from ~33% to ~55%. It walks into zombies it can't see. Intended: night is when hearing and light matter. The knobs are light.byHour, indoorDim, the item radii and charge, and vision.noticeByLight.
-- Save version 7 (items carry lit/charge).
-- Tests:
-  - the hourly levels;
-  - by day outside bright and indoors dim; at night moonlit outside and pitch black indoors ("Night falls." event);
-  - 6 tiles apart on a moonlit road neither notices the other; with a torch both do, and the torch lights 4 tiles off;
-  - a torch left inside lights the tile outside its window;
-  - a candle burns away and a torch goes flat; a flat torch won't switch on;
-  - saves keep the night and the lit torch;
-  - adjacent creatures are noticed in pitch darkness.
-  Checked on 150 seeds.
-
-## Decisions for step 16 (hunger, thirst, fatigue) - built
-- src/sim/systems/needs.js. The player has Needs { hunger, thirst, fatigue }, counted in ticks (2 min). Each shows as a level 0-3: ticks / CONFIG.needs.perLevel, capped at 3 (pillar 4: coarse levels on screen).
-  - hunger: a level every 12 h; thirst every 8 h; fatigue every 6 h awake.
-  - From 08:00 you're thirsty and tired by mid-afternoon, hungry by evening.
-  - Exhausted by about 02:00 if you don't sleep; parched after a day without drinking; starving after a day and a half without food.
-- Effects (all from world.tick, so runs replay exactly):
-  - Starving (hunger 3): lose 1 health every 12 h. Parched (thirst 3): every 6 h. You can die of either ("Starved to death", "Died of thirst").
-  - Exhausted (fatigue 3): every action takes 1.5x the time (turn.js endTurn), so zombies get more turns.
-  - Healing (no healing before step 16 except food and first aid): asleep and not starving/parched, +1 health every 2 h. Awake, fed, watered and rested (all <= 1) and not bleeding, +1 every 8 h.
-- Food and drink are properties of items, in ticks off a need:
-  - tin of beans: a full level of hunger;
-  - chocolate and crisps: less;
-  - bottle of water: a level of thirst;
-  - ale and pop: both, a bit of each.
-  - Using food or drink you don't need is refused ("You're not hungry.").
-  - Food no longer heals; first aid still does. Water and pop are in kitchens, the shop and stock rooms; pop in the bar.
-- Drinking from the beck, the lake or a pond: a DRINK button appears when you're thirsty and on or next to water ({ type: 'drink' }, a turn). It takes a level of thirst off and splashes (noise 1). Dirty water making you ill comes with step 20.
-- Sleep:
-  - A SLEEP button appears when you're tired (fatigue >= 1). Refused if anything is in sight ("Not with them about.").
-  - { type: 'sleep' } is one recorded input. You fall asleep (Asleep component) and the world runs on a turn at a time until you wake. While asleep, fatigue falls 3 ticks per tick, so 6 h clears 3 levels.
-  - You wake when:
-    - rested (fatigue 0);
-    - you hear a noise (any noise_heard: a zombie bashing the door, glass breaking);
-    - you're hurt;
-    - hunger or thirst reaches 3;
-    - or after 12 h at most.
-  - Zombies shuffle silently, so one can walk up and bite you in your sleep. Sleep somewhere safe: a pulled-up loft, a locked house.
-  - Replays exactly (tested).
-- Top bar: H (hunger), T (thirst), Z (tired) after the health blocks, always shown: dim blue-grey when fine, then yellow / orange / red by level; level 3 blinks. (They used to appear only at level 1+, so for the first hours of a run you couldn't see them at all.)
-  - Messages when a level gets worse: "You're getting hungry." / "You're hungry." / "You're starving!", "You're thirsty." / "You're very thirsty." / "You're parched!", "You're tired." / "You're very tired." / "You're exhausted!".
-  - Waking: "You wake, rested.", "A noise wakes you!", "You wake in pain!", "Hunger wakes you."
-  - Inspecting yourself lists how you are ("You: hungry, very tired.").
-- Tuning by the play-test bot (now eats, drinks from the bag or the beck and sleeps when tired and nothing's in sight; 40 seeds x 1500 turns):
-  - The first rates (hunger 8 h, thirst 6 h, damage every 4 h / 2 h) killed every run, a third from hunger or thirst inside two days. Too harsh.
-  - The slower rates above leave bites and bleeding as the main killers; hunger and thirst finish off a wounded bot that never looks for food or water.
-  - Knobs: CONFIG.needs and the items' food/drink values.
-- Save version 8 (the player carries Needs).
-- Tests:
-  - levels rise with time and say so;
-  - water, ale and beans relieve needs; not needed means refused;
-  - parched and starving hurt and can kill;
-  - exhausted actions take ~1.5x;
-  - sleep: refused when not tired, one input that wakes you rested and healed, a noise wakes you, refused with a zombie in sight, and a natural run with sleep replays exactly;
-  - drinking from the beck by the bridge, and not away from water;
-  - needs are saved.
-  Checked on 150 seeds.
-
-## Decisions for step 17 (weather, wet, cold) - built
-- src/sim/systems/weather.js. world.weather = { kind, until }: one weather for the whole valley, saved with the game.
-- Kinds (CONFIG.weather.kinds), each pure data: clear, overcast, rain, heavyRain, fog, snow.
-  - Each lasts hours [min, max]; then a weighted next kind is picked (seeded, so runs replay).
-  - Fog only forms between 00:00 and 10:00 (hoursOfDay).
-  - The weights suit a wet Lakeland November: mostly overcast and rain, some clear spells, morning fog, the odd snow.
-  - A run starts overcast. tickWeather runs at the end of each player turn; a change emits weather_changed and refreshes light and everyone's sight.
-- What weather does (all from the kind's numbers):
-  - Light (light.js ambientFor):
-    - cloudy kinds used to hide the moon (night outdoors 0). Play-testing: on cloudy nights (most nights) the whole screen went black and you couldn't see or find anything, so CONFIG.light.cloudHidesMoon is now false: a cloudy night outdoors is dim (1) like moonlight, and rain/fog still shorten sight.
-    - dayDrop dims the day by a level (heavy rain, snow).
-    - Indoors stays one level darker than that.
-  - Sight: outdoors, sight radius x sight. Fog 0.35 (about 5 tiles), heavy rain 0.6, snow 0.7, rain 0.8. It applies to everyone outdoors, zombies too (vision.js sightRadius(e, world)).
-  - Hearing: outdoors, a heard noise is mask weaker: rain 1, heavy rain 2, snow 1. Footsteps are drowned in the rain, so sneaking is easier and so is being crept up on. Indoors you hear normally (noise.js).
-  - Scent (step 18) and fire (step 19): scentWash and fireDamp are already on each kind, waiting for those systems.
-- Wet and cold join Needs (needs.js) as two more 0-3 levels. Each drifts toward a target where you stand; the player starts dry and warm.
-  - Wet:
-    - target outdoors = the kind's wet (rain 2, heavy rain 3, snow 1, fog 1); indoors 0.
-    - A wielded brolly (new item: a weak weapon, 1 dmg; rainCover 2) takes 2 off.
-    - You get wetter 1 tick per tick (40 ticks a level). You dry 1 tick per 2 ticks indoors, per 4 outdoors.
-    - Wading the beck soaks you to at least 2 at once.
-  - Cold:
-    - target = the kind's chill [day, night] (clear 0/2, overcast 1/1, rain 1/2, heavy rain 2/2, fog 1/2, snow 2/3);
-    - +1 if you're soaked (wet 2+); -2 indoors (shelter); capped 0-3.
-    - It moves 1 tick per tick either way (90 ticks a level).
-  - Effects:
-    - shivering (cold 2+): fatigue rises twice as fast;
-    - freezing (cold 3): lose 1 health every 8 h ("Died of cold"), you can't sleep ("Too cold to sleep."), and the cold wakes you.
-- Top bar: W (wet) and C (cold) after H T Z, only once they're level 1+. They use the same yellow / orange / red, and blink at 3.
-  - Messages as they worsen: "You're getting wet." / "You're soaked." / "You're drenched!", "You feel cold." / "You're shivering." / "You're freezing!".
-  - Weather changes: "It starts to rain.", "The rain pours down.", "The rain eases.", "Fog rolls in.", "The fog lifts.", "It starts to snow.", "It stops.", "Clouds roll in.", "The sky clears."
-  - Dusk and dawn messages come from the clock only, never from the weather.
-  - Inspecting yourself adds damp/soaked/drenched and cold/shivering/freezing.
-- Drawn over the outdoor tiles you can see (greybox step 3b, CONFIG.render.weather): rain streaks (more in a downpour), snowflakes, a grey fog haze. The marks shift each turn so it reads as falling.
-- Tests:
-  - same seed, same weather; every kind happens; durations within range; fog only in the morning;
-  - a clear night 1, a rainy night 0, a downpour day 2;
-  - fog hides a zombie 8 tiles off that you see on a clear day;
-  - a zombie 3 tiles off hears your footsteps when dry, not in rain;
-  - rain soaks you to 2; under a brolly you dry; indoors you dry fully;
-  - a heavy-rain night chills you to freezing and costs health; too cold to sleep; indoors you warm up;
-  - wading the beck soaks you; saves keep the weather.
-  The unit-test helper pins clear weather so older tests stay steady. Checked on 150 seeds.
-- Testing it by hand: the TUNE panel (debug overlay -> TUNE) starts with two world rows. Weather -/+ cycles clear / cloudy / rain / pour / fog / snow and holds it for 24 h (weather.js setWeather). Time -/+ moves the clock an hour, for night, dusk and dawn. Light and sight update at once. Like other tuning, a run changed this way no longer replays exactly.
-- Play-test bot over 40 seeds: deaths unchanged (34 of 40, against 35 before), none from cold. Weather adds pressure (wet, cold nights, black rainy nights, fog) without being a killer by itself.
-- Save version 9 (weather, wet/cold).
-
-## Decisions for step 18 (scent + tracks) - built
-- Scent (src/sim/systems/scent.js): anything with a Scent component (the player) lays scent on its tile every tick.
-  - A tile's scent level is 3 when fresh, one less every scent.fadeTicks (45 ticks = 1.5 h), so a trail is gone in about 4.5 h.
-  - Stored as a stamp per tile (world.scentLaid, saved like the other tile arrays), so nothing updates every tick.
-    - Indoor tiles age by world.tick.
-    - Outdoor tiles age by world.scentClock, which runs 1 + the weather's scentWash per tick (rain 2x, heavy rain 3x, snow 2x). Rain washes trails away outdoors; indoors it lasts.
-  - Water and void never hold scent, so wading the beck breaks your trail.
-- Smell is a 0-3 sense (Smell component), like hearing. scent.minLevelBySmell [never, 3, 2, 1] is the faintest level noticed. Zombies have smell 2 (tunable: Zombie smell in TUNE).
-  - In the zombie brain (shamble.js), after seeing prey and before an old goal: if the zombie has no goal or is only searching, it steps to the freshest walkable neighbour it can smell that's fresher than its own tile.
-  - Its goal becomes that spot with a search. Where the trail ends it searches, then gives up (scent_lost).
-  - Seeing prey and hearing noise still come first.
-  - Unit tests switch smell off in the test helper (as with the weather) unless they test it.
-- Ground (src/sim/systems/tracks.js), one state for the valley like the weather, saved:
-  - world.snowCover: settles a level every 2 h of snow, melts 1 per 3 ticks otherwise, every tick in rain.
-  - world.groundWet: mud builds a level every 2 h of rain and dries 1 per 4 ticks otherwise.
-  - Messages: "Snow settles." / "The snow melts away."
-- Prints: anything with Tracks { mark } moving onto an outdoor tile leaves one if the tile holds snow, or is soft (grass, lanes, paths, fell, bracken, allotments, gates) and muddy. Roads, pavements and floors indoors take no mud prints.
-  - world.tracks: tile -> { mark: 'boots' (you) | 'drag' (zombies), dx, dy (the way it went), t, in: 'snow' | 'mud' }.
-  - A print lasts 24 h, but only 3 h while fresh snow falls on it or rain washes it. Snow prints vanish when the snow melts. Pruned hourly.
-- Tracks are tile state: map memory snapshots them, so remembered prints stay on your map.
-- Inspect: "Footprints in the snow.", "Zombie tracks in the mud." (or ", out of sight").
-- You can follow zombie tracks; zombies follow your scent.
-- Drawn:
-  - settled snow whitens outdoor ground by level (not water) (CONFIG.colours.snow);
-  - prints: boots as a pair of dots, a zombie's drag as a streak, laid along the way it went (dark grey in snow, dark brown in mud; greyed when remembered);
-  - the debug map shows the scent trail.
-- Play-test bot over 40 seeds: 32 of 40 runs died, against 34 before. Zombies following trails doesn't swing the balance by itself. A turn takes about 2.4 ms.
-- Save version 10 (scent stamps, ground state, prints).
-- Tests:
-  - scent is fresh where you stand and fades with time;
-  - heavy rain washes it outdoors but not indoors;
-  - the beck holds none;
-  - a zombie with smell follows your trail to you in the dark while you sneak silently;
-  - snow settles; boot prints in the snow point the way you went; a zombie leaves drag marks;
-  - inspect words; prints remembered; falling snow fills them in;
-  - rain makes mud; no prints on tarmac, prints on grass;
-  - saves keep it all.
-  Checked on 150 seeds.
-
-## Decisions for step 19 (fire, smoke, explosions) - built
-- src/sim/systems/fire.js. Tile state (saved with the tile arrays):
-  - world.fire 0-3 (intensity);
-  - world.fuel (ticks left);
-  - world.smoke 0-3;
-  - world.petrol 0-3 (spilled).
-  Only burning or smoky tiles are worked on each tick (world.fireActive, rebuilt on load).
-- Flammability is data: TILE_INFO flammable 0-3.
-  - Floorboards 2 (with furniture); flagstone and concrete floors 1 (the contents burn, the floor stays).
-  - Wooden walls, hedges, trees, bracken, bushes 2; grass, fell, gates 1.
-  - Stone, brick, metal, glass, tarmac, pavements and earth 0.
-  - +1 under a thatched roof (a building's roof from 14b, mapped per tile in world.thatch). Spilled petrol adds +2.
-  - Weather: settled snow stops ground fires; mud at level fire.wetGround (2) stops grass, fell, bracken and bushes.
-- Burning:
-  - A fire grows a level every growEvery ticks, up to flammability + 1, and burns intensity fuel a tick (fuel = flammability x fuelPerLevel, + petrolFuel).
-  - It spreads to each flammable neighbour with chance spread[flam] x intensity/3 a tick, so stone walls stop it.
-  - Outdoors, the weather's fireDamp knocks it down (dampChance per level a tick): a downpour all but stops it.
-  - Burnt out, a tile turns to TILE_INFO burnsTo:
-    - floorboards: CHARRED (still indoors);
-    - wooden walls, hedges, trees, vegetation: ASH (a wooden wall burns into a gap);
-    - flagstones and concrete: stay as they are.
-- What fire does:
-  - creatures on a burning tile lose 1 health every burnEvery[intensity] ticks (zombies walk into it and burn);
-  - doors and barricades on it burn through, and windows crack in the heat (material flammability / heatDamage);
-  - fires are light sources (light.js: radius = intensity, level 3, through smoke but not walls);
-  - they crackle (noise 1, 2 when roaring);
-  - an explosive item on a burning tile goes off.
-- Smoke:
-  - a fire fills its tile to its intensity; smoke 2+ drifts to open neighbours a level thinner (closed doors and windows keep it out);
-  - it thins a level every 8 ticks indoors, every 2 outdoors;
-  - thick smoke (2+) blocks sight (vision opaqueAt; light still passes);
-  - the living (anything with Needs) cough in it (noise 1); choking smoke (3) costs 1 health every 4 ticks.
-- Explosions (explode(x, y, power)), from items with explodes: gas bottle 3, petrol can 2. They go off in a fire or when shot (shot_fired at their tile).
-  - Damage = power - distance + 1 to everything in range.
-  - Doors and windows take that x blastStructure.
-  - Walls take x blastWall (8): a gas bottle next to a stone wall brings it down to RUBBLE (walkable, slow, noisy). A wall's health is its material's until hurt.
-  - Flammable tiles nearer than the edge catch; smoke; noise 3. A petrol can's blast splashes petrol too.
-- New items (CONFIG.items):
-  - lighter (12 uses) and box of matches (6): USE = LIGHT, sets fire to the most flammable tile next to you (a neighbour before your own; "Nothing here will burn."). The bag shows uses left.
-  - petrol can: USE = POUR round you; thrown, it splashes where it lands.
-  - gas bottle.
-  - Loot: matches and lighters in kitchens, the vestry and the bar; petrol cans and gas bottles in sheds and barns.
-  - A lit candle left on something that burns may set it alight (candleIgnite).
-- Messages:
-  - "You start a fire.", "Fire!" (one you can see starting that you didn't light);
-  - "You're burning!", "You choke on the smoke.";
-  - "BOOM!" / "An explosion!" (out of sight), "Petrol splashes about.";
-  - deaths: "Burned to death", "Blown up", "Choked on smoke".
-- Drawn:
-  - fire: an orange-red glow by intensity with flames that flicker each turn;
-  - grey smoke over tiles in sight; a purple sheen of petrol;
-  - ashes, a charred floor, rubble.
-- TUNE panel: a third world row, Give (- next, + give): - picks the next item type, + puts one in your bag (or at your feet). For testing fire, lights, weapons, anything.
-- Speed: with ~90 tiles burning, ~5 ms a turn. Tile changes from fire don't refresh everyone's sight; the end-of-turn light update refreshes those near fires.
-- Roofs (fix after play-testing: blowing up a building left it dry inside). "Indoors" is one rule, weather.js indoorAt(world, i): an indoor floor tile whose roof is still on. world.roofless (0/1 per tile, saved) records lost roofs (fire.js loseRoof):
-  - an explosion takes the roof off every tile nearer than its edge (the same tiles whose walls it can bring down);
-  - a floor that burns out (floorboards to charred) loses its roof: the timbers burnt with it;
-  - cellars never lose a roof (they have a floor over them).
-  Everything that asked "indoors?" now asks indoorAt: wet and cold (needs.js), the weather's sight and hearing, light (an open room gets the sky's light; light.js rebuilds lightBase when world.roofChanged), scent ageing, snow and mud prints, fire damping and smoke clearing, and the rain/snow/fog drawn over the map.
-- Blasts spread out a step at a time (8 ways) up to their power, through walls but never across the void, so a blast in one floor pocket can't reach the next pocket along (it used to be a plain square).
-- Save version 12 (roofless).
-- Tests:
-  - flammability from data (floorboards yes, stone/bare ground no; dry grass yes, sodden or snowy no);
-  - a lighter fire spreads through a wooden-floored room, leaves charred floor, is stopped by stone walls and burns a wooden wall into a gap;
-  - fire burns you; a zombie walking in the flames dies;
-  - fire lights the room at night; thick smoke blocks sight; you cough and choke;
-  - a downpour damps an outdoor bracken fire;
-  - a gas bottle in the fire explodes, hurts you, blows the door in and brings the wall down;
-  - a shot sets off a gas bottle; poured petrol makes bare ground burn;
-  - saves keep a fire burning.
-  Checked on 150 seeds.
-
-## Decisions for step 20 (water) - built
-- src/sim/systems/water.js. Water changes by changing tiles, so movement, sight, noise, memory, scent and fire all work on it unchanged. world.water = { beck, ice, under, holes } is saved; under remembers what each changed tile was (tile -> original), so it can go back. New tiles: TORRENT (the beck in spate: blocks), FLOODWATER (wade it: moveCost 2, splash 2, soaks you), ICE (walkable, creaks: noise 1).
-- Dirty water:
-  - Every drink from the beck, the lake, a pond or floodwater may make you ill (CONFIG.water.dirty: beck 15%, lake 30%, pond 45%, floodwater 50%).
-  - A corpse in or right by the water within 6 tiles adds 50% and makes the illness worse (level 3, not 2). Drown zombies in the lake and the lake goes bad.
-  - It comes on 2-5 hours later (Needs.illAt), with no message when you drink (show, don't tell). Bottled drinks are safe.
-  - Ill is a sixth need (Needs.ill, ticks; 4 h a level), falling 1 a tick. It starts at the top of its level, so a level-2 bout lasts about 12 h.
-  - Ill 1+: thirst rises twice as fast, no healing while awake. Ill 2+: no healing asleep, fatigue rises faster, and now and then you throw up (noise 1, lose some hunger and thirst). Ill 3: a fever costs 1 health every 4 h ("Died of a fever").
-  - Top bar: I after W and C, from level 1. Messages: "You feel sick." / "You're ill." / "You're very ill!", "You throw up.", "You feel better." Inspect yourself: sick/ill/very ill.
-- The beck: world.water.beck counts ticks; level = ticks / 240, 1 = normal.
-  - It rises 1 a tick in rain, 2 in heavy rain, +2 while settled snow melts. Otherwise it falls 2 a tick, never below normal.
-  - Level 2, in spate: every beck and gill tile becomes TORRENT. You can't wade it; the bridges are the only way over. Anyone in the beck is swept to the nearest bank, soaked and hurt 1 ("The beck sweeps you away!"). Items and corpses in it are washed away.
-  - Level 3, in flood: as well, low ground (grass, lanes, paths, road, pavement, yards, ginnels, shore, allotments) within 2 tiles of the beck goes under FLOODWATER. Fells, walls, gates and buildings stay dry.
-  - Bridges: each hour in flood, each bridge may be swept away (footbridge 10%, the stone bridge 1%). Its tiles become beck; when the water drops they're a ford, so the bridge is gone for good. Heard as "A crash from the beck." if out of sight (noise 3).
-  - Measured over 30 seeds x 6 days of the weather chain: in spate 16% of the time, in flood 7%, first flood usually on day 2-4.
-  - Messages: "The beck is in spate.", "The beck floods its banks!", "The flood goes down.", "The beck goes down.", "The footbridge is swept away!"
-- Ice: world.water.ice counts ticks of frost; level = ticks / 120 (4 h).
-  - It freezes by the weather's chill (day/night): chill 3 +2 a tick, chill 2 +1. It thaws 2 a tick in rain, 1 otherwise. So a clear or foggy night skins the lake, and snow thickens it.
-  - At level 1+ every lake and pond tile becomes ICE. Inspect: "Thin ice." / "Ice." / "Thick ice."; thin ice is drawn with dark water showing through.
-  - A step onto ice breaks it with chance iceBreak by level (30% thin, 6%, 0% thick). It cracks (noise 2), and the tile is open water (a hole) until the ice thickens a level.
-  - The living climb back out where they came from: soaked, freezing (cold 3) and hurt 1 ("You fall through the ice!"). Zombies go under and drown, leaving a corpse in the water.
-  - Thawing drops anyone on the ice into the water the same way. Anything lying on the ice sinks.
-  - Lure zombies onto thin ice; don't cross it yourself.
-  - Messages: "The lake freezes over.", "The ice melts.", "The ice cracks!", "The zombie goes under."
-- Drinking: the DRINK button works from the beck (in spate too), the lake, a pond or floodwater, but not through ice.
-- Deaths: "Drowned" (swept away, or through the ice), "Died of a fever".
-- TUNE panel: two more world rows, Beck (normal / spate / flood) and Ice (none / thin / ice / thick), set the level at once. The weather carries on moving it from there (set the weather to pour or snow to hold it).
-- Play-test bot over 40 seeds: 34 of 40 runs died, against 32 before. The causes are still mostly bites and bleeding; thirst deaths rose (it drinks beck water, gets ill and dries out), and one drowned. A turn takes ~2 ms, up to ~20 ms on the turn the whole beck changes.
-- Save version 13 (world.water, Needs.ill).
-- Tests:
-  - dirty water: beck water makes you ill hours later; while ill you're thirstier; you recover; clean luck stays clean; a corpse in the beck fouls it (worse); very ill: you throw up and the fever hurts;
-  - the beck: heavy rain puts it in spate; it sweeps you ashore soaked and hurt; things in it wash away; you can't wade it; the bridge stands in spate;
-  - flood: it spills two tiles over the banks and sweeps the footbridge away; saves keep it; it goes down to a ford where the bridge was;
-  - ice: frost freezes the lake, inspected as thin ice; thin ice breaks under you, and you climb out soaked and freezing; a zombie drowns; thicker ice closes the hole; rain thaws it and you go in and out.
-
-## Decisions for storms and floods (after step 20, from play-testing: "flooding doesn't do an awful lot") - built
-Harsh weather now leaves lasting marks on the map, not just a temporary tile swap. Save version 14.
-- Gales: a new weather kind (CONFIG.weather.kinds.gale, wind: true), reached from heavy rain. It lasts 2-5 h. Sight 0.6, it drowns sound (mask 3), soaks you, chill 2/3, washes scent, raises the beck fast (3 a tick). Drawn as rain driven sideways. About 2% of the time, roughly every other day.
-  - src/sim/systems/storm.js. A gale picks a wind direction when it blows up (world.weather.wind, saved).
-  - Each tick (CONFIG.storm):
-    - a tree may come down (12%): it leaves a STUMP (you can see past it now) and lies downwind as FALLEN_TREE over 2 tiles. That's slow to clamber over (moveCost 3), noisy (branches snap), blocks sight, hides you and burns. Walls and houses stop it. It knocks flat whatever it lands on (loses its next action, no damage), and the crash is noise 3, so zombies come.
-    - a roof may lose slates (5%, thatch twice as likely): a 2x2 patch opens to the sky (fire.js loseRoof), so rain, cold and light get in.
-    - a greenhouse pane may blow in (3%): the glass wall becomes a gap with broken glass.
-  - Nothing grows back or gets mended.
-- Floods (water.js):
-  - The longer a flood lasts, the further it spreads: 2 tiles from the beck and the lake at first, then a tile more every 2 hours, up to 6.
-  - It gets into ground floors (water gets under doors) as FLOOD_IN, which is still indoors. A flooded house fills its cellar.
-  - Each hour things lying in floodwater may drift up to 3 tiles, mostly down the valley. Loot leaves houses and bodies turn up in odd places, fouling the water.
-  - Dry-stone walls standing in the flood may give way to rubble (1.5% an hour each), opening fields.
-  - Each hour in spate or flood, soft ground beside the torrent may wash out and become beck for good (0.5% a tile), so the beck widens and wanders.
-  - When it goes down it leaves silt everywhere it was (SILT outside, SILT_FLOOR indoors) for a day. Silt is slow (moveCost 2), squelches (noise 1) and always takes prints, indoors too, then dries back.
-- Not harsher on you: the map changes, your health doesn't take more. The wind itself never hurts you, and a falling tree only knocks you flat. (An earlier version added flying debris, crushing trees and faster freezing; taken out on request.)
-- Measured over 20 seeds x 6 days of the weather chain, per run: ~12 trees down, ~5 roofs damaged, ~3 panes, ~80 bank tiles washed out, ~50 wall sections breached, 1-2 bridges, 3 cellars flooded, ~20 things drifting. It costs ~0.04 ms a tick.
-- Messages:
-  - "A gale blows up!" / "The wind drops.";
-  - "A tree comes down!" / "A crash in the wind." / "A tree knocks you flat!";
-  - "Slates crash down.", "Glass shatters.";
-  - "The flood spreads.", "A wall gives way.", "The flood leaves silt.";
-  - "You clamber over the tree.", "Silt squelches underfoot.".
-  Inspect: "A fallen tree.", "A tree stump.", "Flood silt.", "A floor caked in silt."
-- Tests:
-  - a long flood gets into the house (still indoors), fills its cellar, floats things off, and breaches a wall;
-  - it leaves silt inside and out, which is slow and takes prints, and the wall stays down;
-  - a spate widens the beck;
-  - a tree falls downwind leaving a stump and knocks a zombie flat, unhurt; fallen trees block sight, are slow and burn;
-  - a gale fells trees and strips a roof open, and the wind itself never hurts you;
-  - saves keep it.
-
-## Decisions for step 21 (death replay) - built
-- The death page has two big buttons: REPLAY (blue) and NEW GAME (red), from ui.js deathButtons(). It still ignores taps for the first second.
-- src/sim/replay.js: createReplay(createWorld, { seed, map, inputs }) rebuilds the world from the seed and steps through the recorded inputs ({ world, step(n), index, total, done }). The seeded RNG makes the run play out exactly as it did (tested on both maps, to the same tick, death, creatures and map).
-- TUNE world changes (weather, time, give, beck, ice) now go through applyDebug(), which records them as { turn, debug } inputs, so a replay matches. Changing tuning numbers mid-run still isn't recorded, so such a run may not replay exactly. turn.js replay() uses the same applyInput().
-- src/render/replay.js draws it from above: the whole land (not the void band) scaled to fit the screen, one pixel per tile through an ImageData, cheap every frame.
-  - Fire shows orange. Zombies are green dots, corpses dark red, you a big yellow square (red once dead).
-  - Your path is a yellow trail. Upstairs, cellars and lofts show at their building's middle, and you blink on the roof.
-  - Night and dark weather dim the valley (replay.darkByLight).
-  - Header: REPLAY, the day and clock, and a progress bar. Footer: "Tap to skip" / "Tap to go back". Any tap returns to the death page.
-- Speed is time-based: long runs take about replay.seconds (25), short ones play at least replay.minRate (12) inputs a second. A 1,700-input village run costs ~0.75 s of compute in total (worst frame ~16 ms, a long sleep).
-- The save is still deleted on death; the replay uses the dead run's inputs in memory.
-- Tests: a run with TUNE changes in it replays step by step to exactly the same end, on the test grid and the village.
-
-## Decisions for step 22 (watch mode) - built
-- Two ways in:
-  - From the death page: it now has three buttons, REPLAY (blue), WATCH (green) and NEW (red). WATCH carries on the world you died in, with your body where you fell: fires keep burning, zombies wander off, the weather and floods go on.
-  - A village with nobody in it: ?watch=1 (with ?seed=N if you like), or the WATCH button under TUNE / TO GRID in the debug overlay. It never reads or writes the save, so leaving it (any tap) goes back to your game.
-- Sim: scheduler.js tick() is one tick of the world (per-tick systems, then every actor but the player acts). advance() uses it for play.
-  - turn.js runWorld(world, n) runs n ticks with no player: noise cleared, tick, weather, light. So the same systems run as in play.
-  - removePlayer(world) takes the player out and marks world.watchOnly.
-  - Nothing is recorded; it's just to watch.
-- Drawn with the replay's view from above (render/replay.js drawReplay with title 'WATCH' and a speed instead of a progress bar). Footer: "Tap to leave. Top bar: speed."
-- Speed: tap the top bar to cycle x1 / x4 / x16 (CONFIG.watch.speeds 10 / 40 / 160 ticks a second; x1 is 20 game minutes a second).
-  - Each frame spends at most watch.frameBudgetMs (25 ms) on the world, so a slow phone just runs slower rather than freezing.
-  - A tick costs ~2 ms with 35 zombies.
-- The camera falls back to the middle of the map when there's no player.
-- Tests:
-  - a village with nobody in it runs for a day: zombies wander, light and weather go on;
-  - after you die the world carries on (a fire you left burns on).
-
-## Decisions for step 23 (animals) - built
-- src/sim/systems/animals.js: one brain ('animal') runs every species; what each does is data in CONFIG.animals.species.
-  - Each animal is an entity: Animal { species, herd, home, flee, target, fedUntil }, Actor, Health, Hearing, Glyph, Name, maybe Melee, Prey, Tracks; Blocks, or Flies for crows.
-  - Species: sheep s, deer d, goose g, fox f, dog D, crow c.
-- What they do, in order, each action:
-  1. Danger. Fire within 3 tiles, or something they fear (fears: player / zombie / dog / fox) that they notice.
-     - Noticing is line of sight, light, cover and sneaking, like vision; always when next to it.
-     - Within fearRange (4; crows 2) they run.
-     - Geese and dogs give the alarm first (alarm: noise 2, so zombies hear it; callCooldown).
-     - A heard noise at least `startle` strong scares them too (deer 2: a gunshot far off; sheep 5). Animals' own calls don't.
-     - The herd nearby runs with the one that was scared (panic spreads).
-  2. Running: away from the danger for `flee` steps.
-     - Deer and sheep bolt (fleeCost 0.5: quick steps).
-     - A stampede (stampede: true) that's hemmed in barges whoever is in the way: pushed (pushEntity), or knocked flat (staggered) if it can't be. Never hurt. "The sheep knock you flat!"
-     - A stampede is a flock fleeing with more than 2 of them ("The sheep stampede!", "The deer bolt!").
-  3. A target: one that hit it (geese and dogs fight back; the rest run), or the hunt.
-     - Dog packs (hunts sheep, deer, geese) and foxes (geese) hunt when not fed. They pick prey they see or smell (nose: through walls, 10 / 8 tiles), and the pack shares one target.
-     - The pack bays when it sets off (noise, "Dogs bay nearby.").
-     - A kill feeds the whole pack (fed 18 h dogs, 12 h foxes).
-  4. Bodies: crows and foxes go to bodies they can see (crows from the air, 20 tiles). Crows circle 1-2 tiles off and caw, so a ring of crows marks the dead.
-  5. Otherwise, while awake (active: day / night / any; foxes come out at night, sheep and crows by day; resting animals still run from danger):
-     - keep within `herd` of the herd's middle;
-     - keep within `range` of home;
-     - wander a little;
-     - call now and then (sheep bleat, crows caw, foxes scream at night: "A fox screams.").
-- Moving: a greedy step. If that's stuck against a wall, the first step of the shortest way round within ~14 tiles (a small path search, not tried again for 15 ticks if it fails).
-  - Animals never step into fire.
-  - Crows fly over walls, water and ice: anywhere outdoors but the void. They make no ground noise, don't break ice, and floods and thaws leave them alone.
-  - Walkers can go through thin ice and drown like anything else.
-- Zombies and animals: sheep, deer and dogs have Prey, so zombies go after them. A flock in a field can pull zombies off you, and leaves bodies for the crows. Dogs fear zombies and bark at them, so a barking dog is a warning.
-- Only zombies count as kills (world.stats.kills), and only zombies get TUNE's zombie numbers. The messages "comes into view" / "next to you" are for zombies and dogs only (species announce), not every sheep.
-- Prints: hoof (sheep, deer) and paw (dogs, foxes) marks, a little cluster of dots ("Hoof prints in the mud."). Death: "Pecked to death by a goose".
-- Where they live (life.js populateAnimals, village only, at least 18 tiles from the start):
-  - 3 flocks of 5-8 sheep in the fields;
-  - deer in the wood;
-  - 2 gaggles of geese by the lake and beck;
-  - 2 foxes on the fell or by trees;
-  - a pack of 2-4 dogs at a farm;
-  - 2 groups of crows anywhere.
-  About 60 animals. The test grid has none.
-- Seen from above (replay and watch) in their own colours.
-- Speed: blockerAt now loops plainly instead of building a list (it runs a lot), and path searches note who stands where once. A tick costs ~2 ms with 35 zombies and ~60 animals, the same as before animals.
-- Measured over 5 villages x 2 days with nobody in them: ~50-130 flights, ~5-35 stampedes, a few kills each (dogs and zombies take sheep, foxes take geese). Flocks thin out but aren't wiped out.
-- Play-test bot over 40 seeds: 36 of 40 died (36 before), none from animals.
-- Save version 15.
-- Tests:
-  - a flock runs from you;
-  - a stampede in a lane knocks what's in its way over, unhurt;
-  - a gunshot startles deer behind a wall;
-  - a zombie hunts a sheep down;
-  - a dog pack kills a sheep, is fed and leaves the next one be;
-  - crows circle a body;
-  - geese honk at you and peck back when hit;
-  - sheep run from fire;
-  - a fox rests by day and hunts by night;
-  - a dead sheep isn't a zombie kill;
-  - villages have their animals, none near the start, and saves keep them.
-
-## Decisions for step 14 (village) - recorded now, built in 14b-14d
-- Upstairs, cellars and lofts: built in 14c (above).
-- Building types have their own rooms (built in 14b, below); contents and which have upstairs/cellars are decided in 14c/14d.
-- Building materials are chosen per building from the materials table (built in 14b); CONFIG.build is now only the test grid's defaults.
+(Record decisions from playtesting here.)
