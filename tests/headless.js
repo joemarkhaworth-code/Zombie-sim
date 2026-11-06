@@ -33,6 +33,7 @@ for (const [cw, ch] of [[360, 640], [390, 844], [430, 932]]) {
   const L = computeLayout(cw, ch);
   check(L.tile >= 32, `tiles thumb-sized on ${cw}x${ch} (got ${L.tile})`);
   check(L.mapW <= cw && L.mapY + L.mapH <= ch - CONFIG.ui.actionBarHeight, `screen fits ${cw}x${ch}`);
+  check(L.mapY === CONFIG.ui.topBarHeight && L.barY === L.mapY + L.mapH && L.barH >= CONFIG.ui.actionBarHeight, `no gaps on ${cw}x${ch}`);
   const t = tileAtPixel(L, L.mapX + L.tile * 3.5, L.mapY + L.tile * 2.5);
   check(t && t.x === 3 && t.y === 2, 'pixel -> tile');
 }

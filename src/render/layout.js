@@ -1,4 +1,6 @@
-// Fits one screen of tiles between the top bar and the action bar, centred.
+// Fits one screen of tiles between the top bar and the action bar.
+// The map sits flush under the top bar; any height left over goes to the action bar
+// (more thumb room), so there are no black bands. Narrow gaps either side stay black.
 import { CONFIG } from '../config.js';
 
 export function computeLayout(cssW, cssH) {
@@ -7,8 +9,9 @@ export function computeLayout(cssW, cssH) {
   const mapH = cssH - topBarHeight - actionBarHeight;
   const tile = Math.max(minTile, Math.floor(Math.min(cssW / w, mapH / h)));
   const mapX = Math.floor((cssW - tile * w) / 2);
-  const mapY = topBarHeight + Math.max(0, Math.floor((mapH - tile * h) / 2));
-  return { cssW, cssH, tile, mapX, mapY, mapW: tile * w, mapH: tile * h };
+  const mapY = topBarHeight;
+  const barY = mapY + tile * h; // action bar runs from here to the bottom (at least actionBarHeight)
+  return { cssW, cssH, tile, mapX, mapY, mapW: tile * w, mapH: tile * h, barY, barH: cssH - barY };
 }
 
 // Screen pixel -> tile, or null if outside the map.

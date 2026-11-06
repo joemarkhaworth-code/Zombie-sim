@@ -12,7 +12,6 @@ export function drawTopBar(ctx, world, L) {
 }
 
 export function drawActionBar(ctx, L) {
-  const h = CONFIG.ui.actionBarHeight;
   ctx.fillStyle = CONFIG.colours.actionBar;
-  ctx.fillRect(0, L.cssH - h, L.cssW, h); // buttons arrive with later steps
+  ctx.fillRect(0, L.barY, L.cssW, L.barH); // buttons arrive with later steps
 }
