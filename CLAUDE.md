@@ -135,3 +135,12 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
 
 ## Decisions
 (Record decisions from playtesting here.)
+
+### Step 1 (screen grid, tap to move, turn loop) - built
+- One screen is CONFIG.screen = 11 x 15 tiles (portrait). The tile size is computed to fit the whole screen between the top bar (36 px) and the action bar (72 px), centred, so a screen never scrolls (flip-screen). Tiles are 32-41 px on common phones.
+- Tapping: your own tile waits; any other tile on the map steps one tile towards it (8-way), so a slightly-off tap still moves you the way you meant. Walking into a wall costs no turn. Arrow keys / numpad / hjklyubn and space work on desktop.
+- Turn loop (src/sim/turn.js applyInput): the player acts, then endTurn, where the rest of the world will act (scheduler in step 2). Inputs { type: 'move', dx, dy } and { type: 'wait' } that take a turn are recorded in world.inputs; replay(createWorld, seed, inputs) rebuilds a run exactly.
+- Seeded RNG (src/sim/rng.js, mulberry32). ?seed=N in the URL picks the run seed. The test screen (gen/testscreen.js) is a walled room with 10 seeded single-tile rocks.
+- Entities are plain component bags in world.entities; the event bus (src/sim/events.js) lists its event types at the top.
+- Top bar shows the turn (T12) on the left and the seed dimmed on the right. The action bar is empty until its buttons arrive.
+- Deploy: .github/workflows/pages.yml runs the headless test, stamps imports with the commit for cache-busting, and publishes to GitHub Pages on every push to main.
