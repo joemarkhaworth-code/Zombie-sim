@@ -20,6 +20,9 @@ function check(cond, msg) {
   const x0 = p.Position.x, y0 = p.Position.y;
   check(applyInput(w, { type: 'wait' }) && w.turn === 1, 'waiting takes a turn');
   check(p.Position.x === x0 && p.Position.y === y0, 'waiting does not move');
+  const before = { ...p.Position }, t0 = w.turn;
+  check(!applyInput(w, { type: 'move', dx: 1, dy: 1 }) && w.turn === t0
+    && p.Position.x === before.x && p.Position.y === before.y, 'diagonal moves refused, no turn');
   // Walk left into the edge wall: moves until blocked, blocked bumps cost no turn.
   let moves = 0;
   while (applyInput(w, { type: 'move', dx: -1, dy: 0 })) moves++;
@@ -43,11 +46,14 @@ const SEEDS = 100, TURNS = 500;
 for (let s = 1; s <= SEEDS; s++) {
   const w = createWorld(s);
   const r = createRng(s * 7919);
+  let last = { ...player(w).Position };
   for (let i = 0; i < TURNS * 2 && w.turn < TURNS; i++) {
     const input = r.chance(0.1) ? { type: 'wait' } : { type: 'move', dx: r.int(3) - 1, dy: r.int(3) - 1 };
     applyInput(w, input);
     const p = player(w).Position;
     if (tileBlocks(w, p.x, p.y)) { check(false, `seed ${s}: player in a wall`); break; }
+    if (Math.abs(p.x - last.x) + Math.abs(p.y - last.y) > 1) { check(false, `seed ${s}: moved diagonally`); break; }
+    last = { ...p };
   }
   const again = replay(createWorld, s, w.inputs);
   const a = player(w).Position, b = player(again).Position;

@@ -32,22 +32,30 @@ function draw() {
   drawActionBar(ctx, layout);
 }
 
-// Tap a tile: your own tile waits; any other tile steps one tile towards it (8-way).
+// Tap your own tile to wait. Tap anywhere else on the map to step one tile up, down, left
+// or right: whichever way is furthest from you, measured in pixels from your tile's centre.
 canvas.addEventListener('pointerdown', ev => {
   ev.preventDefault();
   const t = tileAtPixel(layout, ev.clientX, ev.clientY);
   if (!t) return;
   const p = player(world).Position;
-  const dx = Math.sign(t.x - p.x), dy = Math.sign(t.y - p.y);
-  const input = dx === 0 && dy === 0 ? { type: 'wait' } : { type: 'move', dx, dy };
+  let input;
+  if (t.x === p.x && t.y === p.y) input = { type: 'wait' };
+  else {
+    const ox = ev.clientX - (layout.mapX + (p.x + 0.5) * layout.tile);
+    const oy = ev.clientY - (layout.mapY + (p.y + 0.5) * layout.tile);
+    input = Math.abs(ox) >= Math.abs(oy)
+      ? { type: 'move', dx: Math.sign(ox), dy: 0 }
+      : { type: 'move', dx: 0, dy: Math.sign(oy) };
+  }
   if (applyInput(world, input)) draw();
 });
 
-// Keyboard for desktop testing: arrows / numpad / hjklyubn, space or . to wait.
+// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait. No diagonals.
 const KEYS = {
   ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-  k: [0, -1], j: [0, 1], h: [-1, 0], l: [1, 0], y: [-1, -1], u: [1, -1], b: [-1, 1], n: [1, 1],
-  8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0], 7: [-1, -1], 9: [1, -1], 1: [-1, 1], 3: [1, 1],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+  8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0],
 };
 window.addEventListener('keydown', ev => {
   let input = null;

@@ -1,7 +1,7 @@
 // The turn loop. The player acts, then the rest of the world takes its turn (step 2 adds the scheduler).
 import { tileBlocks, blockerAt, player } from './world.js';
 
-// Inputs: { type: 'move', dx, dy } (dx, dy in -1..1) or { type: 'wait' }.
+// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
@@ -10,7 +10,7 @@ export function applyInput(world, input) {
     took = true;
   } else if (input.type === 'move') {
     const dx = Math.sign(input.dx), dy = Math.sign(input.dy);
-    if (dx === 0 && dy === 0) return false;
+    if ((dx === 0) === (dy === 0)) return false; // standing still or diagonal: not a move
     const nx = p.Position.x + dx, ny = p.Position.y + dy;
     if (tileBlocks(world, nx, ny) || blockerAt(world, nx, ny)) {
       world.events.emit('move_blocked', { id: p.id, x: nx, y: ny }); // no turn spent
