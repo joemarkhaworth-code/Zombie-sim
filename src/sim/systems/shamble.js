@@ -75,6 +75,8 @@ export function shamble(world, e) {
     b.goal = { x: prey.Position.x, y: prey.Position.y, why: 'glimpsed' };
     b.search = null;
     world.events.emit('prey_glimpsed', { id: e.id, preyId: prey.id });
+    // A stare is quicker than a step: refund the rest of the action.
+    if (e.Actor) e.Actor.energy += CONFIG.scheduler.actionCost - cfg.glimpseCost;
     return;
   }
   b.glimpsed = 0;

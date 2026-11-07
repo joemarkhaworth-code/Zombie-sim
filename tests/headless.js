@@ -298,20 +298,30 @@ function check(cond, msg) {
   for (const t of ['prey_glimpsed', 'prey_spotted']) w.events.on(t, () => ev.push(t));
   applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
   check(ev.join() === 'prey_glimpsed' && z.Position.y === 7 && z.Brain.goal.why === 'glimpsed', 'first look: it stops and stares');
-  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
-  check(ev.join() === 'prey_glimpsed,prey_spotted' && z.Brain.tracking, 'still in view on its next look: it comes for you');
+  applyInput(w, { type: 'wait' });
+  check(ev.join() === 'prey_glimpsed,prey_spotted' && z.Brain.tracking, 'still in view one move later: it comes for you');
   // Duck out of view in time: it only goes to check the spot, it never spots you.
   w = emptyWorld();
   const q = player(w); q.Position.x = 5; q.Position.y = 3;
-  for (let x = 1; x <= 3; x++) wall(w, x, 4); // cover to the left: a wall under (1..3, 4)
+  for (let x = 1; x <= 4; x++) wall(w, x, 4); // cover one step to the left: a wall under (1..4, 4)
   const z2 = makeZombie(w, 5, 7);
   const ev2 = [];
   for (const t of ['prey_glimpsed', 'prey_spotted']) w.events.on(t, () => ev2.push(t));
   applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
   check(ev2.join() === 'prey_glimpsed', 'it glimpses you');
-  applyInput(w, { type: 'move', dx: -1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 }); // (3,3): behind the wall
+  applyInput(w, { type: 'move', dx: -1, dy: 0 }); // one move: (4,3), behind the wall
   for (let i = 0; i < 2; i++) applyInput(w, { type: 'wait' });
-  check(!ev2.includes('prey_spotted') && z2.Brain.goal && z2.Brain.goal.why === 'glimpsed', `you slip away: it goes to check, no ! (${ev2.join()})`);
+  check(!ev2.includes('prey_spotted') && z2.Brain.goal && z2.Brain.goal.why === 'glimpsed', `one move to cover in time: it goes to check, no ! (${ev2.join()})`);
+  // Two moves to cover is too slow.
+  w = emptyWorld();
+  const q2 = player(w); q2.Position.x = 5; q2.Position.y = 3;
+  for (let x = 1; x <= 3; x++) wall(w, x, 4);
+  makeZombie(w, 5, 7);
+  const ev3 = [];
+  w.events.on('prey_spotted', () => ev3.push('spotted'));
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  applyInput(w, { type: 'move', dx: -1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 });
+  check(ev3.length === 1, 'two moves to cover: too slow, it has spotted you');
   // Close up there's no stare: within glimpseRange it comes straight away.
   w = emptyWorld();
   const r = player(w); r.Position.x = 5; r.Position.y = 3;

@@ -27,6 +27,8 @@ export const CONFIG = {
     footsteps: 0,         // shuffles quietly
     glimpseRange: 2,      // sees you further off than this: stops and stares (?) first; only comes
                           // for you (!) if it still sees you on its next look
+    glimpseCost: 50,      // energy a stare costs (a normal action is 100): it looks again sooner, so
+                          // at half speed you get one move to get out of sight, not two
     searchActions: 12,    // after losing you, shuffles about the last known spot this many moves
     searchRadius: 3,      // ...staying within this many tiles of it
     wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
