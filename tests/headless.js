@@ -479,7 +479,7 @@ function check(cond, msg) {
       const B = bagLayout(wf, L, pf.Inventory.items[0].id);
       const bottom = Math.max(...B.hits.map(b => b.y + b.h));
       check(bottom <= B.y + B.h && B.gx + B.cell * B.inv.cols <= B.x + B.w, `bag panel fits on ${cw}x${ch} (cell ${B.cell})`);
-      check(B.cell >= 36, `bag squares big enough to tap on ${cw}x${ch} (${B.cell})`);
+      check(B.cell >= 22, `bag squares big enough on ${cw}x${ch} (${B.cell}; a tin is twice that)`);
     }
   }
   const stick = w0.entities.get(p0.Inventory.hand);
@@ -491,37 +491,39 @@ function check(cond, msg) {
   let w = emptyWorld();
   const p = player(w); p.Position.x = 1; p.Position.y = 5;
   const inv = p.Inventory;
-  inv.cols = 4; inv.rows = 3; // the mechanics below are checked on a 4x3 bag
   const log = createMessageLog(w);
   const turn = i => { log.clear(); return applyInput(w, i); };
-  const overlaps = () => {
+  const overlaps = (iv = inv) => {
     const g = new Set();
-    for (const s of inv.items) for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
-      if (x < 0 || y < 0 || x >= inv.cols || y >= inv.rows || g.has(`${x},${y}`)) return true;
+    for (const s of iv.items) for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
+      if (x < 0 || y < 0 || x >= iv.cols || y >= iv.rows || g.has(`${x},${y}`)) return true;
       g.add(`${x},${y}`);
     }
     return false;
   };
+  const sizeOf = id => { const s = inv.items.find(t => t.id === id); return s ? s.w * s.h : 0; };
+  check(['beans', 'bandage', 'walkingStick', 'cricketBat'].map(t => CONFIG.items[t].size.join('x')).join() === '2x2,1x2,1x8,2x8',
+    'sizes: tin 2x2, bandage 1x2, stick 1x8, bat 2x8');
   // Walking onto an item picks it up as part of the step, into the bag.
   const beans = makeItem(w, 'beans', 2, 5);
   check(turn({ type: 'move', dx: 1, dy: 0 }) && w.turn === 1, 'stepping onto an item is one turn');
-  check(inv.items.some(s => s.id === beans.id) && !beans.Position, 'and puts it in the bag');
+  check(inv.items.some(s => s.id === beans.id) && !beans.Position && sizeOf(beans.id) === 4, 'and puts it in the bag (4 squares)');
   check(log.text === 'You pick up the tin of beans.', `it says so (got "${log.text}")`);
-  // Shapes: a bat takes 3 squares. Fill the 4x3 bag: 3 bats (9) + beans + 2 bandages = 12.
-  for (let i = 0; i < 3; i++) makeItem(w, 'cricketBat', 3 + i, 5);
-  makeItem(w, 'bandage', 6, 5); makeItem(w, 'bandage', 7, 5);
-  for (let i = 0; i < 5; i++) turn({ type: 'move', dx: 1, dy: 0 });
+  // Shapes fill the 10x8 bag exactly: 4 bats (64) + 4 tins (16) = 80.
+  for (let i = 0; i < 4; i++) makeItem(w, 'cricketBat', 3 + i, 5);
+  for (let i = 0; i < 3; i++) makeItem(w, 'beans', 7 + i, 5);
+  for (let i = 0; i < 7; i++) turn({ type: 'move', dx: 1, dy: 0 });
   const cells = inv.items.reduce((n, s) => n + s.w * s.h, 0);
-  check(inv.items.length === 6 && cells === 12, `items take their shapes: 3 bats, beans and 2 bandages fill 12 squares (${cells})`);
+  check(inv.items.length === 8 && cells === inv.cols * inv.rows, `4 bats and 4 tins fill all ${inv.cols * inv.rows} squares (${cells})`);
   check(!overlaps(), 'no two items overlap, all inside the grid');
-  check(inv.items.filter(s => w.entities.get(s.id).Item.type === 'cricketBat').every(s => s.w * s.h === 3), 'each bat is 1x3, upright or turned');
   // Full: the next item stays on the floor.
-  makeItem(w, 'beans', 8, 5);
-  turn({ type: 'move', dx: 1, dy: 0 });
-  check(itemsAt(w, 8, 5).length === 1 && log.text === 'No room for the tin of beans.', `a full bag leaves it on the floor (got "${log.text}")`);
-  // Drop the beans from the bag: a 1x1 hole, and the tin on the floor fits it.
-  check(turn({ type: 'drop', itemId: beans.id }) && itemsAt(w, 8, 5).length === 2, 'dropping takes a turn and leaves it at your feet');
-  check(turn({ type: 'pickup' }) && inv.items.length === 6, 'tapping yourself picks up the top item');
+  p.Position.x = 9; p.Position.y = 7;
+  makeItem(w, 'bandage', 9, 8);
+  turn({ type: 'move', dx: 0, dy: 1 });
+  check(itemsAt(w, 9, 8).length === 1 && log.text === 'No room for the bandage.', `a full bag leaves it on the floor (got "${log.text}")`);
+  // Drop a tin: a 2x2 hole, and the bandage on the floor fits it.
+  check(turn({ type: 'drop', itemId: beans.id }) && itemsAt(w, 9, 8).length === 2, 'dropping takes a turn and leaves it at your feet');
+  check(turn({ type: 'pickup' }) && inv.items.length === 8 && itemsAt(w, 9, 8)[0].id === beans.id, 'tapping yourself picks up the top item (the bandage)');
   // Hold a bat: it leaves the bag for your hand, and the stick takes its place in the bag.
   const bat = inv.items.find(s => w.entities.get(s.id).Item.type === 'cricketBat').id;
   const stickId = inv.hand;
@@ -529,27 +531,25 @@ function check(cond, msg) {
     'HOLD swaps: the bat in hand, the stick into its space in the bag');
   check(!overlaps(), 'still no overlaps');
   check(meleeStats(w, p).damage === 2, 'the bat does 2');
-  // Stow with no room: refused, no turn. Make room, then it goes in.
+  // Stow with no room: refused, no turn.
   const t0 = w.turn;
   check(!turn({ type: 'use', itemId: bat }) && w.turn === t0 && inv.hand === bat, 'stowing into a full bag is refused, no turn');
   check(log.text === 'No room in the bag for the cricket bat.', `it says so (got "${log.text}")`);
   // Drop the hand's weapon: bare hands.
   check(turn({ type: 'drop', itemId: bat }) && inv.hand === 0 && itemsAt(w, p.Position.x, p.Position.y).some(e => e.id === bat), 'you can drop what you hold');
   check(meleeStats(w, p).damage === 1 && !meleeStats(w, p).knockback, 'bare hands: 1, no knockback');
-  // Tidying: fragmented space is repacked to fit a long item.
+  // Tidying: fragmented space is repacked to fit a long item (pinned 4x8 bag).
   w = emptyWorld();
   const q = player(w); q.Position.x = 5; q.Position.y = 5;
   const qi = q.Inventory;
-  qi.hand = 0; qi.cols = 4; qi.rows = 3;
-  // Four tins on the diagonal of the 4x3 grid leave no straight run of 3 free.
-  const tins = [[0, 0], [1, 1], [2, 2], [3, 0]].map(([x, y]) => { const t = makeItem(w, 'beans'); qi.items.push({ id: t.id, x, y, w: 1, h: 1 }); return t; });
+  qi.hand = 0; qi.cols = 4; qi.rows = 8;
+  // Four tins staggered down the bag leave no clear 2x8 strip.
+  [[0, 0], [2, 2], [0, 4], [2, 6]].forEach(([x, y]) => { const t = makeItem(w, 'beans'); qi.items.push({ id: t.id, x, y, w: 2, h: 2 }); });
   const tidied = [];
   w.events.on('bag_tidied', () => tidied.push(1));
   makeItem(w, 'cricketBat', 5, 5);
-  check(applyInput(w, { type: 'pickup' }) && qi.items.length === 5 && tidied.length === 1, 'the bag tidies itself to fit a long item');
-  // A weapon that won't fit at all goes into empty hands.
-  for (let i = 0; i < 5; i++) { makeItem(w, 'beans', 5, 5); applyInput(w, { type: 'pickup' }); }
-  check(qi.items.reduce((n, s) => n + s.w * s.h, 0) === 12, 'nine tins and a bat fill all 12 squares');
+  check(applyInput(w, { type: 'pickup' }) && qi.items.length === 5 && tidied.length === 1 && !overlaps(qi), 'the bag tidies itself to fit a bat');
+  // Now full; a weapon that won't fit goes into empty hands.
   const bat2 = makeItem(w, 'cricketBat', 5, 5);
   check(applyInput(w, { type: 'pickup' }) && qi.hand === bat2.id, 'a weapon with no room in the bag goes into empty hands');
   // Healing: refused at full health (no turn); a bandage heals a heart and is used up.
