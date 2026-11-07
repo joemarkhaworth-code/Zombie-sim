@@ -54,19 +54,22 @@ export function createMessageLog(world) {
 const TILE_TEXT = {
   [TILE.FLOOR]: 'Bare floor. Seen better days.',
   [TILE.WALL]: 'A stone wall. Solid, at least.',
+  [TILE.BUSH]: 'A bush. Good for hiding in.',
 };
 const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',
 };
 
 // Short names for remembered tiles (the line also says ", out of sight").
-const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };
+const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall', [TILE.BUSH]: 'A bush' };
 
 // Only what you can see. Out of sight, what you remember (never the live tile) with
 // ", out of sight"; never seen is "Unexplored." Creatures you haven't noticed aren't there.
 export function describeTile(world, x, y) {
   const p = world.entities.get(world.playerId);
-  if (p.Position.x === x && p.Position.y === y) return "That's you.";
+  if (p.Position.x === x && p.Position.y === y) {
+    return world.tiles[y * world.w + x] === TILE.BUSH ? "That's you, in a bush." : "That's you.";
+  }
   if (!world.view[y * world.w + x]) {
     const snap = p.Memory && p.Memory.tiles[y * world.w + x];
     if (!snap) return 'Unexplored.';

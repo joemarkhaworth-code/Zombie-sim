@@ -7,11 +7,19 @@ import { tryStep } from './systems/movement.js';
 import { updatePlayerView } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 
-// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
+// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals), { type: 'wait' },
+// { type: 'sneak', on } (toggle: takes no turn, but is recorded so replays match).
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
-  let took = false;
+  let took = false, cost = CONFIG.scheduler.actionCost;
+  if (input.type === 'sneak') {
+    if (!p.Stealth || p.Stealth.sneaking === !!input.on) return false;
+    p.Stealth.sneaking = !!input.on;
+    world.inputs.push({ turn: world.turn, type: 'sneak', on: !!input.on });
+    world.events.emit('sneak_toggled', { id: p.id, on: !!input.on });
+    return false;
+  }
   clearNoise(world);
   if (input.type === 'wait') {
     world.events.emit('entity_waited', { id: p.id });
@@ -19,16 +27,17 @@ export function applyInput(world, input) {
   } else if (input.type === 'move') {
     // Blocked or diagonal: no turn spent. (Walking into a zombie attacks it from step 8.)
     took = tryStep(world, p, input.dx, input.dy) === 'moved';
+    if (p.Stealth && p.Stealth.sneaking) cost *= CONFIG.stealth.moveCost; // slow, careful steps
   }
   if (took) {
     world.inputs.push({ turn: world.turn, ...input });
-    endTurn(world);
+    endTurn(world, cost);
   }
   return took;
 }
 
-function endTurn(world) {
-  player(world).Actor.energy -= CONFIG.scheduler.actionCost;
+function endTurn(world, cost) {
+  player(world).Actor.energy -= cost;
   advance(world);
   updatePlayerView(world);
   world.turn++;

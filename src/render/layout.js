@@ -14,6 +14,20 @@ export function computeLayout(cssW, cssH) {
   return { cssW, cssH, tile, mapX, mapY, mapW: tile * w, mapH: tile * h, barY, barH: cssH - barY };
 }
 
+// Action bar buttons: big, side by side, splitting the bar evenly. Add future actions here
+// rather than new UI. Returns [{ id, x, y, w, h }].
+export const ACTION_BUTTONS = ['sneak'];
+export function actionButtons(L) {
+  const pad = 8, n = ACTION_BUTTONS.length;
+  const h = Math.min(L.barH - pad * 2, CONFIG.ui.actionBarHeight - pad * 2);
+  const w = (L.cssW - pad * (n + 1)) / n;
+  return ACTION_BUTTONS.map((id, i) => ({ id, x: pad + i * (w + pad), y: L.barY + pad, w, h }));
+}
+
+export function actionButtonAt(L, px, py) {
+  return actionButtons(L).find(b => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) || null;
+}
+
 // Screen pixel -> tile, or null if outside the map.
 export function tileAtPixel(layout, px, py) {
   const x = Math.floor((px - layout.mapX) / layout.tile);

@@ -70,9 +70,21 @@ export function computeView(world, e) {
   return view;
 }
 
+export function inCover(world, e) {
+  return !!TILE_INFO[tileAt(world, e.Position.x, e.Position.y)].cover;
+}
+
+export function isSneaking(e) {
+  return !!(e.Stealth && e.Stealth.sneaking);
+}
+
 // Does `viewer` notice `target`? Its tile must be in sight with light >= minLevelToSpot, and
-// within sight radius x noticeByLight[light]. Anything right next to you (8 ways) with no wall
-// between is always noticed.
+// within sight radius x noticeByLight[light] (x stealth.noticeFactor if the target is sneaking).
+// A target in cover (a bush) can only be noticed from next to it. Anything right next to you
+// (8 ways) with no wall between is always noticed.
+// Sneaking and cover stop you being noticed; they don't shake off a viewer that already has you
+// in view (it tracked you on its last look and watched you duck into the bush): it keeps you
+// at its normal range while you stay in its line of sight.
 export function canNotice(world, viewer, target) {
   if (!viewer.Position || !target.Position) return false;
   const { x: vx, y: vy } = viewer.Position, { x, y } = target.Position;
@@ -80,7 +92,11 @@ export function canNotice(world, viewer, target) {
   if (ddx <= 1 && ddy <= 1) return lineClear(world, vx, vy, x, y);
   const level = world.light[y * world.w + x];
   if (level < CONFIG.vision.minLevelToSpot) return false;
-  if (Math.hypot(x - vx, y - vy) > sightRadius(viewer) * CONFIG.vision.noticeByLight[level]) return false;
+  const watching = viewer.Brain && viewer.Brain.tracking === target.id;
+  if (!watching && inCover(world, target)) return false;
+  let range = sightRadius(viewer) * CONFIG.vision.noticeByLight[level];
+  if (!watching && isSneaking(target)) range *= CONFIG.stealth.noticeFactor;
+  if (Math.hypot(x - vx, y - vy) > range) return false;
   return lineClear(world, vx, vy, x, y);
 }
 

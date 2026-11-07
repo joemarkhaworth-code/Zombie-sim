@@ -49,6 +49,14 @@ export const CONFIG = {
     minStrengthToHear: [Infinity, 3, 2, 1], // by hearing 0-3: the faintest strength still heard
   },
 
+  // Sneaking: each step costs moveCost x the energy (zombies get that much more time), footsteps
+  // are one level quieter (a walking step becomes silent), and you can only be noticed from
+  // noticeFactor of the usual distance. Waiting costs the same as normal.
+  stealth: {
+    moveCost: 2,
+    noticeFactor: 0.67,
+  },
+
   vision: {
     eyesightFactor: [0, 0.2, 0.35, 1], // sight radius = light.range x this, by eyesight 0-3 (zombie 2: 5 tiles)
     minLevelToSpot: 1,    // a creature is only noticed on a tile at least this visible
@@ -61,6 +69,8 @@ export const CONFIG = {
     zombieDist: [5, 9],   // the test zombie starts this many steps (4-way) from you
     wallRuns: 3,          // short straight walls to hide behind
     wallLength: [3, 5],
+    bushClumps: 3,        // clumps of bushes to hide in
+    bushClumpSize: [2, 4],
   },
 
   render: {
@@ -75,6 +85,8 @@ export const CONFIG = {
     floorMark: '#44443a',
     wall: '#7a7a72',
     wallMark: '#5e5e58',
+    bush: '#2f4a22',
+    bushMark: '#4f7a36',
     player: '#ffdd33',
     playerText: '#000000',
     zombie: '#6fcf4f',
@@ -84,7 +96,8 @@ export const CONFIG = {
     dangerText: '#ffdd33',
     inspectOutline: '#ffffff',
     // Remembered tiles: dark greys that keep each tile's shapes.
-    memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', thing: '#5a5a5a' },
+    memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', bush: '#1f251c', bushMark: '#30382b', thing: '#5a5a5a' },
+    sneakButton: '#ffdd33',
     noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you

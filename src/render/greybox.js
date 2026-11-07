@@ -1,13 +1,13 @@
 // Greybox map: plain coloured squares and letters. Only reads world state.
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
-import { canNotice } from '../sim/systems/vision.js';
+import { canNotice, inCover, isSneaking } from '../sim/systems/vision.js';
 
 // inspect: { x, y } of a long-pressed tile to outline, or null. debug: draw the noise heatmap.
 export function drawMap(ctx, world, L, inspect, debug) {
   const c = CONFIG.colours, t = L.tile, m = c.memory;
   const p = world.entities.get(world.playerId);
-  const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark };
+  const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark, bush: c.bush, bushMark: c.bushMark };
   for (let y = 0; y < world.h; y++) {
     for (let x = 0; x < world.w; x++) {
       const px = L.mapX + x * t, py = L.mapY + y * t;
@@ -26,6 +26,7 @@ export function drawMap(ctx, world, L, inspect, debug) {
   ents.sort((a, b) => (a.Player ? 1 : 0) - (b.Player ? 1 : 0));
   for (const e of ents) {
     const px = L.mapX + e.Position.x * t, py = L.mapY + e.Position.y * t;
+    if (isSneaking(e)) ctx.globalAlpha = 0.55; // a sneaking creature is drawn dimmer
     if (e.Player) {
       ctx.fillStyle = e.Glyph.colour;
       ctx.fillRect(px + 2, py + 2, t - 4, t - 4);
@@ -33,6 +34,8 @@ export function drawMap(ctx, world, L, inspect, debug) {
     } else {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, e.Glyph.colour);
     }
+    ctx.globalAlpha = 1;
+    if (inCover(world, e)) drawLeaves(ctx, px, py, t, c.bushMark); // hiding in a bush
   }
   // Dim tiles in view by visibility: 3 full colour, 2 and 1 darker.
   const alpha = CONFIG.render.dimAlpha;
@@ -88,8 +91,22 @@ function drawBadge(ctx, mark, px, py, t, colour) {
   ctx.fillText(mark, x, y);
 }
 
+// Leaf marks over a creature in a bush.
+function drawLeaves(ctx, px, py, t, colour) {
+  ctx.fillStyle = colour;
+  const s = Math.max(3, Math.floor(t / 8));
+  for (const [fx, fy] of [[0.15, 0.2], [0.7, 0.15], [0.1, 0.7], [0.75, 0.72], [0.45, 0.85]]) {
+    ctx.fillRect(px + fx * t, py + fy * t, s, s);
+  }
+}
+
 // One terrain tile in a palette (live colours or remembered greys).
 function drawTile(ctx, tile, px, py, t, pal) {
+  if (tile === TILE.BUSH) {
+    ctx.fillStyle = pal.bush; ctx.fillRect(px, py, t, t);
+    drawLeaves(ctx, px, py, t, pal.bushMark);
+    return;
+  }
   if (tile === TILE.WALL) {
     ctx.fillStyle = pal.wall; ctx.fillRect(px, py, t, t);
     ctx.fillStyle = pal.wallMark; // stone courses

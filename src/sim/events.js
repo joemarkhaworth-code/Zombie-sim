@@ -9,6 +9,7 @@
 //   search_gave_up { id }               (a zombie finished searching and gave up)
 //   noise_made     { x, y, level, by }  (level 1-3; by = the maker's id, 0 for none)
 //   noise_heard    { id, x, y, strength, by } (id heard a noise from x, y)
+//   sneak_toggled  { id, on }
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();
