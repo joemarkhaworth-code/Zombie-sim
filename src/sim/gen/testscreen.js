@@ -1,5 +1,6 @@
-// Test screen: floor walled round the edge, a few short walls and single-tile rocks, all seeded.
-// Any floor sealed off from the start is filled in, so everything open is reachable.
+// Screens of rocks and short walls, all seeded: the phase-1 test room, and (until the districts,
+// step 13) every screen of the placeholder town. Any floor sealed off from the start is filled
+// in, so everything open is reachable.
 export const TILE = { FLOOR: 0, WALL: 1 };
 
 // Tiles are properties, not special cases.
@@ -8,7 +9,35 @@ export const TILE_INFO = {
   [TILE.WALL]: { name: 'wall', blocks: true, opaque: true },
 };
 
-export function generateTestScreen(world, cfg) {
+// Rocks and short walls inside one screen at (ox, oy), kept 2 tiles off its edges (so you can
+// always get round them and between screens) and clear of `keepClear` (x, y) if given.
+export function decorateScreen(world, rng, ox, oy, sw, sh, cfg, keepClear) {
+  const { w } = world;
+  const clear = (x, y) => keepClear && Math.abs(x - keepClear.x) <= 1 && Math.abs(y - keepClear.y) <= 1;
+  for (let r = 0; r < cfg.wallRuns; r++) {
+    const [lo, hi] = cfg.wallLength;
+    const len = lo + rng.int(hi - lo + 1);
+    const horiz = rng.chance(0.5);
+    const x0 = ox + 2 + rng.int(sw - 4 - (horiz ? len - 1 : 0));
+    const y0 = oy + 2 + rng.int(sh - 4 - (horiz ? 0 : len - 1));
+    for (let k = 0; k < len; k++) {
+      const x = x0 + (horiz ? k : 0), y = y0 + (horiz ? 0 : k);
+      if (!clear(x, y)) world.tiles[y * w + x] = TILE.WALL;
+    }
+  }
+  let placed = 0, tries = 0;
+  while (placed < cfg.rocks && tries++ < 500) {
+    const x = ox + 2 + rng.int(sw - 4), y = oy + 2 + rng.int(sh - 4);
+    if (clear(x, y)) continue;
+    const i = y * w + x;
+    if (world.tiles[i] === TILE.WALL) continue;
+    world.tiles[i] = TILE.WALL;
+    placed++;
+  }
+}
+
+// The whole map floored with a wall round its outside edge.
+function walledFloor(world) {
   const { w, h } = world;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -16,31 +45,29 @@ export function generateTestScreen(world, cfg) {
       world.tiles[y * w + x] = edge ? TILE.WALL : TILE.FLOOR;
     }
   }
-  const cx = w >> 1, cy = h >> 1;
-  const nearStart = (x, y) => Math.abs(x - cx) <= 1 && Math.abs(y - cy) <= 1;
-  // Short straight walls, kept off the outer wall so you can always get round them.
-  for (let r = 0; r < cfg.wallRuns; r++) {
-    const [lo, hi] = cfg.wallLength;
-    const len = lo + world.rng.int(hi - lo + 1);
-    const horiz = world.rng.chance(0.5);
-    const x0 = 2 + world.rng.int(w - 4 - (horiz ? len - 1 : 0));
-    const y0 = 2 + world.rng.int(h - 4 - (horiz ? 0 : len - 1));
-    for (let k = 0; k < len; k++) {
-      const x = x0 + (horiz ? k : 0), y = y0 + (horiz ? 0 : k);
-      if (!nearStart(x, y)) world.tiles[y * w + x] = TILE.WALL;
-    }
+}
+
+// The phase-1 test room: one walled screen. Returns the player start.
+export function generateTestScreen(world, cfg) {
+  walledFloor(world);
+  const start = { x: world.w >> 1, y: world.h >> 1 };
+  decorateScreen(world, world.rng, 0, 0, world.w, world.h, cfg, start);
+  fillSealedPockets(world, start.x, start.y);
+  return start;
+}
+
+// The placeholder town: every screen decorated like the test room from the fixed world seed,
+// open to its neighbours, with a wall only round the outside of the whole map. You start in
+// the middle of the middle screen. Returns the start.
+export function generatePlaceholderTown(world, rng, cfg) {
+  walledFloor(world);
+  const { screenW: sw, screenH: sh, screensX, screensY } = world;
+  const start = { x: Math.floor(screensX / 2) * sw + (sw >> 1), y: Math.floor(screensY / 2) * sh + (sh >> 1) };
+  for (let sy = 0; sy < screensY; sy++) {
+    for (let sx = 0; sx < screensX; sx++) decorateScreen(world, rng, sx * sw, sy * sh, sw, sh, cfg, start);
   }
-  let placed = 0, tries = 0;
-  while (placed < cfg.rocks && tries++ < 500) {
-    const x = 2 + world.rng.int(w - 4), y = 2 + world.rng.int(h - 4);
-    if (nearStart(x, y)) continue; // keep the start clear
-    const i = y * w + x;
-    if (world.tiles[i] === TILE.WALL) continue;
-    world.tiles[i] = TILE.WALL;
-    placed++;
-  }
-  fillSealedPockets(world, cx, cy);
-  return { x: cx, y: cy }; // player start
+  fillSealedPockets(world, start.x, start.y);
+  return start;
 }
 
 // Flood fill (4-way) from the start; floor it can't reach becomes wall.

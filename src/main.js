@@ -5,7 +5,7 @@ import { applyInput } from './sim/turn.js';
 import { creatureAt } from './sim/systems/combat.js';
 import { canNotice } from './sim/systems/vision.js';
 import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
-import { drawMap } from './render/greybox.js';
+import { drawMap, camera } from './render/greybox.js';
 import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
 import { drawBag, bagHitAt } from './render/bag.js';
 import { itemsAt } from './sim/systems/items.js';
@@ -98,7 +98,7 @@ canvas.addEventListener('pointerdown', ev => {
   const p = { x: ev.clientX, y: ev.clientY, done: false, timer: 0 };
   p.timer = setTimeout(() => {
     p.done = true;
-    const t = tileAtPixel(layout, p.x, p.y);
+    const t = tileAtPixel(layout, p.x, p.y, camera(world));
     if (!t) return;
     inspect = t;
     log.show(describeTile(world, t.x, t.y));
@@ -133,7 +133,7 @@ function tap(px, py) {
   if (btn) return pressButton(btn.id);
   if (aiming) {
     // Aiming a throw: tap a highlighted tile. Tapping yourself cancels; anywhere else says so.
-    const t = tileAtPixel(layout, px, py);
+    const t = tileAtPixel(layout, px, py, camera(world));
     if (!t) return;
     const pp = player(world).Position;
     if (t.x === pp.x && t.y === pp.y) { aiming = 0; draw(); return; }
@@ -159,12 +159,13 @@ function tap(px, py) {
     else draw();
     return;
   }
-  const t = tileAtPixel(layout, px, py);
+  const cam = camera(world);
+  const t = tileAtPixel(layout, px, py, cam);
   if (!t) return;
   const p = player(world).Position;
   const self = t.x === p.x && t.y === p.y;
-  const ox = px - (layout.mapX + (p.x + 0.5) * layout.tile);
-  const oy = py - (layout.mapY + (p.y + 0.5) * layout.tile);
+  const ox = px - (layout.mapX + (p.x - cam.ox + 0.5) * layout.tile);
+  const oy = py - (layout.mapY + (p.y - cam.oy + 0.5) * layout.tile);
   let [dx, dy] = Math.abs(ox) >= Math.abs(oy) ? [Math.sign(ox), 0] : [0, Math.sign(oy)];
   // Tapping a creature you can see diagonally next to you hits (or shoves) it: attacks reach
   // 8 ways, movement is 4-way.

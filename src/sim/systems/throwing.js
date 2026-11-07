@@ -20,8 +20,10 @@ export function canThrowTo(world, e, x, y) {
 }
 
 export function validThrowTargets(world, e) {
-  const out = [];
-  for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) if (canThrowTo(world, e, x, y)) out.push({ x, y });
+  const out = [], r = Math.ceil(CONFIG.throw.range), { x: ex, y: ey } = e.Position;
+  for (let y = Math.max(0, ey - r); y <= Math.min(world.h - 1, ey + r); y++) {
+    for (let x = Math.max(0, ex - r); x <= Math.min(world.w - 1, ex + r); x++) if (canThrowTo(world, e, x, y)) out.push({ x, y });
+  }
   return out;
 }
 

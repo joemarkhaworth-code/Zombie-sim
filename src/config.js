@@ -3,6 +3,19 @@ export const CONFIG = {
   // One screen of the flip-screen world, in tiles. Portrait, sized so tiles stay thumb-sized.
   screen: { w: 11, h: 15 },
 
+  // The world: a grid of screens. The layout comes from the fixed world seed, so it's the same
+  // every run; the run seed decides zombies and items. 'town' is the game; 'testscreen' is the
+  // single phase-1 room (kept for tests).
+  world: {
+    map: 'town',
+    seed: 1991,
+    screens: [10, 10],
+    activeRadius: 1,           // screens round yours that run in full (1 = your screen and the 8 round it)
+    zombiesPerScreen: [1, 2],  // placeholder town: zombies on each screen but your first
+    itemsPerScreen: [0, 2],
+    itemTypes: ['beans', 'beans', 'bandage', 'cricketBat'],
+  },
+
   // Layout on the phone, in CSS pixels.
   ui: {
     topBarHeight: 36,     // status bar (turn number now, messages from step 3)
@@ -21,7 +34,7 @@ export const CONFIG = {
 
   // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
   // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
-  save: { key: 'zombie-survival-save', version: 1 },
+  save: { key: 'zombie-survival-save', version: 2 },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
@@ -149,6 +162,7 @@ export const CONFIG = {
     bagThrow: '#8a5a10',
     aimTile: 'rgba(255,221,51,0.28)',   // a tile you can throw to
     aimCreature: 'rgba(255,140,0,0.5)', // ... with a creature on it
+    edgeArrow: '#ff3030',  // a creature right next to you across the screen's edge
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

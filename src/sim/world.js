@@ -2,30 +2,37 @@
 import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { createEvents } from './events.js';
-import { generateTestScreen, TILE_INFO } from './gen/testscreen.js';
+import { generateTestScreen, generatePlaceholderTown, TILE_INFO } from './gen/testscreen.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';
 import { makeItem, makeInventory } from './systems/items.js';
 
-export function createWorld(seed) {
-  const { w, h } = CONFIG.screen;
+// map: 'town' (a grid of CONFIG.world.screens screens) or 'testscreen' (one walled room).
+export function createWorld(seed, opts = {}) {
+  const map = opts.map || CONFIG.world.map;
+  const [screensX, screensY] = map === 'town' ? CONFIG.world.screens : [1, 1];
+  const screenW = CONFIG.screen.w, screenH = CONFIG.screen.h;
+  const w = screenW * screensX, h = screenH * screensY;
   const world = {
-    seed,
+    seed, map,
     rng: createRng(seed),
     events: createEvents(),
-    w, h,
+    w, h, screenW, screenH, screensX, screensY,
     tiles: new Uint8Array(w * h),
     entities: new Map(),  // id -> { id, ...components }
     nextId: 1,
     playerId: 0,
-    noise: new Int16Array(CONFIG.screen.w * CONFIG.screen.h), // heard since your last action (debug heatmap)
+    noise: new Int16Array(w * h), // heard since your last action (debug heatmap)
     gameOver: null,       // { cause, killerName, heldName, turn, tick } once the player dies
     stats: { kills: 0 },  // zombies you've put down
     turn: 0,              // player actions taken
     tick: 0,              // scheduler ticks (world time)
     inputs: [],           // every player input, in order, for replay
   };
-  const start = generateTestScreen(world, CONFIG.testScreen);
+  // The layout: the test room from the run seed, or the town from the fixed world seed.
+  const start = map === 'town'
+    ? generatePlaceholderTown(world, createRng(CONFIG.world.seed), CONFIG.testScreen)
+    : generateTestScreen(world, CONFIG.testScreen);
   initLight(world);
   const player = addEntity(world, {
     Position: { x: start.x, y: start.y },
@@ -45,11 +52,48 @@ export function createWorld(seed) {
   });
   world.playerId = player.id;
   if (CONFIG.player.startHolding) player.Inventory.hand = makeItem(world, CONFIG.player.startHolding).id;
-  const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
-  if (zpos) makeZombie(world, zpos.x, zpos.y);
-  scatterItems(world, start, CONFIG.testScreen.items);
+  if (map === 'town') {
+    populateTown(world, start);
+  } else {
+    const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
+    if (zpos) makeZombie(world, zpos.x, zpos.y);
+    scatterItems(world, start, CONFIG.testScreen.items);
+  }
   updatePlayerView(world);
   return world;
+}
+
+// The placeholder town's zombies and items, from the run seed: a few on each screen, none on
+// your first screen.
+function populateTown(world, start) {
+  const cfg = CONFIG.world, rng = world.rng;
+  const home = screenOf(world, start.x, start.y);
+  const between = ([lo, hi]) => lo + rng.int(hi - lo + 1);
+  for (let sy = 0; sy < world.screensY; sy++) {
+    for (let sx = 0; sx < world.screensX; sx++) {
+      const spots = [];
+      for (let y = sy * world.screenH; y < (sy + 1) * world.screenH; y++) {
+        for (let x = sx * world.screenW; x < (sx + 1) * world.screenW; x++) if (!tileBlocks(world, x, y)) spots.push({ x, y });
+      }
+      const take = () => spots.splice(rng.int(spots.length), 1)[0];
+      const items = between(cfg.itemsPerScreen);
+      for (let i = 0; i < items && spots.length; i++) { const { x, y } = take(); makeItem(world, cfg.itemTypes[rng.int(cfg.itemTypes.length)], x, y); }
+      if (sx === home.sx && sy === home.sy) continue;
+      const zs = between(cfg.zombiesPerScreen);
+      for (let i = 0; i < zs && spots.length; i++) { const { x, y } = take(); makeZombie(world, x, y); }
+    }
+  }
+}
+
+// Which screen a tile is on, and that screen's top-left tile.
+export function screenOf(world, x, y) {
+  const sx = Math.floor(x / world.screenW), sy = Math.floor(y / world.screenH);
+  return { sx, sy, ox: sx * world.screenW, oy: sy * world.screenH };
+}
+
+export function sameScreen(world, a, b) {
+  return Math.floor(a.x / world.screenW) === Math.floor(b.x / world.screenW)
+    && Math.floor(a.y / world.screenH) === Math.floor(b.y / world.screenH);
 }
 
 export function makeZombie(world, x, y) {

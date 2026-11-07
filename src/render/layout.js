@@ -29,10 +29,11 @@ export function actionButtonAt(L, px, py, ids) {
   return actionButtons(L, ids).find(b => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) || null;
 }
 
-// Screen pixel -> tile, or null if outside the map.
-export function tileAtPixel(layout, px, py) {
+// Screen pixel -> tile, or null if outside the map. With a camera ({ ox, oy }: the top-left
+// tile of the screen you're on) it's a world tile; without, a tile on the screen.
+export function tileAtPixel(layout, px, py, cam) {
   const x = Math.floor((px - layout.mapX) / layout.tile);
   const y = Math.floor((py - layout.mapY) / layout.tile);
   if (x < 0 || y < 0 || x >= CONFIG.screen.w || y >= CONFIG.screen.h) return null;
-  return { x, y };
+  return cam ? { x: x + cam.ox, y: y + cam.oy } : { x, y };
 }

@@ -8,9 +8,19 @@ import { shamble } from './systems/shamble.js';
 
 const BRAINS = { shamble };
 
+// Only screens near yours run in full (world.activeRadius screens each way); actors further off
+// wait where they are (a rough simulation of distant screens can come later).
+export function isActive(world, e) {
+  const p = world.entities.get(world.playerId);
+  if (!p || !p.Position || e === p) return true;
+  const r = CONFIG.world.activeRadius;
+  return Math.abs(Math.floor(e.Position.x / world.screenW) - Math.floor(p.Position.x / world.screenW)) <= r
+    && Math.abs(Math.floor(e.Position.y / world.screenH) - Math.floor(p.Position.y / world.screenH)) <= r;
+}
+
 export function tick(world) {
   const cost = CONFIG.scheduler.actionCost;
-  const actors = [...world.entities.values()].filter(e => e.Actor).sort((a, b) => a.id - b.id);
+  const actors = [...world.entities.values()].filter(e => e.Actor && e.Position && isActive(world, e)).sort((a, b) => a.id - b.id);
   for (const e of actors) {
     if (!world.entities.has(e.id)) continue; // removed earlier this tick
     e.Actor.energy += e.Actor.speed;

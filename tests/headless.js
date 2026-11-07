@@ -13,6 +13,8 @@ import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
 import { saveWorld, loadWorld } from '../src/sim/save.js';
 import { dayOf, clockOf, daysSurvived } from '../src/sim/time.js';
+import { screenOf } from '../src/sim/world.js';
+import { isActive } from '../src/sim/scheduler.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -25,6 +27,9 @@ function emptyWorld(seed = 1) {
   return w;
 }
 import { computeLayout, tileAtPixel } from '../src/render/layout.js';
+
+// The phase-1 checks run on the single test room; the town (step 12) has its own checks below.
+CONFIG.world.map = 'testscreen';
 
 let failures = 0;
 function check(cond, msg) {
@@ -807,6 +812,12 @@ function check(cond, msg) {
       drawDeath(fake, dw, L); drawTopBar(fake, dw, L, createMessageLog(dw), false);
     } catch (e) { crashed = e; }
   }
+  if (!crashed) {
+    try {
+      const tw = createWorld(4, { map: 'town' });
+      for (let i = 0; i < 30; i++) { applyInput(tw, { type: 'move', dx: 1, dy: 0 }); drawMap(fake, tw, L, { x: player(tw).Position.x, y: player(tw).Position.y }, true, validThrowTargets(tw, player(tw))); drawTopBar(fake, tw, L, createMessageLog(tw), true); }
+    } catch (e) { crashed = e; }
+  }
   check(!crashed, `drawing never throws (${crashed && crashed.message})`);
 }
 
@@ -862,6 +873,97 @@ for (let s = 1; s <= SEEDS; s++) {
       && again.tick === w.tick && a.Health.hp === b.Health.hp && !!again.gameOver === !!w.gameOver
       && zombieState(again) === zombieState(w)), `seed ${s}: replay matches (player, zombie, health, death)`);
   }
+}
+
+// The town (step 12): a 10x10 grid of screens, the same layout every run, walking between screens.
+{
+  const town = s => createWorld(s, { map: 'town' });
+  const a = town(1), b = town(2);
+  const [nx, ny] = CONFIG.world.screens;
+  check(a.w === nx * CONFIG.screen.w && a.h === ny * CONFIG.screen.h, `the town is ${nx}x${ny} screens (${a.w}x${a.h} tiles)`);
+  check(a.tiles.every((t, i) => t === b.tiles[i]), 'the layout is the same every run (fixed world seed)');
+  const za = zombies(a).map(z => `${z.Position.x},${z.Position.y}`).join(), zb = zombies(b).map(z => `${z.Position.x},${z.Position.y}`).join();
+  check(za !== zb, 'zombies are placed by the run seed');
+  const p = player(a), home = screenOf(a, p.Position.x, p.Position.y);
+  check(home.sx === nx >> 1 && home.sy === ny >> 1, 'you start in the middle screen');
+  const perScreen = {};
+  for (const z of zombies(a)) { const s2 = screenOf(a, z.Position.x, z.Position.y); perScreen[`${s2.sx},${s2.sy}`] = (perScreen[`${s2.sx},${s2.sy}`] || 0) + 1; }
+  check(!perScreen[`${home.sx},${home.sy}`], 'no zombies on your first screen');
+  check(Object.keys(perScreen).length === nx * ny - 1, `every other screen has zombies (${Object.keys(perScreen).length})`);
+  check(zombies(a).every(z => !tileBlocks(a, z.Position.x, z.Position.y)), 'none in walls');
+  // Everything open is reachable from the start, across all the screens.
+  const seen = new Uint8Array(a.w * a.h), stack = [p.Position.y * a.w + p.Position.x];
+  seen[stack[0]] = 1;
+  while (stack.length) {
+    const i = stack.pop(), x = i % a.w, y = (i / a.w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const j = (y + dy) * a.w + x + dx;
+      if (!tileBlocks(a, x + dx, y + dy) && !seen[j]) { seen[j] = 1; stack.push(j); }
+    }
+  }
+  let open = 0, reach = 0;
+  for (let i = 0; i < a.w * a.h; i++) if (!tileBlocks(a, i % a.w, (i / a.w) | 0)) { open++; if (seen[i]) reach++; }
+  check(open === reach && open > a.w * a.h * 0.6, `every open tile is reachable (${reach}/${open})`);
+  // You only see the screen you're on; walk off an edge and you're on the next screen.
+  const w = town(3), me = player(w);
+  for (const z of zombies(w)) w.entities.delete(z.id);
+  const s0 = screenOf(w, me.Position.x, me.Position.y);
+  const inView = () => { let n = 0, out = 0; const c = screenOf(w, me.Position.x, me.Position.y); for (let i = 0; i < w.view.length; i++) if (w.view[i]) { n++; const x = i % w.w, y = (i / w.w) | 0; if (x < c.ox || x >= c.ox + w.screenW || y < c.oy || y >= c.oy + w.screenH) out++; } return { n, out }; };
+  check(inView().n > 0 && inView().out === 0, 'you see only your own screen');
+  // Clear a corridor to the right edge, then walk across it.
+  const row = me.Position.y;
+  for (let x = me.Position.x; x <= s0.ox + w.screenW + 2; x++) w.tiles[row * w.w + x] = TILE.FLOOR;
+  updatePlayerView(w);
+  let steps = 0;
+  while (screenOf(w, me.Position.x, me.Position.y).sx === s0.sx && steps++ < 20) applyInput(w, { type: 'move', dx: 1, dy: 0 });
+  const s1 = screenOf(w, me.Position.x, me.Position.y);
+  check(s1.sx === s0.sx + 1 && s1.sy === s0.sy, 'walking off the right edge puts you on the next screen');
+  check(inView().out === 0 && w.view[row * w.w + s1.ox], 'the view flips to the new screen');
+  check(me.Memory.tiles[row * w.w + s0.ox + 3], 'the screen you left stays in your memory');
+  // A zombie just over the edge can't see you, but hears you, and can follow you across.
+  const edgeX = s1.ox; // you're on the first column of the new screen
+  const zz = makeZombie(w, edgeX - 2, row);
+  check(!canNotice(w, zz, me) && !canNotice(w, me, zz), 'a zombie on the next screen 2 tiles off: neither of you sees the other');
+  applyInput(w, { type: 'move', dx: 1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 });
+  check(zz.Brain.goal && zz.Brain.goal.why === 'heard', 'it hears your footsteps across the edge');
+  let close = false;
+  for (let i = 0; i < 10 && !close; i++) { applyInput(w, { type: 'wait' }); close = Math.max(Math.abs(zz.Position.x - me.Position.x), Math.abs(zz.Position.y - me.Position.y)) <= 1; }
+  check(close, 'and follows the sound to you');
+  check(canNotice(w, zz, me) && canNotice(w, me, zz), 'right next to each other across the edge, you see each other');
+  const hp0 = me.Health.hp;
+  for (let i = 0; i < 6; i++) applyInput(w, { type: 'wait' });
+  check(me.Health.hp < hp0, 'so it can bite you there (no safe spot on the edge)');
+  // Far screens wait; nearby ones run.
+  const far = makeZombie(w, 1, 1);
+  const before = { ...far.Position };
+  check(!isActive(w, far) && isActive(w, zz), 'only nearby screens run');
+  far.Brain.goal = { x: 5, y: 5, why: 'heard' };
+  for (let i = 0; i < 10; i++) applyInput(w, { type: 'wait' });
+  check(far.Position.x === before.x && far.Position.y === before.y, 'a zombie on a far screen waits where it is');
+  // Saves on the town stay small and load back exactly.
+  for (let i = 0; i < 60; i++) applyInput(w, { type: 'move', dx: i % 10 < 5 ? 1 : -1, dy: i % 7 < 3 ? 1 : 0 });
+  const json = saveWorld(w);
+  check(json.length < 150000, `a town save is small (${json.length} bytes)`);
+  const back = loadWorld(createWorld, json);
+  check(back.map === 'town' && back.w === w.w && back.tiles.every((t, i) => t === w.tiles[i])
+    && JSON.stringify(player(back).Memory) === JSON.stringify(me.Memory), 'it loads back: map, tiles and memory');
+  // Random play over the town: no crashes, replays match, and it's quick.
+  let slow = 0, worst = 0, total = 0, turns = 0;
+  for (let s2 = 1; s2 <= 10; s2++) {
+    const t0 = town(s2), r = createRng(s2 * 97);
+    player(t0).Health.hp = player(t0).Health.max = 1e9;
+    for (let i = 0; i < 400; i++) {
+      const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][r.int(4)];
+      const start = performance.now();
+      applyInput(t0, r.chance(0.1) ? { type: 'wait' } : { type: 'move', dx: d[0], dy: d[1] });
+      const ms = performance.now() - start; total += ms; turns++; worst = Math.max(worst, ms); if (ms > 30) slow++;
+    }
+    const r2 = replay((sd) => { const x = town(sd); player(x).Health.hp = player(x).Health.max = 1e9; return x; }, s2, t0.inputs);
+    check(r2.turn === t0.turn && r2.tick === t0.tick && player(r2).Position.x === player(t0).Position.x
+      && zombieState(r2) === zombieState(t0), `town seed ${s2}: replay matches`);
+  }
+  console.log(`  town: ${(total / turns).toFixed(2)} ms a turn on average, worst ${worst.toFixed(1)} ms`);
+  check(total / turns < 10, 'a turn in the town is quick');
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.

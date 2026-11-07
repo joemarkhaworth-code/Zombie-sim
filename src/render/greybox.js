@@ -2,6 +2,13 @@
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
 import { canNotice } from '../sim/systems/vision.js';
+import { screenOf } from '../sim/world.js';
+
+// The camera: the screen you're on (flip-screen: it jumps a whole screen when you cross an edge).
+export function camera(world) {
+  const p = world.entities.get(world.playerId);
+  return screenOf(world, p.Position.x, p.Position.y);
+}
 
 // inspect: { x, y } of a long-pressed tile to outline, or null. debug: draw the noise heatmap.
 // aim: tiles you can throw to (while aiming), tinted yellow, orange with a creature on them.
@@ -9,9 +16,11 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
   const c = CONFIG.colours, t = L.tile, m = c.memory;
   const p = world.entities.get(world.playerId);
   const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark };
-  for (let y = 0; y < world.h; y++) {
-    for (let x = 0; x < world.w; x++) {
-      const px = L.mapX + x * t, py = L.mapY + y * t;
+  const { ox, oy } = camera(world);
+  const sx = x => L.mapX + (x - ox) * t, sy = y => L.mapY + (y - oy) * t; // world tile -> screen pixel
+  for (let y = oy; y < oy + world.screenH; y++) {
+    for (let x = ox; x < ox + world.screenW; x++) {
+      const px = sx(x), py = sy(y);
       const i = y * world.w + x;
       if (world.view[i]) { drawTile(ctx, world.tiles[i], px, py, t, live); continue; }
       // Out of sight: draw what you remember, greyed; never seen stays black.
@@ -22,13 +31,14 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
     }
   }
   // Creatures and things you notice, player last so it's always on top.
-  const ents = [...world.entities.values()].filter(e => e.Position && e.Glyph
-    && (e === p || canNotice(world, p, e)));
+  const onScreen = e => e.Position.x >= ox && e.Position.x < ox + world.screenW && e.Position.y >= oy && e.Position.y < oy + world.screenH;
+  const ents = [...world.entities.values()].filter(e => e.Position && e.Glyph && onScreen(e)
+    && (e === p || (e.Actor ? canNotice(world, p, e) : world.view[e.Position.y * world.w + e.Position.x])));
   // Draw order: things (corpses, items) first, then creatures, then you on top.
   const layer = e => (e.Player ? 2 : e.Actor ? 1 : 0);
   ents.sort((a, b) => layer(a) - layer(b));
   for (const e of ents) {
-    const px = L.mapX + e.Position.x * t, py = L.mapY + e.Position.y * t;
+    const px = sx(e.Position.x), py = sy(e.Position.y);
     if (e.Player) {
       ctx.fillStyle = e.Glyph.colour;
       ctx.fillRect(px + 2, py + 2, t - 4, t - 4);
@@ -39,14 +49,14 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
   }
   // Dim tiles in view by visibility: 3 full colour, 2 and 1 darker.
   const alpha = CONFIG.render.dimAlpha;
-  for (let y = 0; y < world.h; y++) {
-    for (let x = 0; x < world.w; x++) {
+  for (let y = oy; y < oy + world.screenH; y++) {
+    for (let x = ox; x < ox + world.screenW; x++) {
       const vis = world.view[y * world.w + x];
       if (!vis) continue;
       const a = alpha[vis];
       if (a <= 0 || a >= 1) continue;
       ctx.fillStyle = `rgba(0,0,0,${a})`;
-      ctx.fillRect(L.mapX + x * t, L.mapY + y * t, t, t);
+      ctx.fillRect(sx(x), sy(y), t, t);
     }
   }
   // Badges over zombies you can see: ! it's after you, ? it's lost you and is looking.
@@ -54,30 +64,37 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
     const b = e.Brain;
     if (!b) continue;
     const mark = b.tracking ? '!' : (b.goal || b.search) ? '?' : null;
-    if (mark) drawBadge(ctx, mark, L.mapX + e.Position.x * t, L.mapY + e.Position.y * t, t,
+    if (mark) drawBadge(ctx, mark, sx(e.Position.x), sy(e.Position.y), t,
       mark === '!' ? c.alert : c.puzzled);
   }
   if (aim) {
     for (const { x, y } of aim) {
       const c2 = ents.some(e => e.Actor && !e.Player && e.Position.x === x && e.Position.y === y);
       ctx.fillStyle = c2 ? CONFIG.colours.aimCreature : CONFIG.colours.aimTile;
-      ctx.fillRect(L.mapX + x * t, L.mapY + y * t, t, t);
+      ctx.fillRect(sx(x), sy(y), t, t);
     }
   }
-  if (debug) drawNoise(ctx, world, L);
-  if (inspect) drawOutline(ctx, L, inspect.x, inspect.y);
+  // A creature right next to you across the screen's edge: a red arrow at the edge, pointing at it.
+  for (const e of world.entities.values()) {
+    if (!e.Actor || e === p || !e.Position || onScreen(e) || !canNotice(world, p, e)) continue;
+    const ex = Math.min(Math.max(e.Position.x, ox), ox + world.screenW - 1);
+    const ey = Math.min(Math.max(e.Position.y, oy), oy + world.screenH - 1);
+    drawEdgeArrow(ctx, sx(ex), sy(ey), t, Math.sign(e.Position.x - ex), Math.sign(e.Position.y - ey), c.edgeArrow);
+  }
+  if (debug) drawNoise(ctx, world, L, ox, oy);
+  if (inspect) drawOutline(ctx, L, inspect.x - ox, inspect.y - oy);
 }
 
 // Debug: noise since your last action, everywhere (out of sight too), with strength numbers.
-function drawNoise(ctx, world, L) {
+function drawNoise(ctx, world, L, ox, oy) {
   const t = L.tile, top = CONFIG.noise.radiusByLevel[3];
   ctx.font = `bold ${Math.floor(t * 0.35)}px monospace`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (let y = 0; y < world.h; y++) {
-    for (let x = 0; x < world.w; x++) {
+  for (let y = oy; y < oy + world.screenH; y++) {
+    for (let x = ox; x < ox + world.screenW; x++) {
       const s = world.noise[y * world.w + x];
       if (s <= 0) continue;
-      const px = L.mapX + x * t, py = L.mapY + y * t;
+      const px = L.mapX + (x - ox) * t, py = L.mapY + (y - oy) * t;
       ctx.fillStyle = `rgba(${CONFIG.colours.noise},${0.15 + 0.5 * s / top})`;
       ctx.fillRect(px, py, t, t);
       ctx.fillStyle = '#ffffff';
@@ -96,6 +113,16 @@ function drawBadge(ctx, mark, px, py, t, colour) {
   ctx.strokeText(mark, x, y);
   ctx.fillStyle = colour;
   ctx.fillText(mark, x, y);
+}
+
+// A small triangle on the side of a tile, pointing off the screen (dx, dy).
+function drawEdgeArrow(ctx, px, py, t, dx, dy, colour) {
+  const cx = px + t / 2 + dx * t * 0.36, cy = py + t / 2 + dy * t * 0.36, s = t * 0.18;
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  if (dx) { ctx.moveTo(cx + dx * s, cy); ctx.lineTo(cx - dx * s, cy - s); ctx.lineTo(cx - dx * s, cy + s); }
+  else { ctx.moveTo(cx, cy + dy * s); ctx.lineTo(cx - s, cy - dy * s); ctx.lineTo(cx + s, cy - dy * s); }
+  ctx.closePath(); ctx.fill();
 }
 
 // One terrain tile in a palette (live colours or remembered greys).
