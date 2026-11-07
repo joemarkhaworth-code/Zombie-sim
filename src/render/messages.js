@@ -60,6 +60,8 @@ export function createMessageLog(world) {
     if (!isPlayer(id)) return;
     log.say(why === 'not_hurt' ? "You're not hurt." : why === 'no_room' ? `No room in the bag for the ${nameOf(itemId)}.` : 'Nothing to do with that.', LEVEL.blocked);
   });
+  ev.on('item_thrown', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You throw the ${nameOf(itemId)}.`, LEVEL.info); });
+  ev.on('thrown_hit', ({ id, targetId }) => { if (isPlayer(id)) log.say(`It hits the ${nameOf(targetId)}.`, LEVEL.info); });
   // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {
     const p = world.entities.get(world.playerId);
@@ -101,6 +103,7 @@ export function deathText(gameOver) {
     bite: `Bitten by a ${by}.`,
     hit: `Beaten by a ${by}.`,
     shove: 'Slammed into a wall.',
+    thrown: `Hit by something a ${by} threw.`,
   }[gameOver.cause] || 'Died.';
 }
 

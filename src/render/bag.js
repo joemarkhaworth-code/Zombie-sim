@@ -1,6 +1,6 @@
 // The bag panel, over the map. Top: BAG and CLOSE. Then IN HAND (what you hold, not in the bag),
 // then the bag grid: each item drawn as a block over the squares it takes up. Tap an item to
-// select it; its name and buttons appear underneath: use (EAT / USE / HOLD / STOW) and DROP.
+// select it; its name and buttons appear underneath: use (EAT / USE / HOLD / STOW), THROW and DROP.
 // Opening it and selecting take no turn; use and drop take a turn and close it (main.js).
 import { CONFIG } from '../config.js';
 import { itemType } from '../sim/systems/items.js';
@@ -8,7 +8,7 @@ import { itemType } from '../sim/systems/items.js';
 const PAD = 8;
 
 // Everything to draw and every hit area, for the current selection.
-// Hit areas: { action: 'close' | 'select' | 'use' | 'drop', itemId?, x, y, w, h, label? }
+// Hit areas: { action: 'close' | 'select' | 'use' | 'throw' | 'drop', itemId?, x, y, w, h, label? }
 export function bagLayout(world, L, selected) {
   const p = world.entities.get(world.playerId), inv = p.Inventory;
   const x = L.mapX + PAD, w = L.mapW - PAD * 2, y = L.mapY + PAD, h = L.mapH - PAD * 2;
@@ -28,9 +28,10 @@ export function bagLayout(world, L, selected) {
   if (selected && (inv.hand === selected || inv.items.some(s => s.id === selected))) {
     const item = world.entities.get(selected), t = itemType(item), held = inv.hand === selected;
     const verb = t.weapon ? (held ? 'STOW' : 'HOLD') : (t.verb || 'USE');
-    const bw = Math.floor((info.w - 8) / 2), by = info.y + 22;
+    const bw = Math.floor((info.w - 16) / 3), by = info.y + 22;
     hits.push({ action: 'use', itemId: selected, x: info.x, y: by, w: bw, h: 48, label: verb });
-    hits.push({ action: 'drop', itemId: selected, x: info.x + bw + 8, y: by, w: bw, h: 48, label: 'DROP' });
+    hits.push({ action: 'throw', itemId: selected, x: info.x + bw + 8, y: by, w: bw, h: 48, label: 'THROW' });
+    hits.push({ action: 'drop', itemId: selected, x: info.x + (bw + 8) * 2, y: by, w: bw, h: 48, label: 'DROP' });
     sel = { item, t, held };
   }
   return { x, y, w, h, hand, cell, gx, gy, blocks, info, sel, hits, inv };
@@ -96,7 +97,7 @@ export function drawBag(ctx, world, L, selected) {
   }
   for (const b of B.hits) {
     if (b.action === 'select') continue;
-    ctx.fillStyle = b.action === 'close' ? c.button : b.action === 'drop' ? c.bagDrop : c.bagUse;
+    ctx.fillStyle = b.action === 'close' ? c.button : b.action === 'drop' ? c.bagDrop : b.action === 'throw' ? c.bagThrow : c.bagUse;
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
     ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 1);

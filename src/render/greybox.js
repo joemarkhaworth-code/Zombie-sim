@@ -4,7 +4,8 @@ import { TILE } from '../sim/gen/testscreen.js';
 import { canNotice } from '../sim/systems/vision.js';
 
 // inspect: { x, y } of a long-pressed tile to outline, or null. debug: draw the noise heatmap.
-export function drawMap(ctx, world, L, inspect, debug) {
+// aim: tiles you can throw to (while aiming), tinted yellow, orange with a creature on them.
+export function drawMap(ctx, world, L, inspect, debug, aim) {
   const c = CONFIG.colours, t = L.tile, m = c.memory;
   const p = world.entities.get(world.playerId);
   const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark };
@@ -55,6 +56,13 @@ export function drawMap(ctx, world, L, inspect, debug) {
     const mark = b.tracking ? '!' : (b.goal || b.search) ? '?' : null;
     if (mark) drawBadge(ctx, mark, L.mapX + e.Position.x * t, L.mapY + e.Position.y * t, t,
       mark === '!' ? c.alert : c.puzzled);
+  }
+  if (aim) {
+    for (const { x, y } of aim) {
+      const c2 = ents.some(e => e.Actor && !e.Player && e.Position.x === x && e.Position.y === y);
+      ctx.fillStyle = c2 ? CONFIG.colours.aimCreature : CONFIG.colours.aimTile;
+      ctx.fillRect(L.mapX + x * t, L.mapY + y * t, t, t);
+    }
   }
   if (debug) drawNoise(ctx, world, L);
   if (inspect) drawOutline(ctx, L, inspect.x, inspect.y);

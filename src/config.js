@@ -35,9 +35,9 @@ export const CONFIG = {
   //   (refused at full health). weapon: { damage, knockback, noise }: hold it to replace your
   //   bare-hands melee. verb: what the bag's use button says.
   items: {
-    walkingStick: { name: 'walking stick', glyph: '/', colour: '#b08850', size: [1, 8], weapon: { damage: 1, knockback: true, noise: 2 } },
-    cricketBat:   { name: 'cricket bat', glyph: '/', colour: '#e8d8a0', size: [2, 8], weapon: { damage: 2, knockback: true, noise: 2 } },
-    beans:        { name: 'tin of beans', glyph: '%', colour: '#d07030', size: [2, 2], heal: 1, verb: 'EAT' },
+    walkingStick: { name: 'walking stick', glyph: '/', colour: '#b08850', size: [1, 8], weapon: { damage: 1, knockback: true, noise: 2 }, throwDamage: 1 },
+    cricketBat:   { name: 'cricket bat', glyph: '/', colour: '#e8d8a0', size: [2, 8], weapon: { damage: 2, knockback: true, noise: 2 }, throwDamage: 1 },
+    beans:        { name: 'tin of beans', glyph: '%', colour: '#d07030', size: [2, 2], heal: 1, verb: 'EAT', throwDamage: 1 },
     bandage:      { name: 'bandage', glyph: '+', colour: '#f0f0f0', size: [1, 2], heal: 2, verb: 'USE' },
   },
 
@@ -57,6 +57,11 @@ export const CONFIG = {
     searchRadius: 3,      // ...staying within this many tiles of it
     wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
   },
+
+  // Throwing: any item. It lands on a tile you can see in a straight line within `range`
+  // (not into walls), and clatters there (landNoise), so zombies come to look: a lure. A creature
+  // on that tile is hit for the item's throwDamage (default 0) and notices you.
+  throw: { range: 6, landNoise: 2 },
 
   // Shove: push an adjacent creature one tile directly away and stagger it. No damage, unless the
   // tile behind is blocked: then it slams into it and takes slamDamage. Quieter than a hit.
@@ -130,6 +135,9 @@ export const CONFIG = {
     bagCell: '#071450',
     bagUse: '#1f7a3a',
     bagDrop: '#7a1f2b',
+    bagThrow: '#8a5a10',
+    aimTile: 'rgba(255,221,51,0.28)',   // a tile you can throw to
+    aimCreature: 'rgba(255,140,0,0.5)', // ... with a creature on it
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

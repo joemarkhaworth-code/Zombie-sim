@@ -8,11 +8,13 @@ import { updatePlayerView } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
 import { attack, shove, creatureAt, inReach } from './systems/combat.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
+import { throwItem } from './systems/throwing.js';
 
 // Inputs: { type: 'move', dx, dy } (moving is 4-way; into a creature with Health it attacks
 // instead, and attacks reach diagonals too), { type: 'wait' },
 // { type: 'shove', dx, dy } (an adjacent creature, 8 ways), { type: 'pickup' },
-// { type: 'use', itemId }, { type: 'drop', itemId }. Item ids are deterministic from the seed.
+// { type: 'use', itemId }, { type: 'drop', itemId }, { type: 'throw', itemId, x, y }.
+// Item ids are deterministic from the seed.
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
@@ -28,6 +30,8 @@ export function applyInput(world, input) {
     took = useItem(world, p, input.itemId);
   } else if (input.type === 'drop') {
     took = drop(world, p, input.itemId);
+  } else if (input.type === 'throw') {
+    took = throwItem(world, p, input.itemId, input.x, input.y);
   } else if (input.type === 'move' || input.type === 'shove') {
     const dx = Math.sign(input.dx), dy = Math.sign(input.dy);
     if (dx === 0 && dy === 0) return false;

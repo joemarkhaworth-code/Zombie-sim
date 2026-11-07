@@ -95,7 +95,7 @@ export function inBag(holder, itemId) {
   return holder.Inventory.items.some(s => s.id === itemId);
 }
 
-function takeOut(holder, itemId) {
+export function takeOut(holder, itemId) {
   const inv = holder.Inventory;
   if (inv.hand === itemId) { inv.hand = 0; return true; }
   const i = inv.items.findIndex(s => s.id === itemId);

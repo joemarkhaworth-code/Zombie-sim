@@ -9,6 +9,7 @@ import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
 import { drawBag, bagHitAt } from './render/bag.js';
 import { itemsAt } from './sim/systems/items.js';
+import { validThrowTargets } from './sim/systems/throwing.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
@@ -24,12 +25,13 @@ let debug = false;  // tap the top bar: noise heatmap and world time (takes no t
 let shoveArmed = false; // SHOVE pressed: the next map tap picks the direction
 let bagOpen = false;    // BAG panel showing (opening it takes no turn)
 let bagSelected = 0;    // item id tapped in the bag
+let aiming = 0;         // item id being aimed for a throw (THROW in the bag); 0 when not aiming
 let diedAt = 0;     // when the player died (ms), so a fast tapper sees the death screen
 
 function newGame(newSeed) {
   world = createWorld(newSeed);
   log = createMessageLog(world);
-  inspect = null; shoveArmed = false; bagOpen = false; diedAt = 0;
+  inspect = null; shoveArmed = false; bagOpen = false; aiming = 0; diedAt = 0;
   draw();
 }
 
@@ -46,10 +48,10 @@ function resize() {
 function draw() {
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
-  drawMap(ctx, world, layout, inspect, debug);
+  drawMap(ctx, world, layout, inspect, debug, aiming ? validThrowTargets(world, player(world)) : null);
   drawTopBar(ctx, world, layout, log, debug);
   if (bagOpen) drawBag(ctx, world, layout, bagSelected);
-  drawActionBar(ctx, layout, { shoveArmed, bagOpen });
+  drawActionBar(ctx, layout, { shoveArmed, bagOpen, aiming: !!aiming });
   if (world.gameOver) drawDeath(ctx, world, layout);
 }
 
@@ -105,8 +107,19 @@ function tap(px, py) {
     return;
   }
   if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
-  const btn = actionButtonAt(layout, px, py);
+  const btn = actionButtonAt(layout, px, py, aiming ? ['cancel'] : undefined);
   if (btn) return pressButton(btn.id);
+  if (aiming) {
+    // Aiming a throw: tap a highlighted tile. Tapping yourself cancels; anywhere else says so.
+    const t = tileAtPixel(layout, px, py);
+    if (!t) return;
+    const pp = player(world).Position;
+    if (t.x === pp.x && t.y === pp.y) { aiming = 0; draw(); return; }
+    if (!validThrowTargets(world, player(world)).some(v => v.x === t.x && v.y === t.y)) { log.show("Can't throw there."); draw(); return; }
+    const itemId = aiming; aiming = 0;
+    act({ type: 'throw', itemId, x: t.x, y: t.y });
+    return;
+  }
   if (bagOpen) {
     // Tap an item to select it (no turn); use or drop takes a turn and closes the bag so you
     // see what happened.
@@ -114,6 +127,11 @@ function tap(px, py) {
     if (!b) return;
     if (b.action === 'select') { bagSelected = b.itemId; draw(); return; }
     bagOpen = false; bagSelected = 0;
+    if (b.action === 'throw') {
+      // Start aiming (no turn yet). If there's nowhere to throw it, say so.
+      if (!validThrowTargets(world, player(world)).length) { log.show('Nowhere to throw it.'); draw(); return; }
+      aiming = b.itemId; log.show('Tap where to throw it.'); draw(); return;
+    }
     if (b.action === 'use') act({ type: 'use', itemId: b.itemId });
     else if (b.action === 'drop') act({ type: 'drop', itemId: b.itemId });
     else draw();
@@ -147,6 +165,7 @@ function tap(px, py) {
 
 // Action bar buttons. SHOVE arms (takes no turn); pressing it again disarms.
 function pressButton(id) {
+  if (id === 'cancel') { aiming = 0; log.clear(); draw(); return; }
   if (id === 'shove') { shoveArmed = !shoveArmed; bagOpen = false; draw(); }
   if (id === 'bag') { bagOpen = !bagOpen; bagSelected = 0; shoveArmed = false; draw(); }
 }

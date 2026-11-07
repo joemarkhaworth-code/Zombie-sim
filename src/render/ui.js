@@ -63,8 +63,9 @@ export function drawActionBar(ctx, L, ui = {}) {
   const c = CONFIG.colours;
   ctx.fillStyle = c.actionBar;
   ctx.fillRect(0, L.barY, L.cssW, L.barH);
-  for (const b of actionButtons(L)) {
+  for (const b of actionButtons(L, ui.aiming ? ['cancel'] : undefined)) {
     let label = b.id.toUpperCase(), on = false;
+    if (b.id === 'cancel') { on = true; label = 'CANCEL THROW'; }
     if (b.id === 'shove' && ui.shoveArmed) { on = true; label = 'TAP A WAY'; }
     if (b.id === 'bag' && ui.bagOpen) on = true;
     ctx.fillStyle = on ? c.shoveArmed : c.button;

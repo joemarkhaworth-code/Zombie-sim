@@ -10,6 +10,7 @@ const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items.js';
+import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -567,6 +568,47 @@ function check(cond, msg) {
   check(describeTile(w, 5, 5) === "That's you." && (makeItem(w, 'bandage', 5, 5), describeTile(w, 5, 5) === "You're on a bandage."), 'inspecting yourself says what you are on');
 }
 
+// Throwing: any item, up to 6 tiles in a clear line; it clatters where it lands (a lure).
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
+  let w = emptyWorld();
+  const p = player(w); p.Position.x = 2; p.Position.y = 2;
+  updatePlayerView(w);
+  const tin = makeItem(w, 'beans', 2, 2); applyInput(w, { type: 'pickup' });
+  check(canThrowTo(w, p, 2, 8) && !canThrowTo(w, p, 2, 9), 'range 6');
+  check(!canThrowTo(w, p, 0, 2), 'not into a wall');
+  check(validThrowTargets(w, p).every(t => canThrowTo(w, p, t.x, t.y)) && validThrowTargets(w, p).length > 20, 'one rule for targets');
+  w.tiles[2 * w.w + 5] = TILE.WALL; updatePlayerView(w);
+  check(!canThrowTo(w, p, 7, 2), 'not through a wall');
+  // A lure: a zombie round the corner that can't see you hears the tin land and goes to it.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 2; q.Position.y = 2;
+  for (let y = 1; y < 8; y++) w.tiles[y * w.w + 5] = TILE.WALL; // a wall between you and it
+  const z = makeZombie(w, 8, 3);
+  updatePlayerView(w);
+  const tin2 = makeItem(w, 'beans', 2, 2); applyInput(w, { type: 'pickup' });
+  const t0 = w.turn;
+  check(!applyInput(w, { type: 'throw', itemId: tin2.id, x: 9, y: 9 }) && w.turn === t0, 'out of range or sight: refused, no turn');
+  check(applyInput(w, { type: 'throw', itemId: tin2.id, x: 4, y: 7 }) && w.turn === t0 + 1, 'a throw takes a turn');
+  check(itemsAt(w, 4, 7).some(e => e.id === tin2.id) && !carried(q).includes(tin2.id), 'the tin lands there and leaves your bag');
+  check(w.noise[7 * w.w + 4] === CONFIG.noise.radiusByLevel[CONFIG.throw.landNoise], 'it clatters where it lands');
+  check(z.Brain.goal && z.Brain.goal.why === 'heard' && z.Brain.goal.x === 4 && z.Brain.goal.y === 7, 'the zombie heard it and goes to look');
+  // Hitting a zombie: 1 damage, it notices you; the item drops at its feet.
+  w = emptyWorld();
+  const r = player(w); r.Position.x = 5; r.Position.y = 2;
+  const z2 = makeZombie(w, 5, 6);
+  updatePlayerView(w);
+  const tin3 = makeItem(w, 'beans', 5, 2); applyInput(w, { type: 'pickup' });
+  check(applyInput(w, { type: 'throw', itemId: tin3.id, x: 5, y: 6 }), 'throw at the zombie');
+  check(z2.Health.hp === CONFIG.zombie.health - 1 && z2.Brain.tracking === r.id, 'it hits for 1 and the zombie knows where you are');
+  check(itemsAt(w, 5, 6).some(e => e.id === tin3.id), 'the tin drops at its feet');
+  // You can throw what you hold.
+  const stickId = r.Inventory.hand;
+  check(applyInput(w, { type: 'throw', itemId: stickId, x: 2, y: 2 }) && r.Inventory.hand === 0 && itemsAt(w, 2, 2).length === 1, 'you can throw what you hold');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -618,9 +660,9 @@ function check(cond, msg) {
   let crashed = null;
   for (let i = 0; i < 200 && !crashed; i++) {
     try {
-      drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
+      drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0, i % 5 ? null : validThrowTargets(w, player(w)));
       drawTopBar(fake, w, L, log, i % 2 === 0);
-      drawActionBar(fake, L, { shoveArmed: i % 3 === 0, bagOpen: i % 4 === 0 });
+      drawActionBar(fake, L, { shoveArmed: i % 3 === 0, bagOpen: i % 4 === 0, aiming: i % 5 === 0 });
       drawBag(fake, w, L, i % 2 ? player(w).Inventory.hand : (player(w).Inventory.items[0] || {}).id);
       if (w.gameOver) drawDeath(fake, w, L);
     } catch (e) { crashed = e; }
@@ -659,6 +701,7 @@ for (let s = 1; s <= SEEDS; s++) {
       const someItem = inv.length ? inv[r.int(inv.length)] : 0;
       const input = r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy }
         : r.chance(0.04) ? { type: 'pickup' } : (someItem && r.chance(0.05)) ? { type: r.chance(0.5) ? 'use' : 'drop', itemId: someItem }
+        : (someItem && r.chance(0.03)) ? { type: 'throw', itemId: someItem, x: r.int(w.w), y: r.int(w.h) }
         : { type: 'move', dx, dy };
       applyInput(w, input);
       const p = player(w).Position;

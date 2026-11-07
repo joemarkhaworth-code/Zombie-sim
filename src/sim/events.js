@@ -20,6 +20,7 @@
 //   item_picked_up { ..., inHand }  bag_tidied { id }  (the bag was rearranged to make room)
 //   item_used      { id, itemId, type, healed }  item_wielded { id, itemId, swappedId }  item_stowed { id, itemId }
 //   use_refused    { id, itemId, why: 'not_hurt' | 'no_use' | 'no_room' }
+//   item_thrown    { id, itemId, x, y }   thrown_hit { id, itemId, targetId }
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();
