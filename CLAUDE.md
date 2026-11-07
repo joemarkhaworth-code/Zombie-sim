@@ -43,12 +43,10 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 - One step per session. Before finishing, the game must load and be playable, the headless test must pass, and the change must be committed.
 
 ## Controls
-- A Game Boy-style control pad under the map: a d-pad laid out like keyboard arrow keys (inverted T: up on top, left/down/right below) for 4-way movement, two action buttons (A and B), and SELECT and START.
-- Move with the d-pad; hold an arrow to keep walking. Walking into a zombie attacks it, into a door opens it.
-- A and B are the two action buttons (what they do is decided step by step; A waits for now).
-- SELECT opens the bag and the map; START opens the menu (save, new game). Details decided later.
+- Tap an adjacent tile to move or act (attack, open a door). Tap your own tile to wait.
 - Long-press any tile to inspect it in the status bar.
-- Buttons and tiles must be big enough to press easily with a thumb.
+- A thumb-friendly action bar at the bottom: sneak toggle, shove, inventory, and later sleep.
+- Tiles must be big enough to tap easily with a thumb.
 
 ## Architecture rules
 - Simulation is separate from rendering. src/sim/ never touches the DOM or canvas. src/render/ only reads world state.
@@ -139,18 +137,15 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
 (Record decisions from playtesting here.)
 
 ### Step 1 (screen grid, tap to move, turn loop) - built
-- One screen is CONFIG.screen = 11 x 12 tiles: shorter than the phone so the control pad fits underneath (it was 11 x 15 with tap-to-move). The tile size is computed to fit the screen's width and the height left after the top bar (36 px) and the pad (at least ui.padMinHeight = 190 px), so a screen never scrolls (flip-screen). The map sits flush under the top bar and any leftover height goes to the pad. Tiles are 35-39 px on common phones (28 px on a 320 px-wide phone).
+- One screen is CONFIG.screen = 11 x 15 tiles (portrait). The tile size is computed to fit the whole screen between the top bar (36 px) and the action bar (at least 72 px), so a screen never scrolls (flip-screen). The map sits flush under the top bar and any leftover height goes to the action bar, so there are no black bands top or bottom. Tiles are 32-41 px on common phones.
 - No diagonal movement (Zelda-style, 4-way). The sim refuses diagonal moves (no turn), so every creature added later moves 4-way too.
-- Control pad (src/render/layout.js lays it out, ui.js drawPad draws it, main.js handles presses): an inverted-T d-pad on the left, round B and A buttons on the right (A higher, like the old handhelds), SELECT and START pills along the bottom. D-pad buttons are the screen width / 7 (44-64 px), A and B 15% bigger. A press within ui.hitSlop (8 px) of a button counts; nearest centre wins. A held button is drawn lighter.
-- The d-pad moves; holding an arrow keeps walking (first repeat after 350 ms, then every 180 ms; ui.repeatDelayMs / repeatMs). Walking into a wall costs no turn.
-- A waits for now. B, SELECT (bag and map) and START (menu, save, new game) do nothing yet.
-- Tapping the map does nothing (it's kept for long-press inspect, step 3), so stray taps can't move you.
-- Desktop keys: arrows / WASD = d-pad, space or Z = A, X = B, Shift = SELECT, Enter = START.
-- Turn loop (src/sim/turn.js applyInput): the player acts, then endTurn, where the rest of the world will act (scheduler in step 2). Inputs { type: 'move', dx, dy } and { type: 'wait' } that take a turn are recorded in world.inputs; replay(createWorld, seed, inputs) rebuilds a run exactly.
+- Tapping: your own tile waits; any other tile on the map steps one tile up, down, left or right, whichever way the tap is furthest from your tile's centre (measured in pixels, so there are no ties). A slightly-off tap still moves you the way you meant. Walking into a wall costs no turn. Arrow keys / WASD / numpad 8426 and space work on desktop.
+- Turn loop (src/sim/turn.js applyInput): the player acts, then endTurn runs the rest of the world (the scheduler, step 2). Inputs { type: 'move', dx, dy } and { type: 'wait' } that take a turn are recorded in world.inputs; replay(createWorld, seed, inputs) rebuilds a run exactly.
 - Seeded RNG (src/sim/rng.js, mulberry32). ?seed=N in the URL picks the run seed. The test screen (gen/testscreen.js) is a walled room with 10 seeded single-tile rocks.
 - Entities are plain component bags in world.entities; the event bus (src/sim/events.js) lists its event types at the top.
-- Top bar shows the turn (T12) on the left and the seed dimmed on the right.
+- Top bar shows the turn (T12) on the left and the seed dimmed on the right. The action bar is empty until its buttons arrive.
 - Deploy: .github/workflows/pages.yml runs the headless test, stamps imports with the commit for cache-busting, and publishes to GitHub Pages on every push to main.
+- Tried and dropped: a Game Boy-style pad (d-pad, A/B, SELECT/START) under a shorter 11 x 12 screen. Tap-to-move on the bigger screen won.
 
 ### Step 2 (scheduler + one zombie) - built
 - Scheduler (src/sim/scheduler.js) is our own small energy scheduler, not rot.js's: rot.js uses its own global RNG, which would break seed + inputs replay. Each tick every Actor gains `speed` energy; an action costs scheduler.actionCost (100). Actors act in entity-id order, so runs are deterministic. The player's action is spent by input (turn.js endTurn takes 100 energy), then advance() runs ticks until the player can act again. world.tick counts ticks (world time); world.turn counts player actions.

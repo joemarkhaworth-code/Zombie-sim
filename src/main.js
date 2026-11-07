@@ -1,10 +1,10 @@
 // Boot, input, loop.
 import { CONFIG } from './config.js';
-import { createWorld } from './sim/world.js';
+import { createWorld, player } from './sim/world.js';
 import { applyInput } from './sim/turn.js';
-import { computeLayout, buttonAt } from './render/layout.js';
+import { computeLayout, tileAtPixel } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
-import { drawTopBar, drawPad } from './render/ui.js';
+import { drawTopBar, drawActionBar } from './render/ui.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -13,7 +13,6 @@ const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
 const seed = Number.isFinite(urlSeed) ? urlSeed >>> 0 : (Math.random() * 2 ** 32) >>> 0;
 let world = createWorld(seed);
 let layout;
-const held = new Set(); // button ids held down, for highlighting
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -30,60 +29,41 @@ function draw() {
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
   drawMap(ctx, world, layout);
   drawTopBar(ctx, world, layout);
-  drawPad(ctx, layout, held);
+  drawActionBar(ctx, layout);
 }
 
-// What each button does. A waits for now (it becomes the context action later);
-// B, SELECT (bag and map) and START (menu, save, new game) come later.
-function press(id) {
-  const btn = layout.buttons.find(b => b.id === id);
-  if (!btn) return;
-  if (btn.kind === 'dpad') applyInput(world, { type: 'move', dx: btn.dx, dy: btn.dy });
-  else if (id === 'a') applyInput(world, { type: 'wait' });
-}
-
-// Touch: press a button to act; hold a d-pad arrow to keep walking.
-const pointers = new Map(); // pointerId -> { id, timer }
+// Tap your own tile to wait. Tap anywhere else on the map to step one tile up, down, left
+// or right: whichever way is furthest from you, measured in pixels from your tile's centre.
 canvas.addEventListener('pointerdown', ev => {
   ev.preventDefault();
-  const btn = buttonAt(layout, ev.clientX, ev.clientY);
-  if (!btn) return;
-  release(ev.pointerId);
-  const p = { id: btn.id, timer: 0 };
-  pointers.set(ev.pointerId, p);
-  held.add(btn.id);
-  press(btn.id);
-  if (btn.kind === 'dpad') {
-    const repeat = () => { press(btn.id); draw(); p.timer = setTimeout(repeat, CONFIG.ui.repeatMs); };
-    p.timer = setTimeout(repeat, CONFIG.ui.repeatDelayMs);
+  const t = tileAtPixel(layout, ev.clientX, ev.clientY);
+  if (!t) return;
+  const p = player(world).Position;
+  let input;
+  if (t.x === p.x && t.y === p.y) input = { type: 'wait' };
+  else {
+    const ox = ev.clientX - (layout.mapX + (p.x + 0.5) * layout.tile);
+    const oy = ev.clientY - (layout.mapY + (p.y + 0.5) * layout.tile);
+    input = Math.abs(ox) >= Math.abs(oy)
+      ? { type: 'move', dx: Math.sign(ox), dy: 0 }
+      : { type: 'move', dx: 0, dy: Math.sign(oy) };
   }
-  draw();
+  if (applyInput(world, input)) draw();
 });
-function release(pointerId) {
-  const p = pointers.get(pointerId);
-  if (!p) return;
-  clearTimeout(p.timer);
-  pointers.delete(pointerId);
-  if (![...pointers.values()].some(q => q.id === p.id)) held.delete(p.id);
-  draw();
-}
-for (const t of ['pointerup', 'pointercancel', 'pointerleave']) {
-  canvas.addEventListener(t, ev => release(ev.pointerId));
-}
 
-// Keyboard for desktop testing: arrows / WASD = d-pad, space or Z = A, X = B,
-// Shift = SELECT, Enter = START.
+// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait. No diagonals.
 const KEYS = {
-  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
-  w: 'up', s: 'down', a: 'left', d: 'right',
-  ' ': 'a', z: 'a', x: 'b', Shift: 'select', Enter: 'start',
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+  8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0],
 };
 window.addEventListener('keydown', ev => {
-  const id = KEYS[ev.key];
-  if (!id) return;
+  let input = null;
+  if (ev.key === ' ' || ev.key === '.' || ev.key === '5') input = { type: 'wait' };
+  else if (KEYS[ev.key]) input = { type: 'move', dx: KEYS[ev.key][0], dy: KEYS[ev.key][1] };
+  if (!input) return;
   ev.preventDefault();
-  press(id);
-  draw();
+  if (applyInput(world, input)) draw();
 });
 
 window.addEventListener('resize', resize);

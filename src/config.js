@@ -1,22 +1,13 @@
 // All tuning numbers live here. Code reads them from CONFIG, never hard-codes them.
 export const CONFIG = {
   // One screen of the flip-screen world, in tiles. Portrait, sized so tiles stay thumb-sized.
-  // Shorter than the phone so the control pad fits underneath.
-  screen: { w: 11, h: 12 },
+  screen: { w: 11, h: 15 },
 
   // Layout on the phone, in CSS pixels.
   ui: {
     topBarHeight: 36,     // status bar (turn number now, messages from step 3)
-    padMinHeight: 190,    // control pad under the map gets at least this much (and any spare)
+    actionBarHeight: 72,  // thumb-friendly action bar (buttons from step 7)
     minTile: 28,          // never draw tiles smaller than this
-    margin: 16,           // pad's distance from the screen's sides and bottom
-    gap: 6,               // between d-pad buttons
-    button: { min: 44, max: 64, perWidth: 7 }, // d-pad button size = screen width / perWidth, clamped
-    abScale: 1.15,        // A and B are a bit bigger than a d-pad button
-    pill: { h: 30, wScale: 1.4 }, // SELECT / START pills (width = button x wScale)
-    hitSlop: 8,           // a press this close to a button still counts
-    repeatDelayMs: 350,   // hold a d-pad arrow: keeps walking after this...
-    repeatMs: 180,        // ...one step every this often
   },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
@@ -47,11 +38,6 @@ export const CONFIG = {
     topBar: '#111111',
     topBarText: '#ffffff',
     dimText: '#777777',
-    pad: '#0b0b0b',
-    button: '#2a2a2a',
-    buttonPressed: '#555555',
-    buttonText: '#dddddd',
-    abButton: '#7a1f2b',
-    abPressed: '#b0334a',
+    actionBar: '#0b0b0b',
   },
 };
