@@ -2,7 +2,8 @@
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
 
-export function drawMap(ctx, world, L) {
+// inspect: { x, y } of a long-pressed tile to outline, or null.
+export function drawMap(ctx, world, L, inspect) {
   const c = CONFIG.colours, t = L.tile;
   for (let y = 0; y < world.h; y++) {
     for (let x = 0; x < world.w; x++) {
@@ -33,6 +34,12 @@ export function drawMap(ctx, world, L) {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, e.Glyph.colour);
     }
   }
+  if (inspect) drawOutline(ctx, L, inspect.x, inspect.y);
+}
+
+function drawOutline(ctx, L, x, y) {
+  ctx.strokeStyle = CONFIG.colours.inspectOutline; ctx.lineWidth = 2;
+  ctx.strokeRect(L.mapX + x * L.tile + 1, L.mapY + y * L.tile + 1, L.tile - 2, L.tile - 2);
 }
 
 function drawGlyph(ctx, ch, px, py, t, colour) {

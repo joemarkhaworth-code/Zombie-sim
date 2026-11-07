@@ -155,3 +155,12 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
 - Walking into the zombie is blocked and costs no turn (attacking comes in step 8).
 - The test screen gets one zombie (green Z) on open floor 5-9 steps from you (testScreen.zombieDist), placed from the run seed.
 - Tests: one zombie per seed at the right distance; in an empty room it closes one tile every other turn while you wait and stops next to you; it can't be walked into; over 100 random runs it never enters a wall, never moves diagonally or onto you, always reaches you at some point, and replays match (player, zombie, turn and tick).
+
+### Step 3 (status bar + long-press inspect) - built
+- Status bar: one line at the top. Turn number (T12) on the left, then the latest message. Each new player action clears the line. If several things happen in one turn, the most important message wins (danger > blocked > bump > info). Danger messages are yellow. With no message, the seed shows dimmed on the right. Long messages shrink a little to fit a narrow phone.
+- Wording lives only in src/render/messages.js, which subscribes to the sim's events (createMessageLog). The sim emits data only (entity_waited, move_blocked { blockerId }, turn_ended...).
+- Messages so far: "You wait.", "A wall blocks the way." (blocked), "The zombie is in the way." (bump), "The zombie is next to you!" (danger: only when a zombie newly ends a turn next to you, not every turn it stays there). Keep messages under ~30 characters.
+- Long-press: hold still for ui.longPressMs (450 ms) to inspect the tile under your finger: one line in the status bar, a white outline on the tile, and a short buzz where the phone supports it. It takes no turn and isn't recorded. The next action clears it.
+- Because of long-press, a tap now acts when your finger lifts (not when it lands). A finger that slides more than ui.tapSlop (12 px) does nothing.
+- Inspect wording (messages.js describeTile): your own tile "That's you."; a creature or thing on the tile; else the terrain. Dry and short, e.g. "A zombie. Not a people person.", "A stone wall. Solid, at least.", "Bare floor. Seen better days." Until line of sight (step 4) you can inspect anything on the screen.
+- Tests: each message, blocked moves take no turn, the warning only fires on arrival, danger outranks waiting, the inspect lines (all 30 characters or fewer), and inspecting takes no turn.

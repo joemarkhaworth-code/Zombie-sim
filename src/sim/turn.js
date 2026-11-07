@@ -11,6 +11,7 @@ export function applyInput(world, input) {
   const p = player(world);
   let took = false;
   if (input.type === 'wait') {
+    world.events.emit('entity_waited', { id: p.id });
     took = true;
   } else if (input.type === 'move') {
     // Blocked or diagonal: no turn spent. (Walking into a zombie attacks it from step 8.)

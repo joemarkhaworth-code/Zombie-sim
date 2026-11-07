@@ -2,6 +2,7 @@
 // Event types (payloads):
 //   entity_moved   { id, from: {x, y}, to: {x, y} }
 //   move_blocked   { id, x, y, blockerId }  (tried to step onto a wall, or into blockerId; 0 = a wall)
+//   entity_waited  { id }
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();

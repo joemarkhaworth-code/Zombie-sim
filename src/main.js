@@ -5,6 +5,7 @@ import { applyInput } from './sim/turn.js';
 import { computeLayout, tileAtPixel } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar } from './render/ui.js';
+import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -12,7 +13,9 @@ const ctx = canvas.getContext('2d');
 const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
 const seed = Number.isFinite(urlSeed) ? urlSeed >>> 0 : (Math.random() * 2 ** 32) >>> 0;
 let world = createWorld(seed);
+let log = createMessageLog(world);
 let layout;
+let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -27,29 +30,65 @@ function resize() {
 function draw() {
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
-  drawMap(ctx, world, layout);
-  drawTopBar(ctx, world, layout);
+  drawMap(ctx, world, layout, inspect);
+  drawTopBar(ctx, world, layout, log);
   drawActionBar(ctx, layout);
 }
 
-// Tap your own tile to wait. Tap anywhere else on the map to step one tile up, down, left
-// or right: whichever way is furthest from you, measured in pixels from your tile's centre.
+// A player action: clears the status line and any inspect outline, then runs the turn.
+// A blocked move takes no turn but still gets its message.
+function act(input) {
+  log.clear();
+  inspect = null;
+  applyInput(world, input);
+  draw();
+}
+
+// Touch. A quick tap acts on release: tap your own tile to wait, anywhere else on the map to
+// step one tile up, down, left or right (whichever way is furthest from your tile's centre).
+// Hold still for longPressMs to inspect the tile instead: no turn, not recorded.
+let press = null; // { x, y, timer, done }
 canvas.addEventListener('pointerdown', ev => {
   ev.preventDefault();
-  const t = tileAtPixel(layout, ev.clientX, ev.clientY);
+  if (press) clearTimeout(press.timer);
+  const p = { x: ev.clientX, y: ev.clientY, done: false, timer: 0 };
+  p.timer = setTimeout(() => {
+    p.done = true;
+    const t = tileAtPixel(layout, p.x, p.y);
+    if (!t) return;
+    inspect = t;
+    log.show(describeTile(world, t.x, t.y));
+    if (navigator.vibrate) navigator.vibrate(CONFIG.ui.vibrateMs);
+    draw();
+  }, CONFIG.ui.longPressMs);
+  press = p;
+});
+canvas.addEventListener('pointermove', ev => {
+  if (press && !press.done && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > CONFIG.ui.tapSlop) {
+    clearTimeout(press.timer); press = null; // a drag, not a tap
+  }
+});
+canvas.addEventListener('pointerup', ev => {
+  const p = press; press = null;
+  if (!p) return;
+  clearTimeout(p.timer);
+  if (p.done) return; // that was an inspect
+  tap(p.x, p.y);
+});
+canvas.addEventListener('pointercancel', () => { if (press) clearTimeout(press.timer); press = null; });
+canvas.addEventListener('contextmenu', ev => ev.preventDefault());
+
+function tap(px, py) {
+  const t = tileAtPixel(layout, px, py);
   if (!t) return;
   const p = player(world).Position;
-  let input;
-  if (t.x === p.x && t.y === p.y) input = { type: 'wait' };
-  else {
-    const ox = ev.clientX - (layout.mapX + (p.x + 0.5) * layout.tile);
-    const oy = ev.clientY - (layout.mapY + (p.y + 0.5) * layout.tile);
-    input = Math.abs(ox) >= Math.abs(oy)
-      ? { type: 'move', dx: Math.sign(ox), dy: 0 }
-      : { type: 'move', dx: 0, dy: Math.sign(oy) };
-  }
-  if (applyInput(world, input)) draw();
-});
+  if (t.x === p.x && t.y === p.y) return act({ type: 'wait' });
+  const ox = px - (layout.mapX + (p.x + 0.5) * layout.tile);
+  const oy = py - (layout.mapY + (p.y + 0.5) * layout.tile);
+  act(Math.abs(ox) >= Math.abs(oy)
+    ? { type: 'move', dx: Math.sign(ox), dy: 0 }
+    : { type: 'move', dx: 0, dy: Math.sign(oy) });
+}
 
 // Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait. No diagonals.
 const KEYS = {
@@ -63,7 +102,7 @@ window.addEventListener('keydown', ev => {
   else if (KEYS[ev.key]) input = { type: 'move', dx: KEYS[ev.key][0], dy: KEYS[ev.key][1] };
   if (!input) return;
   ev.preventDefault();
-  if (applyInput(world, input)) draw();
+  act(input);
 });
 
 window.addEventListener('resize', resize);

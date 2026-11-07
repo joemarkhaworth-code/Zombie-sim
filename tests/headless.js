@@ -5,6 +5,7 @@ import { applyInput, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
+import { createMessageLog, describeTile, LEVEL } from '../src/render/messages.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -70,6 +71,46 @@ function check(cond, msg) {
   const dx = z.Position.x - p.Position.x, dy = z.Position.y - p.Position.y, t0 = w.turn;
   check(!applyInput(w, { type: 'move', dx, dy }) && w.turn === t0, 'walking into a zombie is blocked, no turn');
   // A zombie that steps next to you can't do anything else that action: you act first.
+  CONFIG.zombie.stagger = saved;
+}
+
+// Status line and inspect.
+{
+  const saved = CONFIG.zombie.stagger; CONFIG.zombie.stagger = 0;
+  const w = emptyWorld();
+  const log = createMessageLog(w);
+  const p = player(w);
+  p.Position.x = 5; p.Position.y = 2;
+  const turn = input => { log.clear(); return applyInput(w, input); };
+  turn({ type: 'wait' });
+  check(log.text === 'You wait.', `waiting says so (got "${log.text}")`);
+  p.Position.y = 1;
+  check(!turn({ type: 'move', dx: 0, dy: -1 }) && log.text === 'A wall blocks the way.', `bumping a wall says so, no turn (got "${log.text}")`);
+  const z = makeZombie(w, 5, 3);
+  turn({ type: 'move', dx: 0, dy: 1 }); // into the zombie's way? it's 2 below: step to y=2, now adjacent
+  check(log.text === 'The zombie is next to you!' && log.level === LEVEL.danger, `zombie next to you is a danger message (got "${log.text}")`);
+  turn({ type: 'wait' });
+  check(log.text === 'You wait.', 'the warning only fires when it newly arrives');
+  check(!turn({ type: 'move', dx: 0, dy: 1 }) && log.text === 'The zombie is in the way.', `bumping the zombie says so (got "${log.text}")`);
+  // Several things in one turn: danger beats the rest.
+  p.Position.x = 8; p.Position.y = 2; z.Position.x = 8; z.Position.y = 5;
+  let arrived = false;
+  for (let i = 0; i < 8 && !arrived; i++) {
+    turn({ type: 'wait' });
+    arrived = dist(z.Position, p.Position) === 1;
+  }
+  check(arrived && log.level === LEVEL.danger && log.text === 'The zombie is next to you!', 'danger outranks "You wait." on the turn it arrives');
+  // Inspect wording: you, the zombie, a wall, the floor; all short enough for a phone.
+  check(describeTile(w, 8, 2) === "That's you.", 'inspect yourself');
+  check(describeTile(w, z.Position.x, z.Position.y).startsWith('A zombie'), 'inspect the zombie');
+  check(describeTile(w, 0, 0).startsWith('A stone wall'), 'inspect a wall');
+  check(describeTile(w, 2, 9).startsWith('Bare floor'), 'inspect the floor');
+  for (const [x, y] of [[8, 2], [z.Position.x, z.Position.y], [0, 0], [2, 9]]) {
+    check(describeTile(w, x, y).length <= 30, `inspect text fits a phone: "${describeTile(w, x, y)}"`);
+  }
+  const t0 = w.turn, n0 = w.inputs.length;
+  describeTile(w, 2, 9);
+  check(w.turn === t0 && w.inputs.length === n0, 'inspecting takes no turn and is not recorded');
   CONFIG.zombie.stagger = saved;
 }
 

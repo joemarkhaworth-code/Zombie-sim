@@ -8,6 +8,10 @@ export const CONFIG = {
     topBarHeight: 36,     // status bar (turn number now, messages from step 3)
     actionBarHeight: 72,  // thumb-friendly action bar (buttons from step 7)
     minTile: 28,          // never draw tiles smaller than this
+    longPressMs: 450,     // hold this long to inspect a tile
+    tapSlop: 12,          // a finger moving further than this isn't a tap
+    vibrateMs: 15,        // short buzz on inspect, where the phone supports it
+    messageFont: 14,      // status bar text size (fits ~30 characters on a phone)
   },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
@@ -38,6 +42,8 @@ export const CONFIG = {
     topBar: '#111111',
     topBarText: '#ffffff',
     dimText: '#777777',
+    dangerText: '#ffdd33',
+    inspectOutline: '#ffffff',
     actionBar: '#0b0b0b',
   },
 };
