@@ -123,13 +123,18 @@ then runs past the industrial estate and out to the south-east.
 - **South and south-west:** woods (with the scout hut and archery range: bows and arrows), the old quarry, and farms
   with barns.
 
-## Scale: a compressed town
+## Scale: small outside, big inside (Pokémon-style)
 
-At true scale (1 tile is about 1.5 m) the whole map is only about 270 m x 420 m; Knaresborough and Wetherby are each
-2-3 km across. So the plan keeps buildings and streets at true scale (CLAUDE.md "Scale") but compresses the town as a
-whole, the way Zelda's Hyrule does. Each district gets a few representative streets rather than all of them: say 6-10
-houses where a real street has 40, and one parade where a real suburb has three. The countryside at the edge is
-compressed further.
+At true scale (1 tile is about 1.5 m) the whole map is only about 270 m x 420 m, while Knaresborough and Wetherby are
+each 2-3 km across. The fix (decided in playtesting) is Pokémon's: buildings are smaller outside than inside.
+
+- **Outside, on the town map,** each building is a shrunk token, about half true size: a terraced house is 3 x 3, a pub
+  6 x 5, the church 6 x 9, a train carriage 2 x 8 (full table in CLAUDE.md, "Scale").
+- **Inside, on separate interior screens,** everything is true scale: a terraced house is a full screen of rooms, and a
+  carriage is a long screen with its one-tile aisle.
+
+So the town map fits a proper town's worth of streets: terrace rows of 8-12 houses rather than 3, several shops on each
+side of the High Street, and real estates of cul-de-sacs. The countryside at the edge is compressed further.
 
 Walking: from the market to the edge of town is about 85 steps east or west (~3 game hours) and about 130 steps north
 or south (~4.5 hours). That's a real trip, with a reason to find a safe house out there before dark.

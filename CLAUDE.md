@@ -33,7 +33,7 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
   4. Suburbs: 1930s semis, 1970s estates and cul-de-sacs, leisure centre, garden centre. Fewer zombies, good safe-house territory.
   5. Edge of town: industrial estate, supermarket, golf course, racecourse, then farmland, woods and farms. Quiet, sparse supplies, good for foraging and farming.
 - Danger and loot are highest in the centre and drop towards the edges.
-- Building interiors are separate screens. Entering through a door switches to the interior; stairs and ladders lead to upstairs and cellar screens. Buildings keep their footprint on the street map; interiors use larger tiles to fill the screen, with room layouts roughly matching the building's size. Doors and windows link inside and outside: noise passes both ways, zombies can follow you in through open or broken doors and windows, barricades are placed from inside, and looking out of a window briefly shows the street. The outside world keeps running while you're indoors.
+- Building interiors are separate screens. Entering through a door switches to the interior; stairs and ladders lead to upstairs and cellar screens. Pokémon-style, buildings are smaller outside than inside: on the town map each is a shrunk token (its front, door and windows), while its interior screens are true scale, with room layouts matching the building's type and real size (see Scale). This covers every building you can enter: houses, shops, pubs, the church, the station and the train's carriages. Doors and windows link inside and outside: noise passes both ways, zombies can follow you in through open or broken doors and windows, barricades are placed from inside, and looking out of a window briefly shows the street. The outside world keeps running while you're indoors.
 
 ## Platform and workflow
 - Offline, single player only. No servers or accounts.
@@ -68,11 +68,14 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 - Shove: one-shot action; pushes an adjacent creature one tile and staggers it (loses its next turn); bumping into something blocked does minor damage.
 
 ## Scale
-1 tile ≈ 1.5 m, about one person. Walls occupy tiles.
-- Objects: bed 1×2, sofa 1×2, table 1×1 or 2×1, car 3×2, van 4×2, tractor 3×2.
-- Buildings (outside, incl. walls): shed 3×3, greenhouse 3×4, terraced house 5×7, semi or farmhouse 7×9, corner shop 6×8, pub 10×12, church 9×18, barn 8×12.
-- Paths: snicket/ginnel 1, pavement 1, lane 2–3, main road 4–5, bridge 3, river 4–6, wall/hedge 1.
-- Buildings and objects are true scale. Open countryside at the edge of town is compressed.
+Two scales, Pokémon-style (playtest decision): buildings are smaller outside than inside.
+- Inside (interior screens): true scale. 1 tile ≈ 1.5 m, about one person. Walls occupy tiles.
+  - Objects: bed 1×2, sofa 1×2, table 1×1 or 2×1.
+  - Buildings (true size, incl. walls): shed 3×3, greenhouse 3×4, terraced house 5×7, semi or farmhouse 7×9, corner shop 6×8, pub 10×12, church 9×18, barn 8×12. Room layouts inside follow these.
+  - A train carriage inside: 5 wide (seat, seat, aisle, seat, seat) × 15 long, a 1-tile aisle.
+- Outside (the town map): buildings are shrunk tokens, about half true size: terraced house 3×3, semi / detached / farmhouse 4×4, corner shop / post office / bank 4×4, pub / coaching inn 6×5, church 6×9, barn 5×6, shed 2×2, greenhouse 2×3, station 8×4, superstore 12×8, factory shed 8×6, train carriage 2×8. Vehicles shrink with them: car 2×1, van 3×1, tractor 2×1. People, zombies and items are always 1 tile.
+- Ways (widths, outside): snicket/ginnel 1, pavement 1, lane 2–3, main road 4–5, bridge 3, river 4–6, wall/hedge 1.
+- Because buildings are small outside, the town map fits a real town's worth of streets; open countryside at the edge of town is compressed further.
 
 ## Materials
 Stone, slate, brick, wood, glass, corrugated metal. Each has HP, flammability, see-through, and noise when hit or broken. Sheds can be wood or corrugated metal.
