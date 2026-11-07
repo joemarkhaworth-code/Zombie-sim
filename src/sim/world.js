@@ -11,17 +11,18 @@ import { makeItem, makeInventory } from './systems/items.js';
 export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
   const [screensX, screensY] = map === 'town' ? CONFIG.world.screens : [1, 1];
-  // Neighbouring screens overlap by world.overlap (2) tiles: step onto a screen's last tile and
-  // the view flips to the next screen, where you're on its second tile with one tile of the old
-  // screen still behind you, so there's always a tile to tap either way.
-  const screenW = CONFIG.screen.w, screenH = CONFIG.screen.h, overlap = CONFIG.world.overlap;
+  // Neighbouring screens overlap: step onto the second-to-last tile of a screen (world.flipAt)
+  // and the view flips to the next screen, where you're landIn (2) tiles in, with the tiles you
+  // just crossed still behind you, so there's always a tile to tap either way.
+  const screenW = CONFIG.screen.w, screenH = CONFIG.screen.h;
+  const overlap = CONFIG.world.flipAt + CONFIG.world.landIn + 1;
   const stepX = screenW - overlap, stepY = screenH - overlap;
   const w = stepX * screensX + overlap, h = stepY * screensY + overlap;
   const world = {
     seed, map,
     rng: createRng(seed),
     events: createEvents(),
-    w, h, screenW, screenH, screensX, screensY, stepX, stepY,
+    w, h, screenW, screenH, screensX, screensY, stepX, stepY, overlap,
     cam: { sx: screensX >> 1, sy: screensY >> 1 }, // the screen you're looking at
     tiles: new Uint8Array(w * h),
     entities: new Map(),  // id -> { id, ...components }
@@ -136,8 +137,8 @@ export function sameScreen(world, a, b) {
   return on(b).some(k => sa.includes(k));
 }
 
-// After you move: step onto the last tile of the screen you're looking at and the view flips to
-// the next screen that way. If you're somehow off the screen (loading, tests), look at your
+// After you move: step onto the flip tile (world.flipAt in from the edge) of the screen you're
+// looking at and the view flips to the next screen that way. If you're somehow off the screen (loading, tests), look at your
 // home screen.
 export function updateCamera(world) {
   const p = world.entities.get(world.playerId);
@@ -149,10 +150,11 @@ export function updateCamera(world) {
     world.cam = { sx: home.sx, sy: home.sy };
     return;
   }
-  if (x === r.ox + world.screenW - 1 && world.cam.sx < world.screensX - 1) world.cam.sx++;
-  else if (x === r.ox && world.cam.sx > 0) world.cam.sx--;
-  if (y === r.oy + world.screenH - 1 && world.cam.sy < world.screensY - 1) world.cam.sy++;
-  else if (y === r.oy && world.cam.sy > 0) world.cam.sy--;
+  const f = CONFIG.world.flipAt;
+  if (x >= r.ox + world.screenW - 1 - f && world.cam.sx < world.screensX - 1) world.cam.sx++;
+  else if (x <= r.ox + f && world.cam.sx > 0) world.cam.sx--;
+  if (y >= r.oy + world.screenH - 1 - f && world.cam.sy < world.screensY - 1) world.cam.sy++;
+  else if (y <= r.oy + f && world.cam.sy > 0) world.cam.sy--;
 }
 
 export function makeZombie(world, x, y) {

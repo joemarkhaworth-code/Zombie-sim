@@ -880,7 +880,7 @@ for (let s = 1; s <= SEEDS; s++) {
   const town = s => createWorld(s, { map: 'town' });
   const a = town(1), b = town(2);
   const [nx, ny] = CONFIG.world.screens;
-  const ov = CONFIG.world.overlap;
+  const ov = CONFIG.world.flipAt + CONFIG.world.landIn + 1, flipAt = CONFIG.world.flipAt, landIn = CONFIG.world.landIn;
   check(a.w === nx * (CONFIG.screen.w - ov) + ov && a.h === ny * (CONFIG.screen.h - ov) + ov,
     `the town is ${nx}x${ny} screens overlapping by ${ov} (${a.w}x${a.h} tiles)`);
   check(a.tiles.every((t, i) => t === b.tiles[i]), 'the layout is the same every run (fixed world seed)');
@@ -917,22 +917,22 @@ for (let s = 1; s <= SEEDS; s++) {
   const row = me.Position.y, cam0 = { ...w.cam };
   for (let x = me.Position.x; x <= camR().ox + w.screenW + 3; x++) w.tiles[row * w.w + x] = TILE.FLOOR;
   updatePlayerView(w);
-  let edgeSeen = false;
+  let lastX = -1;
   for (let i = 0; i < 20 && w.cam.sx === cam0.sx; i++) {
+    lastX = local().x;
     applyInput(w, { type: 'move', dx: 1, dy: 0 });
-    if (w.cam.sx === cam0.sx && local().x === w.screenW - 1) edgeSeen = true;
   }
-  check(w.cam.sx === cam0.sx + 1 && w.cam.sy === cam0.sy, 'stepping onto the last tile flips the view to the next screen');
-  check(!edgeSeen, 'you are never left standing on the outermost tile');
-  check(local().x === ov - 1, `you land ${ov - 1} tiles in on the new screen (${local().x})`);
+  check(w.cam.sx === cam0.sx + 1 && w.cam.sy === cam0.sy, 'walking right flips the view to the next screen');
+  check(lastX === w.screenW - 2 - flipAt, `it flips as you step onto the second-to-last tile (from ${lastX})`);
+  check(local().x === landIn, `you land ${landIn} tiles in on the new screen (${local().x})`);
   check(inView().out === 0 && w.view[row * w.w + camR().ox], 'the tiles behind you (the old screen) are on screen to tap');
   const prevMem = me.Memory.tiles[row * w.w + camR().ox - 4];
   check(prevMem, 'the screen you left stays in your memory');
-  for (let i = 0; i < ov - 2; i++) applyInput(w, { type: 'move', dx: -1, dy: 0 });
-  check(w.cam.sx === cam0.sx + 1, 'stepping back, the view stays put until the outermost tile');
+  for (let i = 0; i < landIn - flipAt - 1; i++) applyInput(w, { type: 'move', dx: -1, dy: 0 });
+  check(w.cam.sx === cam0.sx + 1, 'stepping back, the view stays put until the flip tile');
   applyInput(w, { type: 'move', dx: -1, dy: 0 });
-  check(w.cam.sx === cam0.sx && local().x === w.screenW - ov, `stepping onto it flips you back, ${ov - 1} tiles in (${local().x})`);
-  for (let i = 0; i < ov - 1; i++) applyInput(w, { type: 'move', dx: 1, dy: 0 });
+  check(w.cam.sx === cam0.sx && local().x === w.screenW - 1 - landIn, `stepping onto it flips you back, ${landIn} tiles in (${local().x})`);
+  for (let i = 0; i < landIn - flipAt; i++) applyInput(w, { type: 'move', dx: 1, dy: 0 });
   check(w.cam.sx === cam0.sx + 1, 'and forward again');
   const s1 = camR();
   // A zombie just over the edge (on the old screen, not this one) can't see you, but hears you,
