@@ -1,8 +1,8 @@
-# Brackenby: the town plan (draft for approval)
+# Brackenby: the town plan (approved; scale sample in sample-screen.png)
 
 One fixed town, the same every run (CONFIG.world.seed), designed by hand like a real place rather than generated
-differently each time. This is the plan for step 13. Map: [town-plan.png](town-plan.png). Working names only:
-Brackenby (the town) and the River Kell.
+differently each time. This is the plan for step 13. Map: [town-plan.png](town-plan.png). Scale sample:
+[sample-screen.png](sample-screen.png).
 
 ## What it's drawn from
 
@@ -143,10 +143,11 @@ or south (~4.5 hours). That's a real trip, with a reason to find a safe house ou
 
 ## Questions for you
 
-1. **Where do you start?** I've proposed your own terraced house in the inner town north of the market (the pink box),
-   not the Market Place itself, which should be the most dangerous place on the map.
-2. **Names.** "Brackenby" and "River Kell" are placeholders. Street names would follow the real pattern: High Street,
-   Market Place, Back Lane, Bond End, Briggate, Kirkgate, Waterside, Station Road, York Road, North Road.
+1. ~~Where do you start?~~ Decided: at home, your terraced house in the inner town north of the market (the pink box).
+   You have a reason to head into town, and on the way you see an attack: the danger and the scale of it land straight
+   away. (An opening for later: the reason, and the attack you witness.)
+2. ~~Names~~ Decided: Brackenby and the River Kell. Street names follow the real pattern: High Street, Market Place,
+   Back Lane, Bond End, Briggate, Kirkgate, Waterside, Station Road, York Road, North Road.
 3. ~~The railway~~ Decided: open in 1991, with a passenger train stopped across the viaduct (see the town centre).
 
 ## Sources
