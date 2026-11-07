@@ -52,7 +52,7 @@ export const CONFIG = {
     dimAlpha: [1, 0.5, 0.25, 0], // black over a tile by visibility 0-3
     // How tiles out of sight look: 'black' (nothing), 'dim' (the layout, darkened) or
     // 'dither' (the layout under an 8-bit checker of black). Creatures out of sight are never drawn.
-    shadow: 'black',
+    shadow: 'dither',
     shadowDimAlpha: 0.7,  // 'dim': black over out-of-sight tiles
     ditherPx: 3,          // 'dither': size of each checker square, in CSS pixels
   },
