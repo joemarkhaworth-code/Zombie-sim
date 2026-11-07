@@ -19,9 +19,20 @@ export const CONFIG = {
     repeatMs: 180,        // ...one step every this often
   },
 
+  // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
+  scheduler: { actionCost: 100 },
+
+  player: { speed: 100 },  // one action per tick
+
+  zombie: {
+    speed: 50,            // half speed: acts every other tick
+    stagger: 0.15,        // chance a step goes a random way instead
+  },
+
   // Step 1 test screen: a walled room with a few seeded obstacles.
   testScreen: {
     rocks: 10,            // single wall tiles scattered inside
+    zombieDist: [5, 9],   // the test zombie starts this many steps (4-way) from you
   },
 
   colours: {
@@ -32,6 +43,7 @@ export const CONFIG = {
     wallMark: '#5e5e58',
     player: '#ffdd33',
     playerText: '#000000',
+    zombie: '#6fcf4f',
     topBar: '#111111',
     topBarText: '#ffffff',
     dimText: '#777777',

@@ -1,5 +1,9 @@
-// The turn loop. The player acts, then the rest of the world takes its turn (step 2 adds the scheduler).
-import { tileBlocks, blockerAt, player } from './world.js';
+// The turn loop. The player acts (spending energy), then the scheduler runs the world
+// until the player can act again.
+import { CONFIG } from '../config.js';
+import { player } from './world.js';
+import { advance } from './scheduler.js';
+import { tryStep } from './systems/movement.js';
 
 // Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
 // Returns true if the input took a turn.
@@ -9,17 +13,8 @@ export function applyInput(world, input) {
   if (input.type === 'wait') {
     took = true;
   } else if (input.type === 'move') {
-    const dx = Math.sign(input.dx), dy = Math.sign(input.dy);
-    if ((dx === 0) === (dy === 0)) return false; // standing still or diagonal: not a move
-    const nx = p.Position.x + dx, ny = p.Position.y + dy;
-    if (tileBlocks(world, nx, ny) || blockerAt(world, nx, ny)) {
-      world.events.emit('move_blocked', { id: p.id, x: nx, y: ny }); // no turn spent
-      return false;
-    }
-    const from = { ...p.Position };
-    p.Position.x = nx; p.Position.y = ny;
-    world.events.emit('entity_moved', { id: p.id, from, to: { x: nx, y: ny } });
-    took = true;
+    // Blocked or diagonal: no turn spent. (Walking into a zombie attacks it from step 8.)
+    took = tryStep(world, p, input.dx, input.dy) === 'moved';
   }
   if (took) {
     world.inputs.push({ turn: world.turn, ...input });
@@ -29,7 +24,8 @@ export function applyInput(world, input) {
 }
 
 function endTurn(world) {
-  // The rest of the world acts here (nothing yet).
+  player(world).Actor.energy -= CONFIG.scheduler.actionCost;
+  advance(world);
   world.turn++;
   world.events.emit('turn_ended', { turn: world.turn });
 }

@@ -15,7 +15,8 @@ export function createWorld(seed) {
     entities: new Map(),  // id -> { id, ...components }
     nextId: 1,
     playerId: 0,
-    turn: 0,
+    turn: 0,              // player actions taken
+    tick: 0,              // scheduler ticks (world time)
     inputs: [],           // every player input, in order, for replay
   };
   const start = generateTestScreen(world, CONFIG.testScreen);
@@ -24,10 +25,37 @@ export function createWorld(seed) {
     Glyph: { ch: '@', colour: CONFIG.colours.player },
     Name: { name: 'you' },
     Player: {},
+    Prey: {},
     Blocks: {},
+    Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost },
   });
   world.playerId = player.id;
+  const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
+  if (zpos) makeZombie(world, zpos.x, zpos.y);
   return world;
+}
+
+export function makeZombie(world, x, y) {
+  return addEntity(world, {
+    Position: { x, y },
+    Glyph: { ch: 'Z', colour: CONFIG.colours.zombie },
+    Name: { name: 'zombie' },
+    Zombie: {},
+    Blocks: {},
+    Actor: { speed: CONFIG.zombie.speed, energy: 0, brain: 'shamble' },
+  });
+}
+
+// A random open floor tile within [min, max] steps (4-way distance) of the start.
+function placeTestZombie(world, start, [min, max]) {
+  const spots = [];
+  for (let y = 0; y < world.h; y++) {
+    for (let x = 0; x < world.w; x++) {
+      const d = Math.abs(x - start.x) + Math.abs(y - start.y);
+      if (d >= min && d <= max && !tileBlocks(world, x, y) && !blockerAt(world, x, y)) spots.push({ x, y });
+    }
+  }
+  return spots.length ? spots[world.rng.int(spots.length)] : null;
 }
 
 export function addEntity(world, components) {

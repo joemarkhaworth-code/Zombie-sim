@@ -151,3 +151,12 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
 - Entities are plain component bags in world.entities; the event bus (src/sim/events.js) lists its event types at the top.
 - Top bar shows the turn (T12) on the left and the seed dimmed on the right.
 - Deploy: .github/workflows/pages.yml runs the headless test, stamps imports with the commit for cache-busting, and publishes to GitHub Pages on every push to main.
+
+### Step 2 (scheduler + one zombie) - built
+- Scheduler (src/sim/scheduler.js) is our own small energy scheduler, not rot.js's: rot.js uses its own global RNG, which would break seed + inputs replay. Each tick every Actor gains `speed` energy; an action costs scheduler.actionCost (100). Actors act in entity-id order, so runs are deterministic. The player's action is spent by input (turn.js endTurn takes 100 energy), then advance() runs ticks until the player can act again. world.tick counts ticks (world time); world.turn counts player actions.
+- Speeds: player 100 (one action a tick), zombie 50 (acts every other tick). So a zombie that steps next to you can't also act: you get to act first.
+- Movement is one shared rule for everything (src/sim/systems/movement.js tryStep): 4-way only, refused into walls, blockers (anything with Blocks) and off the map. Emits entity_moved / move_blocked { blockerId }.
+- Zombie brain (src/sim/systems/shamble.js): a greedy 4-way step toward the nearest entity with a Prey component (the player has Prey; later animals or NPCs can too). It tries the longer axis first, then the shorter one; equal distances pick an axis at random. zombie.stagger (15%) of its steps go a random open way instead, which also shakes it loose when it's stuck behind a rock. Next to its prey it does nothing yet (biting is step 8). It always knows where you are until line of sight (step 4). Proper pathfinding waits until it's needed.
+- Walking into the zombie is blocked and costs no turn (attacking comes in step 8).
+- The test screen gets one zombie (green Z) on open floor 5-9 steps from you (testScreen.zombieDist), placed from the run seed.
+- Tests: one zombie per seed at the right distance; in an empty room it closes one tile every other turn while you wait and stops next to you; it can't be walked into; over 100 random runs it never enters a wall, never moves diagonally or onto you, always reaches you at some point, and replays match (player, zombie, turn and tick).
