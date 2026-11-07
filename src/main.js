@@ -79,13 +79,56 @@ function draw() {
 // A player action: clears the status line and any inspect outline, then runs the turn.
 // A blocked move takes no turn but still gets its message.
 function act(input) {
+  endScroll();
   log.clear();
   inspect = null;
+  const camBefore = { ...world.cam };
+  const oldMap = captureMap(); // the screen as it was, in case the view flips
   const took = applyInput(world, input);
   if (world.gameOver) { if (!diedAt) diedAt = performance.now(); store.clear(); }
   else store.set(saveWorld(world));
   draw();
+  const dx = world.cam.sx - camBefore.sx, dy = world.cam.sy - camBefore.sy;
+  if ((dx || dy) && CONFIG.ui.scrollMs > 0) startScroll(oldMap, dx, dy);
   return took;
+}
+
+// Scrolling between screens (render only, Zelda-style): when the view flips, the old screen
+// slides out and the new one slides in over ui.scrollMs. Both are pictures of the map area;
+// screens overlap, so they slide by a screen's step, not its full size. A tap during the slide
+// finishes it at once (and still counts).
+let scroll = null; // { oldMap, newMap, dx, dy, start }
+function captureMap() {
+  const dpr = window.devicePixelRatio || 1;
+  const c = document.createElement('canvas');
+  c.width = Math.round(layout.mapW * dpr); c.height = Math.round(layout.mapH * dpr);
+  c.getContext('2d').drawImage(canvas, layout.mapX * dpr, layout.mapY * dpr, c.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
+function startScroll(oldMap, dx, dy) {
+  scroll = { oldMap, newMap: captureMap(), dx, dy, start: performance.now() };
+  requestAnimationFrame(scrollFrame);
+}
+function scrollFrame(now) {
+  if (!scroll) return;
+  const f = Math.min(1, (now - scroll.start) / CONFIG.ui.scrollMs);
+  if (f >= 1) { endScroll(); return; }
+  const e = f < 0.5 ? 2 * f * f : 1 - 2 * (1 - f) * (1 - f); // ease in and out
+  const L = layout, stepX = world.stepX * L.tile, stepY = world.stepY * L.tile;
+  const panX = scroll.dx * stepX * e, panY = scroll.dy * stepY * e;
+  draw();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(L.mapX, L.mapY, L.mapW, L.mapH); ctx.clip();
+  ctx.fillStyle = CONFIG.colours.background; ctx.fillRect(L.mapX, L.mapY, L.mapW, L.mapH);
+  ctx.drawImage(scroll.oldMap, L.mapX - panX, L.mapY - panY, L.mapW, L.mapH);
+  ctx.drawImage(scroll.newMap, L.mapX + scroll.dx * stepX - panX, L.mapY + scroll.dy * stepY - panY, L.mapW, L.mapH);
+  ctx.restore();
+  requestAnimationFrame(scrollFrame);
+}
+function endScroll() {
+  if (!scroll) return;
+  scroll = null;
+  draw();
 }
 
 // Touch. A quick tap acts on release: tap your own tile to wait, anywhere else on the map to
@@ -123,6 +166,7 @@ canvas.addEventListener('pointercancel', () => { if (press) clearTimeout(press.t
 canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 
 function tap(px, py) {
+  endScroll();
   if (world.gameOver) {
     // Ignore taps for a moment so a fast tapper sees the death screen, then start again.
     if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame(randomSeed());

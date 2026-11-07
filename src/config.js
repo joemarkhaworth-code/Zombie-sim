@@ -27,6 +27,7 @@ export const CONFIG = {
     vibrateMs: 15,        // short buzz on inspect, where the phone supports it
     messageFont: 14,      // status bar text size (fits ~30 characters on a phone)
     deathTapDelayMs: 1000, // taps are ignored this long after death, so you see the screen
+    scrollMs: 260,        // the slide between screens (0 = an instant cut)
   },
 
   // Time runs on scheduler ticks, so slow actions take longer. A run starts at 08:00 on day 1,
