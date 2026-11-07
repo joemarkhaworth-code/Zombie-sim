@@ -1,6 +1,6 @@
 // Boot, input, loop.
 import { CONFIG } from './config.js';
-import { createWorld, player, edgeExits } from './sim/world.js';
+import { createWorld, player } from './sim/world.js';
 import { applyInput } from './sim/turn.js';
 import { creatureAt } from './sim/systems/combat.js';
 import { canNotice } from './sim/systems/vision.js';
@@ -160,23 +160,13 @@ function tap(px, py) {
     return;
   }
   const cam = camera(world);
+  const t = tileAtPixel(layout, px, py, cam);
+  if (!t) return;
   const p = player(world).Position;
+  const self = t.x === p.x && t.y === p.y;
   const ox = px - (layout.mapX + (p.x - cam.ox + 0.5) * layout.tile);
   const oy = py - (layout.mapY + (p.y - cam.oy + 0.5) * layout.tile);
   let [dx, dy] = Math.abs(ox) >= Math.abs(oy) ? [Math.sign(ox), 0] : [0, Math.sign(oy)];
-  const t = tileAtPixel(layout, px, py, cam);
-  if (!t) {
-    // The thin strips either side of the map count as taps that way (beside the map's rows).
-    if (py >= layout.mapY && py < layout.mapY + layout.mapH && !aiming && !shoveArmed) act({ type: 'move', dx, dy });
-    return;
-  }
-  const self = t.x === p.x && t.y === p.y;
-  // On a screen edge there's no tile beyond to tap: tapping the outer half of your own tile
-  // (where the arrow is) steps off the screen. The inner half still waits.
-  if (self && !shoveArmed && edgeExits(world, player(world)).some(([ex, ey]) => ex === dx && ey === dy)) {
-    act({ type: 'move', dx, dy });
-    return;
-  }
   // Tapping a creature you can see diagonally next to you hits (or shoves) it: attacks reach
   // 8 ways, movement is 4-way.
   const tx = t.x - p.x, ty = t.y - p.y;

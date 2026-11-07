@@ -13,7 +13,7 @@ import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
 import { saveWorld, loadWorld } from '../src/sim/save.js';
 import { dayOf, clockOf, daysSurvived } from '../src/sim/time.js';
-import { screenOf, edgeExits } from '../src/sim/world.js';
+import { screenOf } from '../src/sim/world.js';
 import { isActive } from '../src/sim/scheduler.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
@@ -910,7 +910,6 @@ for (let s = 1; s <= SEEDS; s++) {
   const s0 = screenOf(w, me.Position.x, me.Position.y);
   const inView = () => { let n = 0, out = 0; const c = screenOf(w, me.Position.x, me.Position.y); for (let i = 0; i < w.view.length; i++) if (w.view[i]) { n++; const x = i % w.w, y = (i / w.w) | 0; if (x < c.ox || x >= c.ox + w.screenW || y < c.oy || y >= c.oy + w.screenH) out++; } return { n, out }; };
   check(inView().n > 0 && inView().out === 0, 'you see only your own screen');
-  check(edgeExits(w, me).length === 0, 'in the middle of a screen there is no way off it');
   // Clear a corridor to the right edge, then walk across it.
   const row = me.Position.y;
   for (let x = me.Position.x; x <= s0.ox + w.screenW + 2; x++) w.tiles[row * w.w + x] = TILE.FLOOR;
@@ -919,7 +918,6 @@ for (let s = 1; s <= SEEDS; s++) {
   while (screenOf(w, me.Position.x, me.Position.y).sx === s0.sx && steps++ < 20) applyInput(w, { type: 'move', dx: 1, dy: 0 });
   const s1 = screenOf(w, me.Position.x, me.Position.y);
   check(s1.sx === s0.sx + 1 && s1.sy === s0.sy, 'walking off the right edge puts you on the next screen');
-  check(edgeExits(w, me).some(([dx, dy]) => dx === -1 && dy === 0), 'standing on the new screen\'s left edge, you can go back left (touch shows an arrow)');
   check(inView().out === 0 && w.view[row * w.w + s1.ox], 'the view flips to the new screen');
   check(me.Memory.tiles[row * w.w + s0.ox + 3], 'the screen you left stays in your memory');
   // A zombie just over the edge can't see you, but hears you, and can follow you across.
