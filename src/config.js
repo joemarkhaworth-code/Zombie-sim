@@ -51,6 +51,7 @@ export const CONFIG = {
   zombie: {
     speed: 50,            // half speed: acts every other tick
     stagger: 0.15,        // chance a step goes a random way instead
+    pathLimit: 400,       // route-finding looks at most this many tiles (a screen is 165)
     eyesight: 2,          // 0-3: poor eyes, so you usually see them first
     hearing: 3,           // 0-3: good ears
     footsteps: 0,         // shuffles quietly

@@ -8,7 +8,7 @@
 //   4. Nothing to do: stand about, now and then shuffling a random way.
 //   Overriding these: a loud noise (zombie.distractLevel) distracts it for distractActions moves:
 //   it heads for the noise even if it can see you, unless you're within glimpseRange.
-// Steps are greedy and 4-way, with a small random stagger. Next to its
+// Steps follow the shortest 4-way route round walls (stepToward), with a small random stagger. Next to its
 // prey (8 ways, like yours) a zombie bites, but never on the action it first spots you.
 import { CONFIG } from '../../config.js';
 import { tileBlocks, blockerAt } from '../world.js';
@@ -43,14 +43,54 @@ function randomStep(world, e, keep) {
   return tryStep(world, e, dx, dy) === 'moved';
 }
 
-// One greedy 4-way step toward (tx, ty): the longer axis first, then the shorter one
-// (equal: random). Returns true if it moved.
+// One 4-way step toward (tx, ty) along the shortest route round walls (a small breadth-first
+// search, zombie.pathLimit tiles at most). Creatures only count as in the way right next to the
+// zombie, so it doesn't plan round someone who'll have moved. The goal tile itself may be
+// occupied (that's usually you). If there's no route, a plain greedy step. Returns true if it moved.
 export function stepToward(world, e, tx, ty) {
+  const { x, y } = e.Position;
+  if (x === tx && y === ty) return false;
+  const first = firstStep(world, e, tx, ty);
+  if (first) return tryStep(world, e, first[0], first[1]) === 'moved';
+  return greedyStep(world, e, tx, ty);
+}
+
+function firstStep(world, e, tx, ty) {
+  const { w } = world, sx = e.Position.x, sy = e.Position.y;
+  const start = sy * w + sx, goal = ty * w + tx;
+  const from = new Map([[start, -1]]);
+  const queue = [start];
+  // Shuffle the direction order once (seeded), so equal routes don't always bend the same way.
+  const dirs = DIRS.slice();
+  for (let i = dirs.length - 1; i > 0; i--) { const j = world.rng.int(i + 1); [dirs[i], dirs[j]] = [dirs[j], dirs[i]]; }
+  let found = false;
+  for (let qi = 0; qi < queue.length && queue.length <= CONFIG.zombie.pathLimit; qi++) {
+    const i = queue[qi];
+    if (i === goal) { found = true; break; }
+    const cx = i % w, cy = (i / w) | 0;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx, ny = cy + dy, j = ny * w + nx;
+      if (from.has(j) || tileBlocks(world, nx, ny)) continue;
+      if (j !== goal && i === start && blockerAt(world, nx, ny)) continue; // someone right next to it
+      from.set(j, i);
+      queue.push(j);
+    }
+  }
+  if (!found && !from.has(goal)) return null;
+  // Walk back to the step after the start.
+  let i = goal;
+  while (from.get(i) !== start) { i = from.get(i); if (i === undefined || i === -1) return null; }
+  const nx = i % w, ny = (i / w) | 0;
+  if (blockerAt(world, nx, ny)) return null; // the goal is right next to it and taken (that's you)
+  return [nx - sx, ny - sy];
+}
+
+// The old greedy step: the longer axis first, then the shorter one (equal: random).
+function greedyStep(world, e, tx, ty) {
   const { x, y } = e.Position;
   const ox = tx - x, oy = ty - y;
   const horiz = [Math.sign(ox), 0], vert = [0, Math.sign(oy)];
   let order;
-  if (ox === 0 && oy === 0) return false;
   if (ox === 0) order = [vert];
   else if (oy === 0) order = [horiz];
   else if (Math.abs(ox) > Math.abs(oy)) order = [horiz, vert];
@@ -130,7 +170,10 @@ export function shamble(world, e) {
   }
   if (b.search) {
     const s = b.search;
-    randomStep(world, e, (x, y) => Math.abs(x - s.x) <= cfg.searchRadius && Math.abs(y - s.y) <= cfg.searchRadius);
+    const near = (x, y) => Math.abs(x - s.x) <= cfg.searchRadius && Math.abs(y - s.y) <= cfg.searchRadius;
+    // Outside the search area (it couldn't get there): head back toward it, don't freeze.
+    if (!near(e.Position.x, e.Position.y)) stepToward(world, e, s.x, s.y);
+    else randomStep(world, e, near);
     if (--s.left <= 0) {
       b.search = null;
       world.events.emit('search_gave_up', { id: e.id });

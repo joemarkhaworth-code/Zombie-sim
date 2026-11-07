@@ -707,6 +707,39 @@ function check(cond, msg) {
   check(deathText({ cause: 'bite', killerName: 'zombie', heldName: '', turn: 0 }, 0) === 'Bitten by a zombie, empty-handed.', 'empty-handed');
 }
 
+// Route-finding: zombies go round walls instead of freezing when the direct steps are blocked.
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
+  const w = emptyWorld();
+  const p = player(w); p.Position.x = 1; p.Position.y = 1;
+  // A wall across the room with one gap far to the right; the zombie hears a noise on the other side.
+  for (let x = 1; x < w.w - 1; x++) if (x !== 9) w.tiles[7 * w.w + x] = TILE.WALL;
+  // And a nook: walls left and below the zombie, so its direct steps toward the noise are blocked.
+  w.tiles[10 * w.w + 2] = TILE.WALL; w.tiles[11 * w.w + 3] = TILE.WALL;
+  const z = makeZombie(w, 3, 10);
+  z.Vision.eyesight = 0; // it follows the noise only, not the sight of you
+  updatePlayerView(w);
+  makeNoise(w, 2, 4, 3);
+  let reached = false, frozen = 0, last = '';
+  for (let i = 0; i < 60 && !reached; i++) {
+    applyInput(w, { type: 'wait' });
+    const k = `${z.Position.x},${z.Position.y}`;
+    frozen = k === last ? frozen + 1 : 0; last = k;
+    if (frozen >= 4) break;
+    reached = Math.abs(z.Position.x - 2) + Math.abs(z.Position.y - 4) <= 1;
+  }
+  check(reached, `a zombie finds its way round a wall to a noise (got to ${z.Position.x},${z.Position.y})`);
+  // Searching from outside its search area: it heads back instead of standing still.
+  const w2 = emptyWorld();
+  const z2 = makeZombie(w2, 9, 12);
+  z2.Brain.search = { x: 2, y: 2, left: 10 };
+  const start = dist(z2.Position, { x: 2, y: 2 });
+  for (let i = 0; i < 6; i++) applyInput(w2, { type: 'wait' });
+  check(dist(z2.Position, { x: 2, y: 2 }) < start, 'a zombie outside its search area walks back to it');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
