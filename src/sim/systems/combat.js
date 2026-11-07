@@ -8,6 +8,14 @@
 import { CONFIG } from '../../config.js';
 import { tileBlocks, blockerAt, addEntity } from '../world.js';
 import { makeNoise } from './noise.js';
+import { lineClear } from './vision.js';
+
+// Attacks and shoves reach all 8 neighbours (movement is 4-way), but not through a gap
+// squeezed between two walls meeting at a corner (the same rule as sight).
+export function inReach(world, a, b) {
+  const dx = Math.abs(a.Position.x - b.Position.x), dy = Math.abs(a.Position.y - b.Position.y);
+  return dx <= 1 && dy <= 1 && dx + dy > 0 && lineClear(world, a.Position.x, a.Position.y, b.Position.x, b.Position.y);
+}
 
 export function stagger(world, e, actions) {
   if (!e.Actor) return;

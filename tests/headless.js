@@ -385,6 +385,26 @@ function check(cond, msg) {
   const t0 = w.turn;
   check(!applyInput(w, { type: 'wait' }) && w.turn === t0, 'after death nothing takes a turn');
   check(deathTextOf(w) === 'Bitten by a zombie.', 'cause of death');
+  // Attacks reach 8 ways: you hit diagonally, it bites diagonally; not through a squeezed corner.
+  w = emptyWorld();
+  const dg = player(w); dg.Position.x = 5; dg.Position.y = 5;
+  const zd = makeZombie(w, 6, 6);
+  check(applyInput(w, { type: 'move', dx: 1, dy: 1 }) && zd.Health.hp === CONFIG.zombie.health - 1, 'you hit a zombie diagonally');
+  check(zd.Position.x === 7 && zd.Position.y === 7 && dg.Position.x === 5, 'it is knocked back diagonally; you stay put');
+  const t2 = w.turn;
+  check(!applyInput(w, { type: 'move', dx: -1, dy: -1 }) && w.turn === t2 && dg.Position.x === 5, 'a diagonal with nothing there: no move, no turn');
+  w = emptyWorld();
+  const db = player(w); db.Position.x = 5; db.Position.y = 5;
+  makeZombie(w, 6, 6);
+  for (let i = 0; i < 6; i++) applyInput(w, { type: 'wait' });
+  check(db.Health.hp < db.Health.max, 'a zombie bites you diagonally');
+  w = emptyWorld();
+  const dc = player(w); dc.Position.x = 5; dc.Position.y = 5;
+  w.tiles[5 * w.w + 6] = TILE.WALL; w.tiles[6 * w.w + 5] = TILE.WALL; // two walls meeting at the corner
+  const zc = makeZombie(w, 6, 6);
+  check(!applyInput(w, { type: 'move', dx: 1, dy: 1 }) && zc.Health.hp === CONFIG.zombie.health, 'no hitting through a squeezed corner');
+  for (let i = 0; i < 6; i++) applyInput(w, { type: 'wait' });
+  check(dc.Health.hp === dc.Health.max, 'nor biting through one');
   // Shove: pushed and staggered, unhurt; into a wall it slams and takes half a heart's worth.
   w = emptyWorld();
   const u = player(w); u.Position.x = 5; u.Position.y = 3;
@@ -408,7 +428,7 @@ function check(cond, msg) {
     me.Position.x = 5; me.Position.y = 3;
     const foe = makeZombie(f, 5, 7);
     for (let k = 0; k < 200 && !f.gameOver && f.entities.has(foe.id); k++) {
-      const d = dist(foe.Position, me.Position);
+      const d = Math.max(Math.abs(foe.Position.x - me.Position.x), Math.abs(foe.Position.y - me.Position.y));
       if (d === 1) applyInput(f, { type: 'move', dx: Math.sign(foe.Position.x - me.Position.x), dy: Math.sign(foe.Position.y - me.Position.y) });
       else applyInput(f, { type: 'wait' });
     }
@@ -426,7 +446,7 @@ function check(cond, msg) {
       const me = player(f); me.Position.x = 5; me.Position.y = 7;
       const foes = spots.map(([x, y]) => makeZombie(f, x, y));
       for (let k = 0; k < 300 && !f.gameOver && foes.some(z => f.entities.has(z.id)); k++) {
-        const near = foes.find(z => f.entities.has(z.id) && dist(z.Position, me.Position) === 1);
+        const near = foes.find(z => f.entities.has(z.id) && Math.max(Math.abs(z.Position.x - me.Position.x), Math.abs(z.Position.y - me.Position.y)) === 1);
         if (near) applyInput(f, { type: 'move', dx: Math.sign(near.Position.x - me.Position.x), dy: Math.sign(near.Position.y - me.Position.y) });
         else applyInput(f, { type: 'wait' });
       }
@@ -536,8 +556,8 @@ for (let s = 1; s <= SEEDS; s++) {
       last = { ...p };
       if (!w.entities.has(z.id)) continue; // killed
       if (tileBlocks(w, z.Position.x, z.Position.y)) { check(false, `seed ${s}: zombie in a wall`); break; }
-      // A step plus a knockback in one turn can move it 2 tiles; never more.
-      if (dist(z.Position, zlast) > 2) { check(false, `seed ${s}: zombie jumped`); break; }
+      // A step plus a (maybe diagonal) knockback in one turn moves it at most 2 tiles each way.
+      if (Math.max(Math.abs(z.Position.x - zlast.x), Math.abs(z.Position.y - zlast.y)) > 2) { check(false, `seed ${s}: zombie jumped`); break; }
       if (z.Position.x === p.x && z.Position.y === p.y) { check(false, `seed ${s}: zombie on the player`); break; }
       zlast = { ...z.Position };
       closest = Math.min(closest, dist(z.Position, p));

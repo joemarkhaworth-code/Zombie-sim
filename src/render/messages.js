@@ -51,7 +51,7 @@ export function createMessageLog(world) {
     for (const e of world.entities.values()) {
       if (!e.Zombie || !e.Position) continue;
       if (canNotice(world, p, e)) seen.add(e.id);
-      if (Math.abs(e.Position.x - p.Position.x) + Math.abs(e.Position.y - p.Position.y) === 1) now.add(e.id);
+      if (Math.max(Math.abs(e.Position.x - p.Position.x), Math.abs(e.Position.y - p.Position.y)) === 1) now.add(e.id);
     }
     for (const id of seen) if (!log.inView.has(id)) log.say('A zombie comes into view.', LEVEL.info);
     for (const id of now) if (!log.adjacent.has(id)) log.say('The zombie is next to you!', LEVEL.danger);

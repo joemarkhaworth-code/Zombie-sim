@@ -6,10 +6,11 @@ import { advance } from './scheduler.js';
 import { tryStep } from './systems/movement.js';
 import { updatePlayerView } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
-import { attack, shove, creatureAt } from './systems/combat.js';
+import { attack, shove, creatureAt, inReach } from './systems/combat.js';
 
-// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals; into a creature with
-// Health it attacks instead), { type: 'wait' }, { type: 'shove', dx, dy } (an adjacent creature).
+// Inputs: { type: 'move', dx, dy } (moving is 4-way; into a creature with Health it attacks
+// instead, and attacks reach diagonals too), { type: 'wait' },
+// { type: 'shove', dx, dy } (an adjacent creature, 8 ways).
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
@@ -21,8 +22,11 @@ export function applyInput(world, input) {
     took = true;
   } else if (input.type === 'move' || input.type === 'shove') {
     const dx = Math.sign(input.dx), dy = Math.sign(input.dy);
-    if ((dx === 0) === (dy === 0)) return false; // standing still or diagonal
-    const target = creatureAt(world, p.Position.x + dx, p.Position.y + dy);
+    if (dx === 0 && dy === 0) return false;
+    // Attacks and shoves reach 8 ways; moving is 4-way only.
+    let target = creatureAt(world, p.Position.x + dx, p.Position.y + dy);
+    if (target && !inReach(world, p, target)) target = null;
+    if (dx !== 0 && dy !== 0 && !target) return false; // a diagonal with nothing to hit: no turn
     if (input.type === 'shove') {
       if (!target) return false; // nothing to shove: no turn
       shove(world, p, target);

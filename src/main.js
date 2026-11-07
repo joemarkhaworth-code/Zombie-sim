@@ -2,6 +2,8 @@
 import { CONFIG } from './config.js';
 import { createWorld, player } from './sim/world.js';
 import { applyInput } from './sim/turn.js';
+import { creatureAt } from './sim/systems/combat.js';
+import { canNotice } from './sim/systems/vision.js';
 import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
@@ -106,7 +108,14 @@ function tap(px, py) {
   const self = t.x === p.x && t.y === p.y;
   const ox = px - (layout.mapX + (p.x + 0.5) * layout.tile);
   const oy = py - (layout.mapY + (p.y + 0.5) * layout.tile);
-  const [dx, dy] = Math.abs(ox) >= Math.abs(oy) ? [Math.sign(ox), 0] : [0, Math.sign(oy)];
+  let [dx, dy] = Math.abs(ox) >= Math.abs(oy) ? [Math.sign(ox), 0] : [0, Math.sign(oy)];
+  // Tapping a creature you can see diagonally next to you hits (or shoves) it: attacks reach
+  // 8 ways, movement is 4-way.
+  const tx = t.x - p.x, ty = t.y - p.y;
+  if (Math.abs(tx) === 1 && Math.abs(ty) === 1) {
+    const c = creatureAt(world, t.x, t.y);
+    if (c && canNotice(world, player(world), c)) [dx, dy] = [tx, ty];
+  }
   if (shoveArmed) {
     // Armed: this tap picks the direction. Tapping yourself cancels; nothing there cancels too.
     shoveArmed = false;
