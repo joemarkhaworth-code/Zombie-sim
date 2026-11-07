@@ -26,6 +26,15 @@ density, no arrivals, no landmarks, no reason for routes.
 3. **Loon Lake**, the lake village under the mountains: summer cabins, the lodge, boathouse and marina.
 4. **Apple Hill**, the farm village: farms, barns, orchards, the feed store, the grange hall. You start at home here.
 5. **Cooper's Corner**, the crossroads on Route 9: gas station, motel, bar, the drive-in.
+6. **Spruce Hollow**, the logging town up north: sawmill, lumber yard, bunkhouse, company store, the gun shop.
+   The logging camp is beyond its padlocked gate.
+7. **Ledgeview**, the quarry village in the south: granite sheds, the Odd Fellows hall, the school, the church.
+
+## Finds in the woods (about a screen each, on trails)
+
+A hunting camp (three cabins), the hermit's cabin, a ranger cabin on the lake shore, a sugar shack, a trapper's
+cabin, a cabin colony in the pines, the town dump, a campground left in a hurry, a radio tower, a hilltop cemetery,
+an abandoned farmhouse, a crashed light aircraft, a fishing shack on Mud Pond, a boarded-up roadside motel.
 
 ## Between them
 

@@ -54,7 +54,7 @@ box(d, 22, 228, 34, 238, '#4a86c8')
 box(d, 78, 222, 102, 238, '#6f8a5a')
 for k in range(30):
     x, y = rnd.randrange(80, 100), rnd.randrange(224, 236); box(d, x, y, x + 2, y + 0.6, '#4a86c8')
-box(d, 62, 246, 80, 258, '#b8ad98', '#7a7060', 2)
+box(d, 40, 246, 56, 262, '#b8ad98', '#7a7060', 2)
 box(d, 110, 58, 126, 72, '#6a8a50')
 # Farmland round Apple Hill: rectangular fields; orchard rows.
 box(d, 0, 146, 64, 210, '#b9c97e')
@@ -77,6 +77,8 @@ PLACES = [
     ((66, 58, 90, 84), '#e2c28e', 'LOON LAKE'),
     ((16, 158, 46, 190), '#e8d29a', 'APPLE HILL'),
     ((140, 96, 162, 114), '#dcb98a', "COOPER'S CORNER"),
+    ((152, 58, 176, 86), '#c9a87a', 'SPRUCE HOLLOW'),
+    ((60, 242, 86, 266), '#d8c6a8', 'LEDGEVIEW'),
 ]
 for (x0, y0, x1, y1), col, _ in PLACES:
     box(d, x0, y0, x1, y1, col, '#6a4a2a', 2)
@@ -92,6 +94,14 @@ way(d, [(16, 170), (46, 170)], 3, grey); way(d, [(30, 158), (30, 190)], 2, grey)
 for (x, y) in [(18, 160), (38, 178), (18, 180)]: box(d, x, y, x + 5, y + 6, '#a8382a', '#5a1a10')   # barns
 way(d, [(140, 104), (162, 104)], 3, grey); way(d, [(151, 96), (151, 114)], 3, grey)       # the crossroads
 box(d, 154, 107, 161, 113, '#333', '#999')                                               # the drive-in
+way(d, [(152, 72), (176, 72)], 3, grey); way(d, [(164, 58), (164, 86)], 3, grey)          # Spruce Hollow
+box(d, 167, 76, 175, 84, '#b08a5a', '#5a3a1a'); box(d, 154, 60, 161, 66, '#7a5a3a', '#3a2a1a')   # lumber yard, sawmill
+way(d, [(60, 254), (86, 254)], 3, grey); way(d, [(72, 242), (72, 266)], 2, grey)          # Ledgeview
+box(d, 62, 244, 68, 250, '#9a9a96', '#555')                                              # granite sheds
+# Small places to find in the woods: cabins, camps, the dump, a wreck...
+SPOTS = [(40, 120), (130, 160), (6, 124), (168, 150), (44, 134), (112, 176), (140, 176), (8, 232),
+         (170, 190), (126, 94), (150, 262), (108, 270), (30, 112), (164, 232)]
+for (x, y) in SPOTS: box(d, x - 2, y - 2, x + 2, y + 2, '#a0784a', '#3a2a1a', 1)
 
 # Roads between the places (gold); red: roadblocks where they leave the map.
 GOLD = '#e8c860'
@@ -104,15 +114,18 @@ ROADS = [
     [(78, 58), (78, 50), (96, 50), (96, 0)],                       # Notch Road (rockslide in the notch)
     [(106, 152), (106, 198), (124, 198), (124, 204)],              # River Road to Carrick Mills
     [(151, 114), (151, 120), (156, 120), (156, 222), (148, 222)],  # County Road (county bridge)
-    [(156, 222), (178, 222)], [(124, 240), (124, 279)],            # out east and south
-    [(151, 96), (151, 82)],                                        # logging road to the gate
+    [(156, 222), (178, 222)],                                      # out east
+    [(151, 96), (151, 90), (164, 90), (164, 86)],                  # logging road to Spruce Hollow
+    [(36, 190), (36, 254), (60, 254)],                              # Quarry Road: Apple Hill to Ledgeview
+    [(124, 240), (124, 254), (86, 254)],                            # Mills Road: Carrick Mills to Ledgeview
+    [(72, 266), (72, 279)],                                         # out south
 ]
 for r in ROADS: way(d, r, 4, '#6a5a3a')
 for r in ROADS: way(d, r, 3, GOLD)
-way(d, [(151, 82), (151, 52)], 2, '#c9b98f')
-for (x, y) in [(1, 170), (177, 104), (124, 277), (177, 222), (96, 2)]:
+way(d, [(164, 58), (164, 40)], 2, '#c9b98f')
+for (x, y) in [(1, 170), (177, 104), (72, 277), (177, 222), (96, 2)]:
     box(d, x - 2, y - 2, x + 2, y + 2, '#d02020')
-box(d, 148, 80, 154, 82, '#333')                                  # the padlocked gate
+box(d, 161, 54, 167, 56, '#333')                                  # the padlocked gate
 box(d, 93, 26, 99, 30, '#6a665e')                                 # the rockslide
 # Crossings: the iron bridge, the county bridge, the lake footbridge; the shallows (waders).
 for (x0, y0, x1, y1) in [(68, 128, 76, 132), (153, 211, 159, 217), (54, 90, 58, 94)]:
@@ -122,7 +135,11 @@ box(d, 97, 182, 103, 188, None, '#9fd0ff', 3)
 # Trails (dashed): the shortcuts and the ways to the wild places.
 for t in [[(90, 66), (118, 66), (118, 72)], [(108, 108), (108, 80), (118, 80), (118, 72)], [(30, 190), (30, 228)],
           [(112, 236), (90, 236), (90, 246), (80, 246)], [(46, 160), (50, 160), (50, 100), (24, 100), (24, 96)],
-          [(10, 92), (6, 92), (6, 40)], [(46, 186), (88, 186), (88, 222)], [(30, 232), (30, 260), (124, 260)]]:
+          [(10, 92), (6, 92), (6, 40)], [(46, 186), (88, 186), (88, 222)],
+          [(52, 120), (40, 120), (40, 134), (44, 134)], [(40, 120), (30, 120), (30, 112), (6, 112), (6, 124)],
+          [(106, 176), (112, 176)], [(156, 150), (168, 150)], [(156, 176), (140, 176)], [(130, 130), (130, 160)],
+          [(156, 190), (170, 190)], [(130, 104), (130, 94), (126, 94)], [(36, 232), (8, 232)],
+          [(124, 262), (150, 262)], [(86, 266), (86, 270), (108, 270)], [(156, 232), (164, 232)]]:
     dashed(d, t, '#f6efe0', 1.2)
 
 # The railway: from the east edge past the crossroads to Haverly depot, west across Haverly and
@@ -140,6 +157,7 @@ d.text(P(17, 150.5), 'HOME', font=f_tag, fill='#ff2a8a')
 for (x0, y0, x1, y1), _, name in PLACES:
     cx, cy = P((x0 + x1) / 2, y1 + 1)
     tw = d.textlength(name, font=f_big)
+    cx = min(cx, PAD + W * S - tw / 2 - 6)
     d.rectangle([cx - tw / 2 - 4, cy, cx + tw / 2 + 4, cy + 20], fill=(255, 255, 255, 215))
     d.text((cx - tw / 2, cy + 1), name, font=f_big, fill='#3a1a0a')
 
@@ -156,15 +174,31 @@ LM = [
     (157, 110, 'The drive-in'),
     (118, 65, 'Fire tower on the hill: see the whole region'),
     (96, 28, 'Ketchum Notch: road blocked by a rockslide; the ranger station beyond'),
-    (151, 66, 'Logging camp behind a padlocked gate (bolt cutters)'),
+    (164, 46, 'Logging camp up the mountain, behind a padlocked gate (bolt cutters)'),
     (14, 30, 'Old mine in the mountains (dark: flashlight)'),
     (28, 233, 'Summer camp on Pine Pond: archery range (bows)'),
     (90, 230, 'The swamp'),
-    (71, 252, 'The quarry'),
+    (48, 254, 'The granite quarry'),
     (100, 185, 'River shallows (waders)'),
     (56, 92, 'Footbridge at the lake outlet'),
     (11, 200, 'Orchard and cider mill'),
     (156, 214, 'County bridge'),
+    (164, 72, 'Spruce Hollow: logging town. Sawmill, lumber yard, bunkhouse, company store, the gun shop'),
+    (73, 254, 'Ledgeview: quarry village. Granite sheds, the Odd Fellows hall, the school, the church'),
+    (40, 120, 'Hunting camp: three cabins in the woods'),
+    (6, 124, "Hermit's cabin by the lake"),
+    (30, 112, 'Ranger cabin on the lake shore'),
+    (44, 134, 'Sugar shack (maple syrup) in the woods'),
+    (130, 160, "Trapper's cabin"),
+    (112, 176, 'The town dump (good junk)'),
+    (140, 176, 'Campground: tents and RVs, left in a hurry'),
+    (168, 150, 'Cabin colony in the pines'),
+    (170, 190, 'Radio tower on the hill'),
+    (126, 94, 'Hilltop cemetery'),
+    (8, 232, 'Abandoned farmhouse'),
+    (150, 262, 'A light aircraft down in the woods'),
+    (108, 270, 'Fishing shack on Mud Pond'),
+    (164, 232, 'Boarded-up roadside motel'),
 ]
 for n, (x, y, _) in enumerate(LM, 1):
     cx, cy = P(x, y)
@@ -182,7 +216,7 @@ notes = [
     'Everything on the grid, like movement: roads, trails, the railway and the river only run N-S or E-W,',
     'with square corners. Places, fields, the lake and the mountains have blocky edges.',
     'Gold = roads (red: roadblocks at the edge). Dashed = trails. Black = railway. Grey = the gorge.',
-    'Each place is 3x3 to 5x4 screens; the rest is wilderness. Faint grid = the 25 x 25 screens.',
+    'Seven places (3x3 to 5x4 screens); small brown squares = cabins and finds in the woods.',
     'Danger and loot: highest in Haverly, then Carrick Mills, the lake, the crossroads; Apple Hill is quietest.',
 ]
 for i, t in enumerate(notes): d.text((PAD, ky + i * 20), t, font=f_leg, fill='#333')
