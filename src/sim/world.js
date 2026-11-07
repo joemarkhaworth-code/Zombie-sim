@@ -55,8 +55,8 @@ export function makeZombie(world, x, y) {
     Vision: { eyesight: CONFIG.zombie.eyesight },
     Hearing: { level: CONFIG.zombie.hearing },
     Noisy: { move: CONFIG.zombie.footsteps },
-    // goal: { x, y, why: 'seen' | 'heard' } | null; search: { x, y, left } | null; tracking: prey id it saw last look
-    Brain: { goal: null, search: null, tracking: 0 },
+    // goal: { x, y, why: 'seen' | 'glimpsed' | 'heard' } | null; glimpsed: prey id it stared at last look; search: { x, y, left } | null; tracking: prey id it saw last look
+    Brain: { goal: null, search: null, tracking: 0, glimpsed: 0 },
   });
 }
 

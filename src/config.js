@@ -25,6 +25,8 @@ export const CONFIG = {
     eyesight: 2,          // 0-3: poor eyes, so you usually see them first
     hearing: 3,           // 0-3: good ears
     footsteps: 0,         // shuffles quietly
+    glimpseRange: 2,      // sees you further off than this: stops and stares (?) first; only comes
+                          // for you (!) if it still sees you on its next look
     searchActions: 12,    // after losing you, shuffles about the last known spot this many moves
     searchRadius: 3,      // ...staying within this many tiles of it
     wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
@@ -46,7 +48,7 @@ export const CONFIG = {
   },
 
   vision: {
-    eyesightFactor: [0, 0.25, 0.5, 1], // sight radius = light.range x this, by eyesight 0-3
+    eyesightFactor: [0, 0.2, 0.35, 1], // sight radius = light.range x this, by eyesight 0-3 (zombie 2: 5 tiles)
     minLevelToSpot: 1,    // a creature is only noticed on a tile at least this visible
     noticeByLight: [0, 0.34, 0.67, 1], // noticing distance x this, by the tile's light level
   },

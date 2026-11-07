@@ -61,10 +61,12 @@ function check(cond, msg) {
   const w = emptyWorld();
   const p = player(w);
   p.Position.x = 5; p.Position.y = 2;
-  const z = makeZombie(w, 5, 8); // 6 tiles off: within its sight (7)
+  const savedG = CONFIG.zombie.glimpseRange; CONFIG.zombie.glimpseRange = 99; // no glimpse pause here
+  const z = makeZombie(w, 5, 7); // 5 tiles off: within its sight
   const ds = [];
   for (let i = 0; i < 8; i++) { applyInput(w, { type: 'wait' }); ds.push(dist(z.Position, p.Position)); }
-  check(ds.join() === '6,5,5,4,4,3,3,2', `zombie moves every other turn (got ${ds.join()})`);
+  check(ds.join() === '5,4,4,3,3,2,2,1', `zombie moves every other turn (got ${ds.join()})`);
+  CONFIG.zombie.glimpseRange = savedG;
   check(w.tick === w.turn, 'one tick per player action');
   // It stops next to you and doesn't step into you.
   for (let i = 0; i < 20; i++) applyInput(w, { type: 'wait' });
@@ -176,21 +178,21 @@ function check(cond, msg) {
   check(z.Position.x === 8 && z.Position.y === 2 && !z.Brain.goal, 'a zombie that cannot see you stays put');
   const events = [];
   for (const t of ['prey_spotted', 'prey_lost', 'search_gave_up']) w.events.on(t, () => events.push(t));
-  q.Position.x = 8; q.Position.y = 7; // step into its view (5 tiles off)
+  q.Position.x = 8; q.Position.y = 6; // step into its view (4 tiles off)
   updatePlayerView(w);
-  for (let i = 0; i < 3; i++) applyInput(w, { type: 'wait' });
+  for (let i = 0; i < 6 && !events.includes('prey_spotted'); i++) applyInput(w, { type: 'wait' });
   check(events.includes('prey_spotted') && z.Brain.goal && z.Brain.goal.why === 'seen', 'it spots you and makes for you');
   q.Position.x = 2; q.Position.y = 10; // gone behind the wall
   updatePlayerView(w);
   for (let i = 0; i < 4 && !events.includes('prey_lost'); i++) applyInput(w, { type: 'wait' });
-  check(events.includes('prey_lost') && z.Brain.goal && z.Brain.goal.x === 8 && z.Brain.goal.y === 7,
+  check(events.includes('prey_lost') && z.Brain.goal && z.Brain.goal.x === 8 && z.Brain.goal.y === 6,
     'it loses you and heads for where it last saw you');
   let searched = false;
   for (let i = 0; i < 80 && !events.includes('search_gave_up'); i++) {
     applyInput(w, { type: 'wait' });
     if (z.Brain.search) {
       searched = true;
-      if (Math.abs(z.Position.x - 8) > CONFIG.zombie.searchRadius + 1 || Math.abs(z.Position.y - 7) > CONFIG.zombie.searchRadius + 1) {
+      if (Math.abs(z.Position.x - 8) > CONFIG.zombie.searchRadius + 1 || Math.abs(z.Position.y - 6) > CONFIG.zombie.searchRadius + 1) {
         check(false, 'it searches near the last spot'); break;
       }
     }
@@ -280,6 +282,42 @@ function check(cond, msg) {
   makeNoise(w, 9, 12, 3);
   applyInput(w, { type: 'wait' });
   check(w.noise[12 * w.w + 9] === 0, 'the heatmap shows only noise since your last action');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
+// Glimpses: a zombie that catches sight of you at a distance stares (?) before it comes (!).
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
+  const wall = (w, x, y) => { w.tiles[y * w.w + x] = TILE.WALL; };
+  // Stay in view: glimpse, then spotted on its next look.
+  let w = emptyWorld();
+  const p = player(w); p.Position.x = 5; p.Position.y = 3;
+  const z = makeZombie(w, 5, 7); // 4 tiles off
+  const ev = [];
+  for (const t of ['prey_glimpsed', 'prey_spotted']) w.events.on(t, () => ev.push(t));
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(ev.join() === 'prey_glimpsed' && z.Position.y === 7 && z.Brain.goal.why === 'glimpsed', 'first look: it stops and stares');
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(ev.join() === 'prey_glimpsed,prey_spotted' && z.Brain.tracking, 'still in view on its next look: it comes for you');
+  // Duck out of view in time: it only goes to check the spot, it never spots you.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 5; q.Position.y = 3;
+  for (let x = 1; x <= 3; x++) wall(w, x, 4); // cover to the left: a wall under (1..3, 4)
+  const z2 = makeZombie(w, 5, 7);
+  const ev2 = [];
+  for (const t of ['prey_glimpsed', 'prey_spotted']) w.events.on(t, () => ev2.push(t));
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(ev2.join() === 'prey_glimpsed', 'it glimpses you');
+  applyInput(w, { type: 'move', dx: -1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 }); // (3,3): behind the wall
+  for (let i = 0; i < 2; i++) applyInput(w, { type: 'wait' });
+  check(!ev2.includes('prey_spotted') && z2.Brain.goal && z2.Brain.goal.why === 'glimpsed', `you slip away: it goes to check, no ! (${ev2.join()})`);
+  // Close up there's no stare: within glimpseRange it comes straight away.
+  w = emptyWorld();
+  const r = player(w); r.Position.x = 5; r.Position.y = 3;
+  const z3 = makeZombie(w, 5, 5); // 2 tiles off
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(z3.Brain.tracking, 'close up it comes for you at once');
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 

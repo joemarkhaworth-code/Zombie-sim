@@ -1,4 +1,6 @@
 // Zombie brain. Zombies only chase what they can see:
+//   0. A first glimpse of prey further than glimpseRange: stop and stare (?). Still in view on
+//      its next look: it's spotted you (!). Gone: it goes to check the spot.
 //   1. Prey in view (anything with Prey it notices): its spot becomes the goal; step toward it.
 //   2. Lost sight: walk to where it last saw the prey...
 //   3. ...then search: shuffle about within searchRadius of that spot for searchActions moves,
@@ -66,6 +68,16 @@ function startSearch(world, e, spot) {
 export function shamble(world, e) {
   const b = e.Brain, cfg = CONFIG.zombie;
   const prey = visiblePrey(world, e);
+  if (prey && !b.tracking && b.glimpsed !== prey.id && manhattan(prey.Position, e.Position) > cfg.glimpseRange) {
+    // A glimpse at a distance: stop and stare (spends this action). It only comes for you if it
+    // still sees you on its next look; if you've gone, it shuffles over to check the spot.
+    b.glimpsed = prey.id;
+    b.goal = { x: prey.Position.x, y: prey.Position.y, why: 'glimpsed' };
+    b.search = null;
+    world.events.emit('prey_glimpsed', { id: e.id, preyId: prey.id });
+    return;
+  }
+  b.glimpsed = 0;
   if (prey) {
     if (!b.tracking) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
     b.tracking = prey.id;
