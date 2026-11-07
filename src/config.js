@@ -22,9 +22,22 @@ export const CONFIG = {
   player: {
     speed: 100, eyesight: 3, hearing: 2, footsteps: 1, // one action per tick; full sight; footsteps noise level 1
     hearts: 3,            // 6 half-hearts: six bites and you're dead
-    // Your melee, like Zelda's sword (your walking stick until items, step 9): every hit lands,
-    // does `damage`, knocks the target back a tile and staggers it (it loses its next action).
-    melee: { damage: 1, knockback: true, noise: 2 },
+    // Bare hands: every hit lands for `damage`; weak, no knockback. A wielded weapon's numbers
+    // replace these (like Zelda's sword: damage and a knockback).
+    melee: { damage: 1, knockback: false, noise: 2 },
+    bagSlots: 6,          // inventory capacity, in slots
+    startWith: ['walkingStick'], // wielded at the start (the first weapon here)
+  },
+
+  // Item types, as data: effects are properties, not special cases.
+  //   slots: room it takes in the bag. heal: half-hearts restored when used (refused at full health).
+  //   weapon: { damage, knockback, noise }: wield it to replace your bare-hands melee.
+  //   verb: what the bag's use button says.
+  items: {
+    walkingStick: { name: 'walking stick', glyph: '/', colour: '#b08850', slots: 2, weapon: { damage: 1, knockback: true, noise: 2 } },
+    cricketBat:   { name: 'cricket bat', glyph: '/', colour: '#e8d8a0', slots: 2, weapon: { damage: 2, knockback: true, noise: 2 } },
+    beans:        { name: 'tin of beans', glyph: '%', colour: '#d07030', slots: 1, heal: 1, verb: 'EAT' },
+    bandage:      { name: 'bandage', glyph: '+', colour: '#f0f0f0', slots: 1, heal: 2, verb: 'USE' },
   },
 
   zombie: {
@@ -76,6 +89,7 @@ export const CONFIG = {
     zombieDist: [5, 9],   // the test zombie starts this many steps (4-way) from you
     wallRuns: 3,          // short straight walls to hide behind
     wallLength: [3, 5],
+    items: ['beans', 'beans', 'bandage', 'cricketBat'], // scattered on open floor
   },
 
   render: {
@@ -108,6 +122,12 @@ export const CONFIG = {
     button: '#2a2a2a',
     buttonText: '#dddddd',
     deadText: '#e0303a',
+    bagBg: '#0a1a66',     // Teletext blue
+    bagLine: '#ffffff',
+    bagTitle: '#ffdd33',
+    bagRow: '#13287a',
+    bagUse: '#1f7a3a',
+    bagDrop: '#7a1f2b',
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

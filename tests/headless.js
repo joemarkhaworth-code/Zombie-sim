@@ -9,6 +9,7 @@ import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/
 const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
+import { makeItem, slotsUsed, meleeStats, itemsAt } from '../src/sim/systems/items.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -16,6 +17,7 @@ const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 function emptyWorld(seed = 1) {
   const w = createWorld(seed);
   for (const z of zombies(w)) w.entities.delete(z.id);
+  for (const e of [...w.entities.values()]) if (e.Item && e.Position) w.entities.delete(e.id); // no stray items
   for (let y = 1; y < w.h - 1; y++) for (let x = 1; x < w.w - 1; x++) w.tiles[y * w.w + x] = TILE.FLOOR;
   return w;
 }
@@ -462,6 +464,58 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander; CONFIG.zombie.glimpseRange = savedG;
 }
 
+// Items and the bag.
+{
+  // You start holding a walking stick; the test screen has the test items lying about.
+  const w0 = createWorld(1), p0 = player(w0);
+  const stick = w0.entities.get(p0.Inventory.wielded);
+  check(stick && stick.Item.type === 'walkingStick', 'you start holding a walking stick');
+  const lying = [...w0.entities.values()].filter(e => e.Item && e.Position).map(e => e.Item.type).sort();
+  check(lying.join() === [...CONFIG.testScreen.items].sort().join(), `the test items are on the floor (${lying.join()})`);
+  check(lying.length && [...w0.entities.values()].filter(e => e.Item && e.Position).every(e => !tileBlocks(w0, e.Position.x, e.Position.y)), 'none in walls');
+
+  let w = emptyWorld();
+  const p = player(w); p.Position.x = 5; p.Position.y = 5;
+  const log = createMessageLog(w);
+  const turn = i => { log.clear(); return applyInput(w, i); };
+  // Walking onto an item picks it up as part of the step.
+  const beans = makeItem(w, 'beans', 6, 5);
+  check(turn({ type: 'move', dx: 1, dy: 0 }) && w.turn === 1, 'stepping onto an item is one turn');
+  check(p.Inventory.items.includes(beans.id) && !beans.Position, 'and picks it up');
+  check(log.text === 'You pick up the tin of beans.', `it says so (got "${log.text}")`);
+  // A full bag leaves it on the floor; drop room and tap yourself to pick it up later.
+  const bat = makeItem(w, 'cricketBat', 7, 5);
+  makeItem(w, 'bandage', 8, 5); makeItem(w, 'bandage', 9, 5);
+  turn({ type: 'move', dx: 1, dy: 0 }); // bat: stick 2 + beans 1 + bat 2 = 5 of 6
+  turn({ type: 'move', dx: 1, dy: 0 }); // bandage: 6 of 6
+  check(slotsUsed(w, p) === 6, 'the bag counts slots');
+  turn({ type: 'move', dx: 1, dy: 0 }); // second bandage: full
+  check(itemsAt(w, 9, 5).length === 1 && log.text === 'Your bag is full.', `a full bag leaves it on the floor (got "${log.text}")`);
+  check(describeTile(w, 9, 5) === "You're on a bandage.", 'inspecting yourself says what you are on');
+  check(turn({ type: 'drop', itemId: beans.id }) && itemsAt(w, 9, 5).some(e => e.id === beans.id), 'dropping takes a turn and leaves it at your feet');
+  check(turn({ type: 'pickup' }) && slotsUsed(w, p) === 6, 'tapping yourself picks up the top item');
+  // Weapons: hold the bat (2 damage), stow it for bare hands (1, no knockback).
+  check(turn({ type: 'use', itemId: bat.id }) && p.Inventory.wielded === bat.id, 'HOLD wields the bat');
+  check(meleeStats(w, p).damage === 2, 'the bat does 2');
+  const z = makeZombie(w, 9, 6);
+  turn({ type: 'move', dx: 0, dy: 1 });
+  check(z.Health.hp === CONFIG.zombie.health - 2 && z.Position.y === 7, 'a bat hit does 2 and knocks it back');
+  check(turn({ type: 'use', itemId: bat.id }) && p.Inventory.wielded === 0, 'STOW puts it away');
+  check(meleeStats(w, p).damage === 1 && !meleeStats(w, p).knockback, 'bare hands: 1, no knockback');
+  w.entities.delete(z.id);
+  // Healing: refused at full health (no turn); a bandage heals a heart and is used up.
+  const band = w.entities.get(p.Inventory.items.find(id => w.entities.get(id).Item.type === 'bandage'));
+  const t0 = w.turn;
+  check(!turn({ type: 'use', itemId: band.id }) && w.turn === t0 && log.text === "You're not hurt.", 'no healing at full health, no turn');
+  p.Health.hp = 2;
+  check(turn({ type: 'use', itemId: band.id }) && p.Health.hp === 4 && !w.entities.has(band.id), 'a bandage heals a heart and is used up');
+  // Things on the floor are remembered, and drawn under creatures.
+  w.entities.delete(p.Inventory.items.pop());
+  const tin = makeItem(w, 'beans', 2, 2);
+  updatePlayerView(w);
+  check(p.Memory.tiles[2 * w.w + 2].things.some(t => t.name === 'tin of beans'), 'items on the floor are remembered');
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -504,6 +558,7 @@ function check(cond, msg) {
 {
   const { drawMap } = await import('../src/render/greybox.js');
   const { drawTopBar, drawActionBar, drawDeath } = await import('../src/render/ui.js');
+  const { drawBag } = await import('../src/render/bag.js');
   const fake = new Proxy({}, {
     get: (o, k) => (k in o ? o[k] : (k === 'measureText' ? () => ({ width: 10 }) : () => {})),
     set: (o, k, v) => { o[k] = v; return true; },
@@ -514,7 +569,8 @@ function check(cond, msg) {
     try {
       drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
       drawTopBar(fake, w, L, log, i % 2 === 0);
-      drawActionBar(fake, L, { shoveArmed: i % 3 === 0 });
+      drawActionBar(fake, L, { shoveArmed: i % 3 === 0, bagOpen: i % 4 === 0 });
+      drawBag(fake, w, L);
       if (w.gameOver) drawDeath(fake, w, L);
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
@@ -548,7 +604,11 @@ for (let s = 1; s <= SEEDS; s++) {
     let zlast = { ...z.Position }, closest = Infinity;
     for (let i = 0; i < TURNS * 2 && w.turn < TURNS && !w.gameOver; i++) {
       const dx = r.int(3) - 1, dy = r.int(3) - 1;
-      const input = r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy } : { type: 'move', dx, dy };
+      const inv = player(w).Inventory.items;
+      const someItem = inv.length ? inv[r.int(inv.length)] : 0;
+      const input = r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy }
+        : r.chance(0.04) ? { type: 'pickup' } : (someItem && r.chance(0.05)) ? { type: r.chance(0.5) ? 'use' : 'drop', itemId: someItem }
+        : { type: 'move', dx, dy };
       applyInput(w, input);
       const p = player(w).Position;
       if (tileBlocks(w, p.x, p.y)) { check(false, `seed ${s}: player in a wall`); break; }

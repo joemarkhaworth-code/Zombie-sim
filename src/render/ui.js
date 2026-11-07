@@ -65,7 +65,8 @@ export function drawActionBar(ctx, L, ui = {}) {
   ctx.fillRect(0, L.barY, L.cssW, L.barH);
   for (const b of actionButtons(L)) {
     let label = b.id.toUpperCase(), on = false;
-    if (b.id === 'shove' && ui.shoveArmed) { on = true; label = 'SHOVE: TAP A WAY'; }
+    if (b.id === 'shove' && ui.shoveArmed) { on = true; label = 'TAP A WAY'; }
+    if (b.id === 'bag' && ui.bagOpen) on = true;
     ctx.fillStyle = on ? c.shoveArmed : c.button;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(b.x, b.y, b.w, b.h, 8); else ctx.rect(b.x, b.y, b.w, b.h);

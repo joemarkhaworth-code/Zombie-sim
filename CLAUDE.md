@@ -45,7 +45,7 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 ## Controls
 - Tap an adjacent tile to move or act (attack, open a door). Tap your own tile to wait.
 - Long-press any tile to inspect it in the status bar.
-- A thumb-friendly action bar at the bottom: shove, inventory, and later sleep.
+- A thumb-friendly action bar at the bottom: shove, bag, and later sleep.
 - Tiles must be big enough to tap easily with a thumb.
 
 ## Architecture rules
@@ -102,7 +102,7 @@ Phase 1 — Core loop (one test screen)
 6. Noise: actions make noise, walls muffle it, zombies investigate the source
 7. ~~Stealth: sneak toggle and hiding spots~~ (built, then dropped in playtesting: see Decisions)
 8. Combat: Zelda-style hearts (each hit takes half a heart), melee with knockback, shove. No bleeding, no sneak attacks
-9. Items and inventory: pick up, drop, use; weapons change damage; bandages stop bleeding
+9. Items and inventory: pick up, drop, use; weapons change damage; bandages heal a heart (no bleeding)
 10. Throwing: any item can be thrown; it makes noise where it lands (distraction)
 11. Save/load (autosave every turn) + game over screen (days survived, deadpan cause of death, seed)
 
@@ -224,3 +224,16 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - Attacks and shoves reach all 8 neighbours; movement stays 4-way (playtest: "attacking should be 8 directions even if movement is 4"). Same for zombies: they bite diagonally. Not through a gap squeezed between two walls meeting at a corner (combat.js inReach uses the sight rule). Tapping a creature you can see diagonally next to you hits it (or shoves it, when armed); tapping an empty diagonal tile moves you 4-way as before; a diagonal input with nothing there takes no turn. Knockback and shoves push along the line of the blow, so diagonally too. "The zombie is next to you!" now counts diagonals.
 - Messages: "You hit the zombie.", "The zombie bites you!" (danger), "You shove the zombie.", "It slams into the wall.", "The zombie goes down.", "You died."
 - Tests: 3 hearts; a hit does 1, knocks back a tile, is heard 5 tiles off; into a wall it stays put; three hits kill and leave a walkable, remembered corpse; no bite on the action it spots you, then half a heart per bite, six kill you, then nothing takes a turn; shove pushes and staggers unhurt, slams into a wall for 1, nothing there costs no turn; the fight numbers above. Random play now has a normal run (you can die; replays must match exactly, health and death included) and a stress run with an unkillable player.
+
+### Step 9 (items and the bag) - built
+- Items (src/sim/systems/items.js): an item is an entity with Item { type } + Glyph + Name. On the map it has a Position; carried, it has none and its id is in Inventory.items. Item types are data in CONFIG.items; effects are properties, not special cases: slots (room in the bag), heal (half-hearts), weapon { damage, knockback, noise }, verb (the use button's word).
+- So far: walking stick (/, 2 slots, 1 damage, knockback), cricket bat (/, 2 slots, 2 damage, knockback: a zombie in 2 hits), tin of beans (%, heals half a heart for now: hunger, step 16, will give food its real job), bandage (+, heals a heart; bandages heal rather than stop bleeding, since there is no bleeding).
+- You start holding the walking stick (player.startWith). Bare hands (nothing held): 1 damage, no knockback, as the guide says. meleeStats(): a held weapon's numbers replace the Melee component's.
+- Inventory { items, capacity, wielded }: capacity is in slots (player.bagSlots 6). The test screen scatters beans, beans, a bandage and a cricket bat (testScreen.items) on open floor.
+- Picking up: walking onto an item picks it up as part of the step, free. A full bag leaves it there ("Your bag is full."); tapping yourself while standing on an item picks it up (a turn) instead of waiting. Inspecting your own tile: "You're on a bandage."
+- BAG is the second action-bar button (orange while open). It opens a Teletext-blue panel over the map: "BAG used/capacity" and CLOSE, then one 56 px row per item (coloured glyph, name, slots; the held weapon marked "> name", "in hand") with two buttons: use (EAT / USE / HOLD / STOW) and DROP. Opening takes no turn; use and drop take a turn and close the bag so you see what happened. Healing at full health is refused with no turn ("You're not hurt.").
+- Inputs: { type: 'pickup' }, { type: 'use', itemId }, { type: 'drop', itemId }, all recorded; item ids are deterministic from the seed, so replays match. Random play includes them.
+- Draw order: things (corpses, items) first, then creatures, then you on top. Items lying about are remembered by map memory. Inspect puts a creature you notice before an item on the same tile.
+- Messages: "You pick up the cricket bat.", "Your bag is full.", "You drop the ...", "You hold the ...", "You put the ... away.", "You eat the beans. Cold.", "You bandage yourself up.", "You're not hurt." Inspect: "A tin of beans. Cold, but beans.", "A bandage. Fairly clean.", "A cricket bat. Well oiled.", "A walking stick. Sturdy."
+- Keyboard: I or B bag, G pick up.
+- Tests: you start holding the stick; the test items are on the floor, not in walls; stepping onto an item picks it up in the same turn; slots add up; a full bag leaves it; drop and pick up; HOLD the bat for 2 damage and knockback, STOW for bare hands; healing refused at full health, a bandage heals a heart and is used up; items on the floor are remembered.

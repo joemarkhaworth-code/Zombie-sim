@@ -44,6 +44,19 @@ export function createMessageLog(world) {
     if (isPlayer(id)) log.say('You died.', LEVEL.danger + 1);
     else if (isPlayer(by)) log.say(`The ${nameOf(id)} goes down.`, LEVEL.info);
   });
+  // Items.
+  ev.on('item_picked_up', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You pick up the ${nameOf(itemId)}.`, LEVEL.info); });
+  ev.on('bag_full', ({ id }) => { if (isPlayer(id)) log.say('Your bag is full.', LEVEL.blocked); });
+  ev.on('item_dropped', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You drop the ${nameOf(itemId)}.`, LEVEL.info); });
+  ev.on('item_wielded', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You hold the ${nameOf(itemId)}.`, LEVEL.info); });
+  ev.on('item_stowed', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You put the ${nameOf(itemId)} away.`, LEVEL.info); });
+  ev.on('item_used', ({ id, type }) => {
+    if (!isPlayer(id)) return;
+    log.say({ beans: 'You eat the beans. Cold.', bandage: 'You bandage yourself up.' }[type] || 'Done.', LEVEL.info);
+  });
+  ev.on('use_refused', ({ id, why }) => {
+    if (isPlayer(id)) log.say(why === 'not_hurt' ? "You're not hurt." : 'Nothing to do with that.', LEVEL.blocked);
+  });
   // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {
     const p = world.entities.get(world.playerId);
@@ -72,6 +85,10 @@ const TILE_TEXT = {
 const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',
   'zombie corpse': 'A dead zombie. Deader, anyway.',
+  'tin of beans': 'A tin of beans. Cold, but beans.',
+  bandage: 'A bandage. Fairly clean.',
+  'cricket bat': 'A cricket bat. Well oiled.',
+  'walking stick': 'A walking stick. Sturdy.',
 };
 
 // Cause of death, for the death screen. Deadpan.
@@ -91,17 +108,19 @@ const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };
 // ", out of sight"; never seen is "Unexplored." Creatures you haven't noticed aren't there.
 export function describeTile(world, x, y) {
   const p = world.entities.get(world.playerId);
-  if (p.Position.x === x && p.Position.y === y) return "That's you.";
+  if (p.Position.x === x && p.Position.y === y) {
+    const under = [...world.entities.values()].filter(e => e.Item && e.Position && e.Position.x === x && e.Position.y === y);
+    return under.length ? `You're on a ${under[under.length - 1].Name.name}.` : "That's you.";
+  }
   if (!world.view[y * world.w + x]) {
     const snap = p.Memory && p.Memory.tiles[y * world.w + x];
     if (!snap) return 'Unexplored.';
     const what = snap.things.length ? `A ${snap.things[snap.things.length - 1].name}` : (TILE_NAME[snap.t] || 'Something');
     return `${what}, out of sight.`;
   }
-  for (const e of world.entities.values()) {
-    if (e.Position && e.Position.x === x && e.Position.y === y && e.Name && canNotice(world, p, e)) {
-      return THING_TEXT[e.Name.name] || `A ${e.Name.name}.`;
-    }
-  }
+  // A creature you notice first, else the top thing on the tile, else the terrain.
+  const here = [...world.entities.values()].filter(e => e.Position && e.Position.x === x && e.Position.y === y && e.Name);
+  const who = here.find(e => e.Actor && canNotice(world, p, e)) || here.filter(e => !e.Actor).pop();
+  if (who) return THING_TEXT[who.Name.name] || `A ${who.Name.name}.`;
   return TILE_TEXT[world.tiles[y * world.w + x]] || 'Nothing much.';
 }

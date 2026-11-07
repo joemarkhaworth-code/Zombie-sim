@@ -16,7 +16,7 @@ export function computeLayout(cssW, cssH) {
 
 // Action bar buttons: big, side by side, splitting the bar evenly. Add future actions here
 // rather than new UI. Returns [{ id, x, y, w, h }].
-export const ACTION_BUTTONS = ['shove'];
+export const ACTION_BUTTONS = ['shove', 'bag'];
 export function actionButtons(L) {
   const pad = 8, n = ACTION_BUTTONS.length;
   const h = Math.min(L.barH - pad * 2, CONFIG.ui.actionBarHeight - pad * 2);

@@ -5,6 +5,7 @@ import { createEvents } from './events.js';
 import { generateTestScreen, TILE_INFO } from './gen/testscreen.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';
+import { makeItem, give } from './systems/items.js';
 
 export function createWorld(seed) {
   const { w, h } = CONFIG.screen;
@@ -39,10 +40,17 @@ export function createWorld(seed) {
     Melee: { ...CONFIG.player.melee },
     Hearing: { level: CONFIG.player.hearing },
     Noisy: { move: CONFIG.player.footsteps },
+    Inventory: { items: [], capacity: CONFIG.player.bagSlots, wielded: 0 },
   });
   world.playerId = player.id;
+  for (const type of CONFIG.player.startWith) {
+    const it = makeItem(world, type);
+    give(world, player, it);
+    if (CONFIG.items[type].weapon && !player.Inventory.wielded) player.Inventory.wielded = it.id;
+  }
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
   if (zpos) makeZombie(world, zpos.x, zpos.y);
+  scatterItems(world, start, CONFIG.testScreen.items);
   updatePlayerView(world);
   return world;
 }
@@ -63,6 +71,22 @@ export function makeZombie(world, x, y) {
     // goal: { x, y, why: 'seen' | 'glimpsed' | 'heard' } | null; glimpsed: prey id it stared at last look; search: { x, y, left } | null; tracking: prey id it saw last look
     Brain: { goal: null, search: null, tracking: 0, glimpsed: 0 },
   });
+}
+
+// Test items on random open floor, not on anyone and not on another item.
+function scatterItems(world, start, types) {
+  const spots = [];
+  for (let y = 0; y < world.h; y++) {
+    for (let x = 0; x < world.w; x++) {
+      if (tileBlocks(world, x, y) || blockerAt(world, x, y) || (x === start.x && y === start.y)) continue;
+      spots.push({ x, y });
+    }
+  }
+  for (const type of types) {
+    if (!spots.length) return;
+    const { x, y } = spots.splice(world.rng.int(spots.length), 1)[0];
+    makeItem(world, type, x, y);
+  }
 }
 
 // A random open floor tile within [min, max] steps (4-way distance) of the start.

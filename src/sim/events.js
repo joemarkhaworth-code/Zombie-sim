@@ -16,6 +16,9 @@
 //   entity_pushed  { id, by, from, to, dx, dy }   (any forced move)
 //   entity_slammed { id, x, y, blockerId }        (pushed into something solid)
 //   entity_lost_action { id }                     (staggered: its action was wasted)
+//   item_picked_up { id, itemId }  bag_full { id, itemId }  item_dropped { id, itemId }
+//   item_used      { id, itemId, type, healed }  item_wielded / item_stowed { id, itemId }
+//   use_refused    { id, itemId, why: 'not_hurt' | 'no_use' }
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();

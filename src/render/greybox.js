@@ -23,7 +23,9 @@ export function drawMap(ctx, world, L, inspect, debug) {
   // Creatures and things you notice, player last so it's always on top.
   const ents = [...world.entities.values()].filter(e => e.Position && e.Glyph
     && (e === p || canNotice(world, p, e)));
-  ents.sort((a, b) => (a.Player ? 1 : 0) - (b.Player ? 1 : 0));
+  // Draw order: things (corpses, items) first, then creatures, then you on top.
+  const layer = e => (e.Player ? 2 : e.Actor ? 1 : 0);
+  ents.sort((a, b) => layer(a) - layer(b));
   for (const e of ents) {
     const px = L.mapX + e.Position.x * t, py = L.mapY + e.Position.y * t;
     if (e.Player) {

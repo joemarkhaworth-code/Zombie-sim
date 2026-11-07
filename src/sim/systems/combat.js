@@ -9,6 +9,7 @@ import { CONFIG } from '../../config.js';
 import { tileBlocks, blockerAt, addEntity } from '../world.js';
 import { makeNoise } from './noise.js';
 import { lineClear } from './vision.js';
+import { meleeStats } from './items.js';
 
 // Attacks and shoves reach all 8 neighbours (movement is 4-way), but not through a gap
 // squeezed between two walls meeting at a corner (the same rule as sight).
@@ -62,7 +63,7 @@ export function kill(world, e, cause, byId) {
 
 // attacker hits target (they must be next to each other).
 export function attack(world, attacker, target) {
-  const m = attacker.Melee;
+  const m = meleeStats(world, attacker);
   if (!m || !target.Health) return;
   const dx = Math.sign(target.Position.x - attacker.Position.x), dy = Math.sign(target.Position.y - attacker.Position.y);
   world.events.emit('attacked', { id: attacker.id, targetId: target.id, damage: m.damage });

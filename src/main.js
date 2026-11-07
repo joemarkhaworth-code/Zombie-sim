@@ -7,6 +7,8 @@ import { canNotice } from './sim/systems/vision.js';
 import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
+import { drawBag, bagButtonAt } from './render/bag.js';
+import { itemsAt } from './sim/systems/items.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
@@ -20,12 +22,13 @@ let layout;
 let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
 let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
 let shoveArmed = false; // SHOVE pressed: the next map tap picks the direction
+let bagOpen = false;    // BAG panel showing (opening it takes no turn)
 let diedAt = 0;     // when the player died (ms), so a fast tapper sees the death screen
 
 function newGame(newSeed) {
   world = createWorld(newSeed);
   log = createMessageLog(world);
-  inspect = null; shoveArmed = false; diedAt = 0;
+  inspect = null; shoveArmed = false; bagOpen = false; diedAt = 0;
   draw();
 }
 
@@ -44,7 +47,8 @@ function draw() {
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
   drawMap(ctx, world, layout, inspect, debug);
   drawTopBar(ctx, world, layout, log, debug);
-  drawActionBar(ctx, layout, { shoveArmed });
+  if (bagOpen) drawBag(ctx, world, layout);
+  drawActionBar(ctx, layout, { shoveArmed, bagOpen });
   if (world.gameOver) drawDeath(ctx, world, layout);
 }
 
@@ -102,6 +106,16 @@ function tap(px, py) {
   if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
   const btn = actionButtonAt(layout, px, py);
   if (btn) return pressButton(btn.id);
+  if (bagOpen) {
+    // Bag rows: use or drop takes a turn and closes the bag so you see what happened.
+    const b = bagButtonAt(world, layout, px, py);
+    if (!b) return;
+    bagOpen = false;
+    if (b.action === 'use') act({ type: 'use', itemId: b.itemId });
+    else if (b.action === 'drop') act({ type: 'drop', itemId: b.itemId });
+    else draw();
+    return;
+  }
   const t = tileAtPixel(layout, px, py);
   if (!t) return;
   const p = player(world).Position;
@@ -123,16 +137,19 @@ function tap(px, py) {
     if (!act({ type: 'shove', dx, dy })) { log.show('Nothing to shove there.'); draw(); }
     return;
   }
-  if (self) return act({ type: 'wait' });
+  // Tapping yourself picks up what you're standing on (if anything), else waits.
+  if (self) return act(itemsAt(world, p.x, p.y).length ? { type: 'pickup' } : { type: 'wait' });
   act({ type: 'move', dx, dy });
 }
 
 // Action bar buttons. SHOVE arms (takes no turn); pressing it again disarms.
 function pressButton(id) {
-  if (id === 'shove') { shoveArmed = !shoveArmed; draw(); }
+  if (id === 'shove') { shoveArmed = !shoveArmed; bagOpen = false; draw(); }
+  if (id === 'bag') { bagOpen = !bagOpen; shoveArmed = false; draw(); }
 }
 
-// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait, F shove. No diagonals.
+// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait, F shove,
+// I or B bag, G pick up. No diagonals.
 const KEYS = {
   ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
@@ -141,6 +158,8 @@ const KEYS = {
 window.addEventListener('keydown', ev => {
   if (world.gameOver) { if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame((Math.random() * 2 ** 32) >>> 0); return; }
   if (ev.key === 'f') { ev.preventDefault(); pressButton('shove'); return; }
+  if (ev.key === 'i' || ev.key === 'b') { ev.preventDefault(); pressButton('bag'); return; }
+  if (ev.key === 'g') { ev.preventDefault(); act({ type: 'pickup' }); return; }
   let input = null;
   if (ev.key === ' ' || ev.key === '.' || ev.key === '5') input = { type: 'wait' };
   else if (KEYS[ev.key]) {
