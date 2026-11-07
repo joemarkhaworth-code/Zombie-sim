@@ -1,7 +1,7 @@
 # Zombie Survival — Project Guide for Claude
 
 ## The game
-A free-roam, turn-based zombie survival game in the style of the original Zelda, set in a Yorkshire market town in the early 1990s. You explore a large world made of screens, scavenge by day, and get back to safety before night. After the player takes a turn, everything else takes its turn.
+A free-roam, turn-based zombie survival game in the style of the original Zelda, set in a corner of rural New England in the early 1980s: a few small towns and villages joined by roads, rail and trails through forest, lakes and mountains. You explore a large world made of screens, scavenge by day, and get back to safety before night. After the player takes a turn, everything else takes its turn.
 
 Goal: survive as many days as you can.
 
@@ -16,24 +16,26 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 6. Readable on a phone. Everything shows as a tile, a colour or a one-line status message. Use coarse values (levels 0–3).
 
 ## Setting and tone
-- A fictional Yorkshire market town inspired by Knaresborough and Wetherby (not a copy). Early 1990s, so no mobile phones. The outbreak starts on the August bank holiday weekend. Days shorten as the run goes on, towards winter.
-- Tone: dry, understated British humour, never slapstick. Danger stays real; humour lives in small details.
-- Humour goes in: one-line inspect text ("Tin of mushy peas. Desperate times."), deadpan cause-of-death lines ("Died of thirst next to a full kettle."), British items, and NPCs as familiar British types (market trader, publican, vicar, dog walker, retired major, farmer). No brand names.
-- Tea: drinking tea reduces tiredness by one level; boiling a kettle whistles (noise). No morale system.
-- Rare odd sightings, still normal shamblers: a zombie Morris dancer (ankle bells make noise as he moves), zombies queueing outside the post office.
+- A fictional corner of rural New England (Maine / New Hampshire / Vermont feel; Stephen King country, not a copy of anywhere). Early 1980s with a late-70s feel: station wagons, pickups, CB radios, payphones, no mobile phones. The outbreak starts on Labor Day weekend. The fall colours turn, then the snow comes: days shorten as the run goes on, towards winter.
+- (Playtest decision: the realistic Yorkshire town lost the charm and the game design. Moved to New England with a Pokémon / Zelda / Stardew map: compact places with wilderness between. See Decisions.)
+- Tone: dry, understated, deadpan small-town humour, never slapstick. Danger stays real; humour lives in small details.
+- Humour goes in: one-line inspect text ("Can of creamed corn. Desperate times."), deadpan cause-of-death lines ("Died of thirst next to a full coffee pot."), period American items, and NPCs as familiar small-town types (diner waitress, gas station owner, pastor, game warden, retired colonel, dairy farmer, summer people). No brand names.
+- Coffee: drinking coffee reduces tiredness by one level; a percolator gurgles and a kettle whistles (noise). No morale system.
 
 ## The world
-- The town layout is the same every run: generated from a fixed world seed in config.js, with hand-placed overrides for key landmarks (market square, castle, church, pubs, bridges).
-- Each run uses a separate run seed for what varies: loot, zombie positions, NPCs, and which bridges are blocked.
-- Flip-screen world: a 25×25 grid of screens (was 10×10; playtest: a big town gives you a reason to find safe houses in new areas). Walk off an edge to go to the next screen.
-- Districts, in rings from the centre:
-  1. Town centre: market square, high street, pubs, shops, bank, post office, parish church, castle ruins on a hill, snickets and ginnels. Most zombies, best loot.
-  2. River through town in a gorge: old stone bridge, weir, railway viaduct, riverside paths. Some bridges blocked by crashed cars. Fishing here.
-  3. Inner town: Victorian stone terraces with back alleys and yards, school, park with bandstand, allotments.
-  4. Suburbs: 1930s semis, 1970s estates and cul-de-sacs, leisure centre, garden centre. Fewer zombies, good safe-house territory.
-  5. Edge of town: industrial estate, supermarket, golf course, racecourse, then farmland, woods and farms. Quiet, sparse supplies, good for foraging and farming.
-- Danger and loot are highest in the centre and drop towards the edges.
-- Building interiors are separate screens. Entering through a door switches to the interior; stairs and ladders lead to upstairs and cellar screens. Pokémon-style, buildings are smaller outside than inside: on the town map each is a shrunk token (its front, door and windows), while its interior screens are true scale, with room layouts matching the building's type and real size (see Scale). This covers every building you can enter: houses, shops, pubs, the church, the station and the train's carriages. Doors and windows link inside and outside: noise passes both ways, zombies can follow you in through open or broken doors and windows, barricades are placed from inside, and looking out of a window briefly shows the street. The outside world keeps running while you're indoors.
+- The region's layout is the same every run: designed by hand as data, with a fixed world seed in config.js only for small details (trees, run lengths of houses, which way a gate opens).
+- Each run uses a separate run seed for what varies: loot, zombie positions, NPCs, and which bridges and roads are blocked.
+- Flip-screen world: a 25×25 grid of screens. Walk off an edge to go to the next screen.
+- Map design (Pokémon / Zelda / Stardew, not realism): a few compact places, each small enough to learn by heart (2×2 to 4×4 screens) with a strong identity and landmarks to steer by, joined by designed routes through wilderness. About a third of the map is settlements, the rest roads, trails, forest, lakes, river and mountains. Routes wind, branch and dead-end on purpose, with chokepoints (bridges, the notch, the trestle), shortcuts and secrets. Places you can see but not reach yet are gated by key items (step 20). Every screen earns its place.
+- The places (plan: docs/region-plan.md, region-plan.png; names provisional):
+  1. Haverly, the town: Main Street, the town green with its white church, diner, general store, hardware store, bank, post office, police and fire station, the train depot, the movie theater. Most zombies, best loot.
+  2. Carrick Mills, the mill town down the river: brick mills on the falls, the dam, workers' row houses, the covered bridge.
+  3. Loon Lake, the lake village under the mountains: summer cabins, the lodge, boathouse and marina, the general store.
+  4. Apple Hill, the farm village: farms, barns, orchards, the feed store, the grange hall. Quiet, good for food and farming; where you start.
+  5. Cooper's Corner, the crossroads: gas station, motel, bar, the drive-in.
+  - Between them: forest, Loon Lake, Mount Ketchum and Ketchum Notch, the Kennock River with its gorge and the railway trestle (the stopped train), a swamp, a quarry, a summer camp, a fire tower, a logging camp, an old mine.
+- Danger and loot are highest in Haverly and drop with distance; the wilderness is quieter but exposed at night.
+- Building interiors are separate screens. Entering through a door switches to the interior; stairs and ladders lead to upstairs and cellar screens. Pokémon-style, buildings are smaller outside than inside: on the town map each is a shrunk token (its front, door and windows), while its interior screens are true scale, with room layouts matching the building's type and real size (see Scale). This covers every building you can enter: houses, stores, the diner, the bar, the church, the depot and the train's carriages. Doors and windows link inside and outside: noise passes both ways, zombies can follow you in through open or broken doors and windows, barricades are placed from inside, and looking out of a window briefly shows the street. The outside world keeps running while you're indoors.
 
 ## Platform and workflow
 - Offline, single player only. No servers or accounts.
@@ -73,7 +75,7 @@ Two scales, Pokémon-style (playtest decision): buildings are smaller outside th
   - Objects: bed 1×2, sofa 1×2, table 1×1 or 2×1.
   - Buildings (true size, incl. walls): shed 3×3, greenhouse 3×4, terraced house 5×7, semi or farmhouse 7×9, corner shop 6×8, pub 10×12, church 9×18, barn 8×12. Room layouts inside follow these.
   - A train carriage inside: 5 wide (seat, seat, aisle, seat, seat) × 15 long, a 1-tile aisle.
-- Outside (the town map): sized against the vehicles, which are close to real size (playtest: "a person is one tile, a bike is 2×1, a car is 2×3, a van is 2×4; the houses need to match that scale a little"). Vehicles (width × length): bike 2×1, car 2×3, van 2×4, tractor 2×3. Buildings are about three-quarters of true size, still smaller than inside (width × depth): terraced house 4×5, semi 5×6 (a pair 10×6), detached 6×6, farmhouse 6×7, corner shop 5×6, post office / bank 6×6, pub / coaching inn 8×8, church 8×14 (with tower), barn 6×9, shed 3×3, greenhouse 3×4, station 12×5, superstore 16×12, factory shed 10×8, train carriage 2×12. People, zombies and items are always 1 tile. (First tried at about half true size, e.g. a terraced house 3×3 and a car 2×1: too small.)
+- Outside (the town map): sized against the vehicles, which are close to real size (playtest: "a person is one tile, a bike is 2×1, a car is 2×3, a van is 2×4; the houses need to match that scale a little"). Vehicles (width × length): bike 2×1, car 2×3, van 2×4, tractor 2×3. Buildings are about three-quarters of true size, still smaller than inside (width × depth): terraced house 4×5, semi 5×6 (a pair 10×6), detached 6×6, farmhouse 6×7, corner shop 5×6, post office / bank 6×6, pub / coaching inn 8×8, church 8×14 (with tower), barn 6×9, shed 3×3, greenhouse 3×4, station 12×5, superstore 16×12, factory shed 10×8, train carriage 2×12. New England kinds at these sizes: cape house or mill row house 4×5, triple-decker 5×6, colonial or farmhouse 6×7, general store or diner 5×6, gas station 6×6, bar or lodge 8×8, white church 8×14 (with steeple), barn 6×9, summer cabin 3×4, depot 12×5, mill 10×8 or more, motel 12×5. People, zombies and items are always 1 tile. (First tried at about half true size, e.g. a terraced house 3×3 and a car 2×1: too small.)
 - Ways (widths, outside): snicket/ginnel 1, pavement 1, lane 2–3, main road 4–5, bridge 3, river 4–6, wall/hedge 1.
 - Because buildings are small outside, the town map fits a real town's worth of streets; open countryside at the edge of town is compressed further.
 - One camera angle outside (looking north, a little from above): every roof shows, with its ridge and two slopes (slate courses, shared chimney stacks on the party walls of terraces), and only walls that face you (south) show, with their doors and windows. A building that faces away shows its roof and back, a doorstep on the pavement, and a painted hanging sign over the pavement so you can tell what it is (hanging signs are a Wetherby feature).
@@ -84,15 +86,15 @@ Stone, slate, brick, wood, glass, corrugated metal. Each has HP, flammability, s
 
 ## Weapons
 - Melee like the Zelda sword: every weapon hit damages and knocks the zombie back 1 tile (staggering too was tried: it made zombies unable to ever bite; see step 8). Unarmed hits are weak with no knockback (shove still available). One zombie is easy with a weapon; several at once is the danger.
-- Melee: walking stick (starting weapon, weak, quick), cricket bat (all-rounder), garden fork (reach 2, light knockback), spade (heavy, big knockback, slow), golf club (strong, noisy), fire axe (best, rare). Light durability: weapons wear out and break.
-- Ranged, distinctly British, no armouries: catapult with stones/marbles (main ranged weapon, quiet, weak), pub darts (thrown, recoverable), bow and arrows from a scout hut or archery club (quiet, arrows recoverable), air rifle (rare, quiet, few pellets), one rare farmer's shotgun (devastating, very loud, few cartridges). No other guns.
+- Melee: walking stick (starting weapon, weak, quick), baseball bat (all-rounder), hockey stick (quick, light), garden fork (reach 2, light knockback), spade (heavy, big knockback, slow), golf club (strong, noisy), fire axe (best, rare). Light durability: weapons wear out and break.
+- Ranged: slingshot with stones/marbles (main ranged weapon, quiet, weak), bar darts (thrown, recoverable), bow and arrows from the summer camp's archery range (quiet, arrows recoverable), BB gun (quiet, weak). Guns exist but are rare and very loud: a hunting rifle or a shotgun, found in a few houses, the gun shop and the police station, with little ammunition. Firing one is devastating and brings a crowd: the high-risk weapon, never the main one.
 - Fireworks: a lure, not a weapon; zombies head to them.
 - Throwables: bricks, bottles, tins (small damage or distraction).
 
 ## Food and water (about 12 food types)
-1. Scavenging: tins, packets, biscuits, bottled water in buildings. Finite; looted places stay looted. Fresh food (bread, milk, fruit) goes off after a few days; tins keep.
-2. Foraging: blackberries, apples, nettles, mushrooms in hedgerows and woods; amounts depend on season and thin out towards winter. Some mushrooms make you ill unless you have the mushroom guide. Fishing in the river with a rod: slow, quiet, exposed.
-3. Light farming: seed potatoes and seed packets from sheds, allotments and the garden centre; plant in a veg patch near the safe house; crops grow over several days; zombies trample crops and desperate NPCs steal them.
+1. Scavenging: cans, packets, crackers, bottled water in buildings. Finite; looted places stay looted. Fresh food (bread, milk, fruit) goes off after a few days; tins keep.
+2. Foraging: blueberries, apples, fiddleheads, mushrooms in the woods and orchards; amounts depend on season and thin out towards winter. Some mushrooms make you ill unless you have the mushroom guide. Fishing in the river and the lake with a rod: slow, quiet, exposed.
+3. Light farming: seed potatoes and seed packets from sheds, barns and the feed store; plant in a veg patch near the safe house; crops grow over several days; zombies trample crops and desperate NPCs steal them.
 - Water: bottled water → river water (boil it or risk illness) → rain collector.
 - Cooking: raw fish, potatoes and mushrooms must be cooked on a stove or campfire; fires give off light visible at night.
 
@@ -111,9 +113,9 @@ Phase 1 — Core loop (one test screen)
 10. Throwing: any item can be thrown; it makes noise where it lands (distraction)
 11. Save/load (autosave every turn) + game over screen (days survived, deadpan cause of death, seed)
 
-Phase 2 — The town
+Phase 2 — The region
 12. Flip-screen world: 25×25 screens from the fixed world seed, walking between screens
-13. Districts: generate the town centre, river, inner town, suburbs and edge of town as described in The world
+13. The region: the five places and the wilderness between them as described in The world (13a, a single realistic town, was built and then replaced: see Decisions)
 14. Building interiors as separate screens, with doors (open/close/lock), windows (see-through, smashable, loud), barricades and upstairs/cellars, using the materials table
 
 Phase 3 — Surviving
@@ -124,11 +126,11 @@ Phase 3 — Surviving
 
 Phase 4 — Depth
 19. Zombie numbers: numbers rise as the days pass, noise draws them into crowds, night brings more out
-20. Key items, Zelda-style: bolt cutters (padlocked gates), torch (dark cellars, night), crowbar (boarded doors), bike (fast travel, can't fight while riding, carries less), wellies (wade the river shallows), mushroom guide. Locked areas hold better loot
-21. Weapons: the full melee and British ranged set from Weapons
+20. Key items, Zelda-style: bolt cutters (padlocked gates), torch (dark cellars, night), crowbar (boarded doors), bike (fast travel, can't fight while riding, carries less), waders (wade the river shallows), mushroom guide. Locked areas hold better loot
+21. Weapons: the full melee and ranged set from Weapons
 22. Foraging, fishing and cooking (Food and water, stage 2)
 23. Light farming (Food and water, stage 3)
-24. NPC survivors: NPCs follow the same rules as the player — they scavenge, eat, drink, sleep, avoid zombies and compete for the same finite loot. Each has one attitude: friendly (gets on with their own day), wary (keeps distance, fights if cornered) or hostile (attacks for your stuff). Desperation: when an NPC's hunger or thirst is low, they may steal or attack, even if friendly; giving them food or tea calms them. NPCs only remember whether the player attacked or helped them. No relationships, factions or gossip
+24. NPC survivors: NPCs follow the same rules as the player — they scavenge, eat, drink, sleep, avoid zombies and compete for the same finite loot. Each has one attitude: friendly (gets on with their own day), wary (keeps distance, fights if cornered) or hostile (attacks for your stuff). Desperation: when an NPC's hunger or thirst is low, they may steal or attack, even if friendly; giving them food or coffee calms them. NPCs only remember whether the player attacked or helped them. No relationships, factions or gossip
 25. Rare odd sightings from Setting and tone
 
 Phase 5 — Polish
@@ -136,7 +138,7 @@ Phase 5 — Polish
 27. Art pass: 8-bit tiles and UI
 
 ## Not doing (keep it a game)
-Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factions, NPC relationships, simulated history, zombie evolution, flowing water, complex ecosystems, crafting trees, procedurally generated towns. Only revisit after the game is finished and fun.
+Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factions, NPC relationships, simulated history, zombie evolution, flowing water, complex ecosystems, crafting trees, procedurally generated towns, guns as the main weapon. Only revisit after the game is finished and fun.
 
 ## Decisions
 (Record decisions from playtesting here.)
@@ -308,3 +310,9 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - Wording (messages.js): an inspect line for every tile kind and building ("Setts. Murder on the ankles.", "The Black Bull. Free house.", "Post office. Back in 5 mins.", "A carriage. Bags on the racks.", "Castle ruins. Cromwell's work."), signs ("A sign: CHIPS."), and what walking into things says ("Too deep to wade.", "Too deep without wellies.", "A sheer drop. Not that way.", "The door's locked. For now.").
 - Speed: town made in ~160 ms once, ~20 ms a world after; ~0.8 ms a turn on average (worst ~8 ms); a save ~39 KB.
 - Tests: the start (screen 11,8, on the pavement outside your own door), every screen with room has zombies, every open tile reachable, the river crosses the map unbroken, without its bridges and weir the river splits the town (the hamlet can't be reached), the train and ledge on the viaduct, buildings at their outside sizes, none on the water, every way in reachable, the closed edge with roadblocks, signs over walkable tiles, a short inspect line for every tile, and every screen of the town drawn in view and remembered.
+
+### Playtest: the realistic town lost the fun (after step 13a) - decided
+- "The map isn't very fun. We've aimed for realism but it's lost charm and good game design." One continuous town at even density: no arrivals, no landmarks to steer by, no reason for routes. Look at how Pokémon, Zelda and Stardew maps are designed: compact towns with space around them, 4-5 distinct places with forest and wilderness between.
+- Decided: drop the UK setting and move to rural New England, early 1980s ("70s, 80s"). Kept: dry deadpan humour (American details: coffee, the diner, the bar), guns rare and very loud (a high-risk weapon that brings a crowd), the stopped train (now on a trestle over the gorge), the 25 x 25 screens, and everything under the map from 13a (tiles as data, buildings drawn with the one camera angle, street frontages, gates, docs/map.html).
+- 13a's Brackenby layout (src/sim/gen/town.js) is replaced by the region once its plan (docs/region-plan.md, region-plan.png) is approved. The Yorkshire research and plan stay in docs/ as history.
+
