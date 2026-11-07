@@ -7,7 +7,7 @@ import { canNotice } from './sim/systems/vision.js';
 import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
-import { drawBag, bagButtonAt } from './render/bag.js';
+import { drawBag, bagHitAt } from './render/bag.js';
 import { itemsAt } from './sim/systems/items.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
@@ -23,6 +23,7 @@ let inspect = null; // { x, y } of the long-pressed tile, cleared by the next ac
 let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
 let shoveArmed = false; // SHOVE pressed: the next map tap picks the direction
 let bagOpen = false;    // BAG panel showing (opening it takes no turn)
+let bagSelected = 0;    // item id tapped in the bag
 let diedAt = 0;     // when the player died (ms), so a fast tapper sees the death screen
 
 function newGame(newSeed) {
@@ -47,7 +48,7 @@ function draw() {
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
   drawMap(ctx, world, layout, inspect, debug);
   drawTopBar(ctx, world, layout, log, debug);
-  if (bagOpen) drawBag(ctx, world, layout);
+  if (bagOpen) drawBag(ctx, world, layout, bagSelected);
   drawActionBar(ctx, layout, { shoveArmed, bagOpen });
   if (world.gameOver) drawDeath(ctx, world, layout);
 }
@@ -107,10 +108,12 @@ function tap(px, py) {
   const btn = actionButtonAt(layout, px, py);
   if (btn) return pressButton(btn.id);
   if (bagOpen) {
-    // Bag rows: use or drop takes a turn and closes the bag so you see what happened.
-    const b = bagButtonAt(world, layout, px, py);
+    // Tap an item to select it (no turn); use or drop takes a turn and closes the bag so you
+    // see what happened.
+    const b = bagHitAt(world, layout, bagSelected, px, py);
     if (!b) return;
-    bagOpen = false;
+    if (b.action === 'select') { bagSelected = b.itemId; draw(); return; }
+    bagOpen = false; bagSelected = 0;
     if (b.action === 'use') act({ type: 'use', itemId: b.itemId });
     else if (b.action === 'drop') act({ type: 'drop', itemId: b.itemId });
     else draw();
@@ -145,7 +148,7 @@ function tap(px, py) {
 // Action bar buttons. SHOVE arms (takes no turn); pressing it again disarms.
 function pressButton(id) {
   if (id === 'shove') { shoveArmed = !shoveArmed; bagOpen = false; draw(); }
-  if (id === 'bag') { bagOpen = !bagOpen; shoveArmed = false; draw(); }
+  if (id === 'bag') { bagOpen = !bagOpen; bagSelected = 0; shoveArmed = false; draw(); }
 }
 
 // Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait, F shove,

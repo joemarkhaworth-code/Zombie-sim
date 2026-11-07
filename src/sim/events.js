@@ -17,8 +17,9 @@
 //   entity_slammed { id, x, y, blockerId }        (pushed into something solid)
 //   entity_lost_action { id }                     (staggered: its action was wasted)
 //   item_picked_up { id, itemId }  bag_full { id, itemId }  item_dropped { id, itemId }
-//   item_used      { id, itemId, type, healed }  item_wielded / item_stowed { id, itemId }
-//   use_refused    { id, itemId, why: 'not_hurt' | 'no_use' }
+//   item_picked_up { ..., inHand }  bag_tidied { id }  (the bag was rearranged to make room)
+//   item_used      { id, itemId, type, healed }  item_wielded { id, itemId, swappedId }  item_stowed { id, itemId }
+//   use_refused    { id, itemId, why: 'not_hurt' | 'no_use' | 'no_room' }
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();

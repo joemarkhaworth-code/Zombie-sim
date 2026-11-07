@@ -45,8 +45,10 @@ export function createMessageLog(world) {
     else if (isPlayer(by)) log.say(`The ${nameOf(id)} goes down.`, LEVEL.info);
   });
   // Items.
-  ev.on('item_picked_up', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You pick up the ${nameOf(itemId)}.`, LEVEL.info); });
-  ev.on('bag_full', ({ id }) => { if (isPlayer(id)) log.say('Your bag is full.', LEVEL.blocked); });
+  ev.on('item_picked_up', ({ id, itemId, inHand }) => {
+    if (isPlayer(id)) log.say(inHand ? `No room. You carry the ${nameOf(itemId)}.` : `You pick up the ${nameOf(itemId)}.`, LEVEL.info);
+  });
+  ev.on('bag_full', ({ id, itemId }) => { if (isPlayer(id)) log.say(`No room for the ${nameOf(itemId)}.`, LEVEL.blocked); });
   ev.on('item_dropped', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You drop the ${nameOf(itemId)}.`, LEVEL.info); });
   ev.on('item_wielded', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You hold the ${nameOf(itemId)}.`, LEVEL.info); });
   ev.on('item_stowed', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You put the ${nameOf(itemId)} away.`, LEVEL.info); });
@@ -54,8 +56,9 @@ export function createMessageLog(world) {
     if (!isPlayer(id)) return;
     log.say({ beans: 'You eat the beans. Cold.', bandage: 'You bandage yourself up.' }[type] || 'Done.', LEVEL.info);
   });
-  ev.on('use_refused', ({ id, why }) => {
-    if (isPlayer(id)) log.say(why === 'not_hurt' ? "You're not hurt." : 'Nothing to do with that.', LEVEL.blocked);
+  ev.on('use_refused', ({ id, itemId, why }) => {
+    if (!isPlayer(id)) return;
+    log.say(why === 'not_hurt' ? "You're not hurt." : why === 'no_room' ? `No room in the bag for the ${nameOf(itemId)}.` : 'Nothing to do with that.', LEVEL.blocked);
   });
   // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {

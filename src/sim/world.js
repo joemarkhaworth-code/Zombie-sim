@@ -5,7 +5,7 @@ import { createEvents } from './events.js';
 import { generateTestScreen, TILE_INFO } from './gen/testscreen.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';
-import { makeItem, give } from './systems/items.js';
+import { makeItem, makeInventory } from './systems/items.js';
 
 export function createWorld(seed) {
   const { w, h } = CONFIG.screen;
@@ -40,14 +40,10 @@ export function createWorld(seed) {
     Melee: { ...CONFIG.player.melee },
     Hearing: { level: CONFIG.player.hearing },
     Noisy: { move: CONFIG.player.footsteps },
-    Inventory: { items: [], capacity: CONFIG.player.bagSlots, wielded: 0 },
+    Inventory: makeInventory(CONFIG.player.bag.cols, CONFIG.player.bag.rows),
   });
   world.playerId = player.id;
-  for (const type of CONFIG.player.startWith) {
-    const it = makeItem(world, type);
-    give(world, player, it);
-    if (CONFIG.items[type].weapon && !player.Inventory.wielded) player.Inventory.wielded = it.id;
-  }
+  if (CONFIG.player.startHolding) player.Inventory.hand = makeItem(world, CONFIG.player.startHolding).id;
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
   if (zpos) makeZombie(world, zpos.x, zpos.y);
   scatterItems(world, start, CONFIG.testScreen.items);

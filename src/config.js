@@ -22,22 +22,22 @@ export const CONFIG = {
   player: {
     speed: 100, eyesight: 3, hearing: 2, footsteps: 1, // one action per tick; full sight; footsteps noise level 1
     hearts: 3,            // 6 half-hearts: six bites and you're dead
-    // Bare hands: every hit lands for `damage`; weak, no knockback. A wielded weapon's numbers
+    // Bare hands: every hit lands for `damage`; weak, no knockback. A held weapon's numbers
     // replace these (like Zelda's sword: damage and a knockback).
     melee: { damage: 1, knockback: false, noise: 2 },
-    bagSlots: 6,          // inventory capacity, in slots
-    startWith: ['walkingStick'], // wielded at the start (the first weapon here)
+    bag: { cols: 4, rows: 3 }, // the bag is a grid; items take up their shape in it
+    startHolding: 'walkingStick', // in your hand (not in the bag) at the start
   },
 
   // Item types, as data: effects are properties, not special cases.
-  //   slots: room it takes in the bag. heal: half-hearts restored when used (refused at full health).
-  //   weapon: { damage, knockback, noise }: wield it to replace your bare-hands melee.
-  //   verb: what the bag's use button says.
+  //   size: [w, h] in bag squares (it may be turned to fit). heal: half-hearts restored when used
+  //   (refused at full health). weapon: { damage, knockback, noise }: hold it to replace your
+  //   bare-hands melee. verb: what the bag's use button says.
   items: {
-    walkingStick: { name: 'walking stick', glyph: '/', colour: '#b08850', slots: 2, weapon: { damage: 1, knockback: true, noise: 2 } },
-    cricketBat:   { name: 'cricket bat', glyph: '/', colour: '#e8d8a0', slots: 2, weapon: { damage: 2, knockback: true, noise: 2 } },
-    beans:        { name: 'tin of beans', glyph: '%', colour: '#d07030', slots: 1, heal: 1, verb: 'EAT' },
-    bandage:      { name: 'bandage', glyph: '+', colour: '#f0f0f0', slots: 1, heal: 2, verb: 'USE' },
+    walkingStick: { name: 'walking stick', glyph: '/', colour: '#b08850', size: [1, 3], weapon: { damage: 1, knockback: true, noise: 2 } },
+    cricketBat:   { name: 'cricket bat', glyph: '/', colour: '#e8d8a0', size: [1, 3], weapon: { damage: 2, knockback: true, noise: 2 } },
+    beans:        { name: 'tin of beans', glyph: '%', colour: '#d07030', size: [1, 1], heal: 1, verb: 'EAT' },
+    bandage:      { name: 'bandage', glyph: '+', colour: '#f0f0f0', size: [1, 1], heal: 2, verb: 'USE' },
   },
 
   zombie: {
@@ -126,6 +126,7 @@ export const CONFIG = {
     bagLine: '#ffffff',
     bagTitle: '#ffdd33',
     bagRow: '#13287a',
+    bagCell: '#071450',
     bagUse: '#1f7a3a',
     bagDrop: '#7a1f2b',
     alert: '#ffdd33',     // ! over a zombie that's after you

@@ -9,7 +9,7 @@ import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/
 const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
-import { makeItem, slotsUsed, meleeStats, itemsAt } from '../src/sim/systems/items.js';
+import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -464,56 +464,92 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander; CONFIG.zombie.glimpseRange = savedG;
 }
 
-// Items and the bag.
+// Items, the bag grid and your hand.
 {
-  // You start holding a walking stick; the test screen has the test items lying about.
+  // You start holding a walking stick (in hand, not in the bag); test items lie about.
   const w0 = createWorld(1), p0 = player(w0);
-  const stick = w0.entities.get(p0.Inventory.wielded);
-  check(stick && stick.Item.type === 'walkingStick', 'you start holding a walking stick');
+  const stick = w0.entities.get(p0.Inventory.hand);
+  check(stick && stick.Item.type === 'walkingStick' && p0.Inventory.items.length === 0, 'you start with the stick in hand and an empty bag');
   const lying = [...w0.entities.values()].filter(e => e.Item && e.Position).map(e => e.Item.type).sort();
   check(lying.join() === [...CONFIG.testScreen.items].sort().join(), `the test items are on the floor (${lying.join()})`);
-  check(lying.length && [...w0.entities.values()].filter(e => e.Item && e.Position).every(e => !tileBlocks(w0, e.Position.x, e.Position.y)), 'none in walls');
+  check([...w0.entities.values()].filter(e => e.Item && e.Position).every(e => !tileBlocks(w0, e.Position.x, e.Position.y)), 'none in walls');
 
   let w = emptyWorld();
-  const p = player(w); p.Position.x = 5; p.Position.y = 5;
+  const p = player(w); p.Position.x = 1; p.Position.y = 5;
+  const inv = p.Inventory;
   const log = createMessageLog(w);
   const turn = i => { log.clear(); return applyInput(w, i); };
-  // Walking onto an item picks it up as part of the step.
-  const beans = makeItem(w, 'beans', 6, 5);
+  const overlaps = () => {
+    const g = new Set();
+    for (const s of inv.items) for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
+      if (x < 0 || y < 0 || x >= inv.cols || y >= inv.rows || g.has(`${x},${y}`)) return true;
+      g.add(`${x},${y}`);
+    }
+    return false;
+  };
+  // Walking onto an item picks it up as part of the step, into the bag.
+  const beans = makeItem(w, 'beans', 2, 5);
   check(turn({ type: 'move', dx: 1, dy: 0 }) && w.turn === 1, 'stepping onto an item is one turn');
-  check(p.Inventory.items.includes(beans.id) && !beans.Position, 'and picks it up');
+  check(inv.items.some(s => s.id === beans.id) && !beans.Position, 'and puts it in the bag');
   check(log.text === 'You pick up the tin of beans.', `it says so (got "${log.text}")`);
-  // A full bag leaves it on the floor; drop room and tap yourself to pick it up later.
-  const bat = makeItem(w, 'cricketBat', 7, 5);
-  makeItem(w, 'bandage', 8, 5); makeItem(w, 'bandage', 9, 5);
-  turn({ type: 'move', dx: 1, dy: 0 }); // bat: stick 2 + beans 1 + bat 2 = 5 of 6
-  turn({ type: 'move', dx: 1, dy: 0 }); // bandage: 6 of 6
-  check(slotsUsed(w, p) === 6, 'the bag counts slots');
-  turn({ type: 'move', dx: 1, dy: 0 }); // second bandage: full
-  check(itemsAt(w, 9, 5).length === 1 && log.text === 'Your bag is full.', `a full bag leaves it on the floor (got "${log.text}")`);
-  check(describeTile(w, 9, 5) === "You're on a bandage.", 'inspecting yourself says what you are on');
-  check(turn({ type: 'drop', itemId: beans.id }) && itemsAt(w, 9, 5).some(e => e.id === beans.id), 'dropping takes a turn and leaves it at your feet');
-  check(turn({ type: 'pickup' }) && slotsUsed(w, p) === 6, 'tapping yourself picks up the top item');
-  // Weapons: hold the bat (2 damage), stow it for bare hands (1, no knockback).
-  check(turn({ type: 'use', itemId: bat.id }) && p.Inventory.wielded === bat.id, 'HOLD wields the bat');
+  // Shapes: a bat takes 3 squares. Fill the 4x3 bag: 3 bats (9) + beans + 2 bandages = 12.
+  for (let i = 0; i < 3; i++) makeItem(w, 'cricketBat', 3 + i, 5);
+  makeItem(w, 'bandage', 6, 5); makeItem(w, 'bandage', 7, 5);
+  for (let i = 0; i < 5; i++) turn({ type: 'move', dx: 1, dy: 0 });
+  const cells = inv.items.reduce((n, s) => n + s.w * s.h, 0);
+  check(inv.items.length === 6 && cells === 12, `items take their shapes: 3 bats, beans and 2 bandages fill 12 squares (${cells})`);
+  check(!overlaps(), 'no two items overlap, all inside the grid');
+  check(inv.items.filter(s => w.entities.get(s.id).Item.type === 'cricketBat').every(s => s.w * s.h === 3), 'each bat is 1x3, upright or turned');
+  // Full: the next item stays on the floor.
+  makeItem(w, 'beans', 8, 5);
+  turn({ type: 'move', dx: 1, dy: 0 });
+  check(itemsAt(w, 8, 5).length === 1 && log.text === 'No room for the tin of beans.', `a full bag leaves it on the floor (got "${log.text}")`);
+  // Drop the beans from the bag: a 1x1 hole, and the tin on the floor fits it.
+  check(turn({ type: 'drop', itemId: beans.id }) && itemsAt(w, 8, 5).length === 2, 'dropping takes a turn and leaves it at your feet');
+  check(turn({ type: 'pickup' }) && inv.items.length === 6, 'tapping yourself picks up the top item');
+  // Hold a bat: it leaves the bag for your hand, and the stick takes its place in the bag.
+  const bat = inv.items.find(s => w.entities.get(s.id).Item.type === 'cricketBat').id;
+  const stickId = inv.hand;
+  check(turn({ type: 'use', itemId: bat }) && inv.hand === bat && inv.items.some(s => s.id === stickId) && !inv.items.some(s => s.id === bat),
+    'HOLD swaps: the bat in hand, the stick into its space in the bag');
+  check(!overlaps(), 'still no overlaps');
   check(meleeStats(w, p).damage === 2, 'the bat does 2');
-  const z = makeZombie(w, 9, 6);
-  turn({ type: 'move', dx: 0, dy: 1 });
-  check(z.Health.hp === CONFIG.zombie.health - 2 && z.Position.y === 7, 'a bat hit does 2 and knocks it back');
-  check(turn({ type: 'use', itemId: bat.id }) && p.Inventory.wielded === 0, 'STOW puts it away');
-  check(meleeStats(w, p).damage === 1 && !meleeStats(w, p).knockback, 'bare hands: 1, no knockback');
-  w.entities.delete(z.id);
-  // Healing: refused at full health (no turn); a bandage heals a heart and is used up.
-  const band = w.entities.get(p.Inventory.items.find(id => w.entities.get(id).Item.type === 'bandage'));
+  // Stow with no room: refused, no turn. Make room, then it goes in.
   const t0 = w.turn;
-  check(!turn({ type: 'use', itemId: band.id }) && w.turn === t0 && log.text === "You're not hurt.", 'no healing at full health, no turn');
-  p.Health.hp = 2;
-  check(turn({ type: 'use', itemId: band.id }) && p.Health.hp === 4 && !w.entities.has(band.id), 'a bandage heals a heart and is used up');
-  // Things on the floor are remembered, and drawn under creatures.
-  w.entities.delete(p.Inventory.items.pop());
-  const tin = makeItem(w, 'beans', 2, 2);
+  check(!turn({ type: 'use', itemId: bat }) && w.turn === t0 && inv.hand === bat, 'stowing into a full bag is refused, no turn');
+  check(log.text === 'No room in the bag for the cricket bat.', `it says so (got "${log.text}")`);
+  // Drop the hand's weapon: bare hands.
+  check(turn({ type: 'drop', itemId: bat }) && inv.hand === 0 && itemsAt(w, p.Position.x, p.Position.y).some(e => e.id === bat), 'you can drop what you hold');
+  check(meleeStats(w, p).damage === 1 && !meleeStats(w, p).knockback, 'bare hands: 1, no knockback');
+  // Tidying: fragmented space is repacked to fit a long item.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 5; q.Position.y = 5;
+  const qi = q.Inventory;
+  qi.hand = 0;
+  // Four tins on the diagonal of the 4x3 grid leave no straight run of 3 free.
+  const tins = [[0, 0], [1, 1], [2, 2], [3, 0]].map(([x, y]) => { const t = makeItem(w, 'beans'); qi.items.push({ id: t.id, x, y, w: 1, h: 1 }); return t; });
+  const tidied = [];
+  w.events.on('bag_tidied', () => tidied.push(1));
+  makeItem(w, 'cricketBat', 5, 5);
+  check(applyInput(w, { type: 'pickup' }) && qi.items.length === 5 && tidied.length === 1, 'the bag tidies itself to fit a long item');
+  // A weapon that won't fit at all goes into empty hands.
+  for (let i = 0; i < 5; i++) { makeItem(w, 'beans', 5, 5); applyInput(w, { type: 'pickup' }); }
+  check(qi.items.reduce((n, s) => n + s.w * s.h, 0) === 12, 'nine tins and a bat fill all 12 squares');
+  const bat2 = makeItem(w, 'cricketBat', 5, 5);
+  check(applyInput(w, { type: 'pickup' }) && qi.hand === bat2.id, 'a weapon with no room in the bag goes into empty hands');
+  // Healing: refused at full health (no turn); a bandage heals a heart and is used up.
+  w = emptyWorld();
+  const r = player(w); r.Position.x = 5; r.Position.y = 5;
+  const band = makeItem(w, 'bandage', 5, 5); applyInput(w, { type: 'pickup' });
+  const t1 = w.turn;
+  check(!applyInput(w, { type: 'use', itemId: band.id }) && w.turn === t1, 'no healing at full health, no turn');
+  r.Health.hp = 2;
+  check(applyInput(w, { type: 'use', itemId: band.id }) && r.Health.hp === 4 && !w.entities.has(band.id) && r.Inventory.items.length === 0, 'a bandage heals a heart and is used up');
+  // Items on the floor are remembered.
+  makeItem(w, 'beans', 2, 2);
   updatePlayerView(w);
-  check(p.Memory.tiles[2 * w.w + 2].things.some(t => t.name === 'tin of beans'), 'items on the floor are remembered');
+  check(r.Memory.tiles[2 * w.w + 2].things.some(t => t.name === 'tin of beans'), 'items on the floor are remembered');
+  check(describeTile(w, 5, 5) === "That's you." && (makeItem(w, 'bandage', 5, 5), describeTile(w, 5, 5) === "You're on a bandage."), 'inspecting yourself says what you are on');
 }
 
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
@@ -570,7 +606,7 @@ function check(cond, msg) {
       drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
       drawTopBar(fake, w, L, log, i % 2 === 0);
       drawActionBar(fake, L, { shoveArmed: i % 3 === 0, bagOpen: i % 4 === 0 });
-      drawBag(fake, w, L);
+      drawBag(fake, w, L, i % 2 ? player(w).Inventory.hand : (player(w).Inventory.items[0] || {}).id);
       if (w.gameOver) drawDeath(fake, w, L);
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
@@ -604,7 +640,7 @@ for (let s = 1; s <= SEEDS; s++) {
     let zlast = { ...z.Position }, closest = Infinity;
     for (let i = 0; i < TURNS * 2 && w.turn < TURNS && !w.gameOver; i++) {
       const dx = r.int(3) - 1, dy = r.int(3) - 1;
-      const inv = player(w).Inventory.items;
+      const inv = carried(player(w));
       const someItem = inv.length ? inv[r.int(inv.length)] : 0;
       const input = r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy }
         : r.chance(0.04) ? { type: 'pickup' } : (someItem && r.chance(0.05)) ? { type: r.chance(0.5) ? 'use' : 'drop', itemId: someItem }

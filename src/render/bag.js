@@ -1,58 +1,108 @@
-// The bag panel: an 8-bit list over the map. Header "BAG used/capacity" + CLOSE, one big row per
-// item with its glyph, name and slots, and two buttons: use (EAT / USE / HOLD / STOW) and DROP.
-// Opening it takes no turn; use and drop take a turn and close it (main.js).
+// The bag panel, over the map. Top: BAG and CLOSE. Then IN HAND (what you hold, not in the bag),
+// then the bag grid: each item drawn as a block over the squares it takes up. Tap an item to
+// select it; its name and buttons appear underneath: use (EAT / USE / HOLD / STOW) and DROP.
+// Opening it and selecting take no turn; use and drop take a turn and close it (main.js).
 import { CONFIG } from '../config.js';
-import { itemType, slotsUsed } from '../sim/systems/items.js';
+import { itemType } from '../sim/systems/items.js';
 
-const ROW = 56, PAD = 8;
+const PAD = 8;
 
-// Hit areas: [{ action: 'close' | 'use' | 'drop', itemId?, x, y, w, h }] plus the drawing rows.
-export function bagLayout(world, L) {
-  const p = world.entities.get(world.playerId);
-  const inv = p.Inventory;
-  const x = L.mapX + PAD, w = L.mapW - PAD * 2, top = L.mapY + PAD;
-  const buttons = [{ action: 'close', x: x + w - 96, y: top + 6, w: 90, h: 40 }];
-  const rows = inv.items.map((id, i) => {
-    const item = world.entities.get(id), t = itemType(item);
-    const y = top + 52 + i * (ROW + 4);
-    const verb = t.weapon ? (inv.wielded === id ? 'STOW' : 'HOLD') : (t.verb || 'USE');
-    const bw = 64;
-    buttons.push({ action: 'drop', itemId: id, x: x + w - bw - 6, y: y + 6, w: bw, h: ROW - 12, label: 'DROP' });
-    buttons.push({ action: 'use', itemId: id, x: x + w - bw * 2 - 12, y: y + 6, w: bw, h: ROW - 12, label: verb });
-    return { item, t, y, wielded: inv.wielded === id };
-  });
-  return { x, y: top, w, h: L.mapH - PAD * 2, rows, buttons, used: slotsUsed(world, p), capacity: inv.capacity };
+// Everything to draw and every hit area, for the current selection.
+// Hit areas: { action: 'close' | 'select' | 'use' | 'drop', itemId?, x, y, w, h, label? }
+export function bagLayout(world, L, selected) {
+  const p = world.entities.get(world.playerId), inv = p.Inventory;
+  const x = L.mapX + PAD, w = L.mapW - PAD * 2, y = L.mapY + PAD, h = L.mapH - PAD * 2;
+  const hits = [{ action: 'close', x: x + w - 96, y: y + 6, w: 90, h: 40, label: 'CLOSE' }];
+  // In hand.
+  const hand = { x: x + 12, y: y + 76, w: w - 24, h: 52 };
+  if (inv.hand) hits.push({ action: 'select', itemId: inv.hand, ...hand });
+  // The grid.
+  const cell = Math.floor(Math.min(64, (w - 24) / inv.cols));
+  const gx = x + Math.floor((w - cell * inv.cols) / 2), gy = hand.y + hand.h + 34;
+  const blocks = inv.items.map(s => ({ ...s, px: gx + s.x * cell, py: gy + s.y * cell, pw: s.w * cell, ph: s.h * cell }));
+  for (const b of blocks) hits.push({ action: 'select', itemId: b.id, x: b.px, y: b.py, w: b.pw, h: b.ph });
+  // The selected item's buttons.
+  const info = { x: x + 12, y: gy + cell * inv.rows + 14, w: w - 24 };
+  let sel = null;
+  if (selected && (inv.hand === selected || inv.items.some(s => s.id === selected))) {
+    const item = world.entities.get(selected), t = itemType(item), held = inv.hand === selected;
+    const verb = t.weapon ? (held ? 'STOW' : 'HOLD') : (t.verb || 'USE');
+    const bw = Math.floor((info.w - 8) / 2), by = info.y + 30;
+    hits.push({ action: 'use', itemId: selected, x: info.x, y: by, w: bw, h: 52, label: verb });
+    hits.push({ action: 'drop', itemId: selected, x: info.x + bw + 8, y: by, w: bw, h: 52, label: 'DROP' });
+    sel = { item, t, held };
+  }
+  return { x, y, w, h, hand, cell, gx, gy, blocks, info, sel, hits, inv };
 }
 
-export function bagButtonAt(world, L, px, py) {
-  return bagLayout(world, L).buttons.find(b => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) || null;
+export function bagHitAt(world, L, selected, px, py) {
+  const B = bagLayout(world, L, selected);
+  // Later areas win (buttons over blocks).
+  for (let i = B.hits.length - 1; i >= 0; i--) {
+    const b = B.hits[i];
+    if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return b;
+  }
+  return null;
 }
 
-export function drawBag(ctx, world, L) {
-  const c = CONFIG.colours, B = bagLayout(world, L);
+export function drawBag(ctx, world, L, selected) {
+  const c = CONFIG.colours, B = bagLayout(world, L, selected), inv = B.inv;
   ctx.fillStyle = c.bagBg; ctx.fillRect(B.x, B.y, B.w, B.h);
   ctx.strokeStyle = c.bagLine; ctx.lineWidth = 2; ctx.strokeRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.fillStyle = c.bagTitle; ctx.font = 'bold 20px monospace';
-  ctx.fillText(`BAG ${B.used}/${B.capacity}`, B.x + 12, B.y + 26);
-  if (!B.rows.length) {
-    ctx.fillStyle = c.dimText; ctx.font = 'bold 15px monospace';
-    ctx.fillText('Empty.', B.x + 12, B.y + 80);
+  ctx.fillText('BAG', B.x + 12, B.y + 26);
+  // In hand.
+  ctx.fillStyle = c.dimText; ctx.font = 'bold 12px monospace';
+  ctx.fillText('IN HAND', B.hand.x, B.hand.y - 10);
+  ctx.fillStyle = c.bagRow; ctx.fillRect(B.hand.x, B.hand.y, B.hand.w, B.hand.h);
+  if (inv.hand) {
+    const t = itemType(world.entities.get(inv.hand));
+    ctx.fillStyle = t.colour; ctx.font = 'bold 26px monospace';
+    ctx.fillText(t.glyph, B.hand.x + 12, B.hand.y + B.hand.h / 2 + 1);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 15px monospace';
+    ctx.fillText(t.name, B.hand.x + 40, B.hand.y + B.hand.h / 2 + 1);
+    if (selected === inv.hand) outline(ctx, B.hand.x, B.hand.y, B.hand.w, B.hand.h, c.bagTitle);
+  } else {
+    ctx.fillStyle = c.dimText; ctx.font = '14px monospace';
+    ctx.fillText('Bare hands', B.hand.x + 12, B.hand.y + B.hand.h / 2 + 1);
   }
-  for (const r of B.rows) {
-    ctx.fillStyle = c.bagRow; ctx.fillRect(B.x + 6, r.y, B.w - 12, ROW);
-    ctx.fillStyle = r.t.colour; ctx.font = 'bold 26px monospace';
-    ctx.fillText(r.t.glyph, B.x + 16, r.y + ROW / 2 + 1);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px monospace';
-    ctx.fillText(r.wielded ? `> ${r.t.name}` : r.t.name, B.x + 42, r.y + ROW / 2 - 8);
-    ctx.fillStyle = c.dimText; ctx.font = '12px monospace';
-    ctx.fillText(`${r.wielded ? 'in hand, ' : ''}${r.t.slots} slot${r.t.slots > 1 ? 's' : ''}`, B.x + 42, r.y + ROW / 2 + 10);
+  // The grid: empty squares, then each item as a block over its squares.
+  ctx.fillStyle = c.dimText; ctx.font = 'bold 12px monospace';
+  ctx.fillText('IN THE BAG', B.gx, B.gy - 12);
+  for (let yy = 0; yy < inv.rows; yy++) {
+    for (let xx = 0; xx < inv.cols; xx++) {
+      ctx.fillStyle = c.bagCell;
+      ctx.fillRect(B.gx + xx * B.cell + 2, B.gy + yy * B.cell + 2, B.cell - 4, B.cell - 4);
+    }
   }
-  for (const b of B.buttons) {
+  for (const b of B.blocks) {
+    const t = itemType(world.entities.get(b.id));
+    ctx.fillStyle = c.bagRow; ctx.fillRect(b.px + 2, b.py + 2, b.pw - 4, b.ph - 4);
+    ctx.strokeStyle = t.colour; ctx.lineWidth = 2; ctx.strokeRect(b.px + 3, b.py + 3, b.pw - 6, b.ph - 6);
+    ctx.fillStyle = t.colour; ctx.font = `bold ${Math.floor(B.cell * 0.5)}px monospace`; ctx.textAlign = 'center';
+    ctx.fillText(t.glyph, b.px + b.pw / 2, b.py + b.ph / 2 + 1);
+    ctx.textAlign = 'left';
+    if (selected === b.id) outline(ctx, b.px, b.py, b.pw, b.ph, c.bagTitle);
+  }
+  // Selected item.
+  if (B.sel) {
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 15px monospace';
+    ctx.fillText(`${B.sel.t.name}${B.sel.held ? ', in hand' : ''}`, B.info.x, B.info.y + 10);
+  } else {
+    ctx.fillStyle = c.dimText; ctx.font = '13px monospace';
+    ctx.fillText(inv.items.length || inv.hand ? 'Tap an item.' : 'Nothing on you.', B.info.x, B.info.y + 10);
+  }
+  for (const b of B.hits) {
+    if (b.action === 'select') continue;
     ctx.fillStyle = b.action === 'close' ? c.button : b.action === 'drop' ? c.bagDrop : c.bagUse;
     ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(b.label || 'CLOSE', b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 1);
     ctx.textAlign = 'left';
   }
+}
+
+function outline(ctx, x, y, w, h, colour) {
+  ctx.strokeStyle = colour; ctx.lineWidth = 3; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
 }
