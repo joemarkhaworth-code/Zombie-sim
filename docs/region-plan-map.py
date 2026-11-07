@@ -1,167 +1,175 @@
 # Draws the region plan (New England, early 1980s) on the real 25x25 screen grid.
-# Coordinates are game tiles: the map is 179 x 279 tiles (screens step 7 across, 11 down).
+# Everything runs on the grid, like the movement: roads, trails, the railway and the river go
+# only north-south or east-west, with square corners; places, fields, the lake and the mountains
+# have blocky edges. Coordinates are game tiles (179 x 279; screens step 7 across, 11 down).
 # Run from the repo root: python3 docs/region-plan-map.py  ->  docs/region-plan.png
 from PIL import Image, ImageDraw, ImageFont
+import random
 
 W, H, S, PAD = 179, 279, 4, 14
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 f_small = ImageFont.truetype(FONT, 11); f_num = ImageFont.truetype(BOLD, 10)
-f_label = ImageFont.truetype(BOLD, 14); f_big = ImageFont.truetype(BOLD, 17)
-f_title = ImageFont.truetype(BOLD, 21); f_leg = ImageFont.truetype(FONT, 13); f_legb = ImageFont.truetype(BOLD, 14)
+f_big = ImageFont.truetype(BOLD, 16); f_title = ImageFont.truetype(BOLD, 21)
+f_leg = ImageFont.truetype(FONT, 13); f_legb = ImageFont.truetype(BOLD, 14); f_tag = ImageFont.truetype(BOLD, 13)
 
 P = lambda x, y: (PAD + x * S, PAD + 40 + y * S)
-def poly(d, pts, fill, outline=None, width=1): d.polygon([P(x, y) for x, y in pts], fill=fill, outline=outline, width=width)
-def line(d, pts, fill, width): d.line([P(x, y) for x, y in pts], fill=fill, width=width, joint='curve')
-def dashed(d, pts, fill, width=3, on=3, off=2):
-    import math
+def box(d, x0, y0, x1, y1, fill, outline=None, width=1):
+    x0, x1 = sorted((x0, x1)); y0, y1 = sorted((y0, y1))
+    d.rectangle([P(x0, y0), P(x1, y1)], fill=fill, outline=outline, width=width)
+def way(d, pts, w, fill):
+    """A way of width w tiles along orthogonal corner points (centre line)."""
+    h = w / 2
     for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / (on + off)))
-        for k in range(n):
-            a, b = k / n, (k + on / (on + off)) / n
-            line(d, [(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a), (x0 + (x1 - x0) * b, y0 + (y1 - y0) * b)], fill, width)
+        assert x0 == x1 or y0 == y1, ('not straight', (x0, y0), (x1, y1))
+        box(d, min(x0, x1) - h, min(y0, y1) - h, max(x0, x1) + h, max(y0, y1) + h, fill)
+def dashed(d, pts, fill, w=1):
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        assert x0 == x1 or y0 == y1
+        n = int(abs(x1 - x0) + abs(y1 - y0))
+        for k in range(0, n, 4):
+            a, b = k / n, min(1, (k + 2) / n)
+            box(d, x0 + (x1 - x0) * a - w / 2, y0 + (y1 - y0) * a - w / 2, x0 + (x1 - x0) * b + w / 2, y0 + (y1 - y0) * b + w / 2, fill)
 
 img = Image.new('RGB', (PAD * 2 + W * S, 40 + PAD * 2 + H * S + 1300), '#f2ead6')
 d = ImageDraw.Draw(img, 'RGBA')
-d.text((PAD, 10), 'The region: New England, early 1980s (plan)', font=f_title, fill='#222')
+d.text((PAD, 10), 'The region: New England, early 1980s (plan v2: on the grid)', font=f_title, fill='#222')
 
-# Wilderness: forest everywhere, with clearings, fields round the farm village.
-poly(d, [(0, 0), (W, 0), (W, H), (0, H)], '#4f7d3c')
-import random
+# Forest everywhere, as square trees.
+box(d, 0, 0, W, H, '#4f7d3c')
 rnd = random.Random(1981)
-for _ in range(1400):
-    x, y = rnd.uniform(0, W), rnd.uniform(0, H)
-    r = rnd.uniform(0.8, 1.6)
-    d.ellipse([P(x - r, y - r), P(x + r, y + r)], fill=(40, 90, 40, 120))
-# Mountains along the top, Mount Ketchum, the notch.
-MOUNT = [(0, 0), (W, 0), (W, 34), (160, 44), (138, 36), (112, 46), (100, 30), (92, 30), (82, 44), (60, 38), (36, 46), (0, 40)]
-poly(d, MOUNT, '#8f8a80')
-for (x, y) in [(20, 18), (50, 14), (72, 22), (124, 16), (150, 20), (170, 12)]:
-    poly(d, [(x - 9, y + 10), (x, y - 8), (x + 9, y + 10)], '#a8a398', '#6a665e')
-    poly(d, [(x - 3, y - 2), (x, y - 8), (x + 3, y - 2)], '#ffffff')
-line(d, [(96, 46), (96, 30), (96, 0)], '#c9b98f', 6)   # Ketchum Notch road
-# Farmland round Apple Hill, orchards.
-poly(d, [(0, 150), (60, 146), (66, 200), (40, 212), (0, 206)], '#b9c97e')
-for gx in range(4, 62, 9):
-    line(d, [(gx, 150), (gx + 2, 206)], (90, 110, 50, 90), 1)
-for (x, y) in [(52, 160), (56, 168), (52, 176), (8, 196), (14, 200)]:
-    for k in range(4):
-        d.ellipse([P(x + k * 1.6 - 0.7, y - 0.7), P(x + k * 1.6 + 0.7, y + 0.7)], fill='#2f6a2a')
-# Loon Lake (with its island), Pine Pond, the swamp.
-LAKE = [(10, 52), (48, 46), (68, 54), (66, 64), (62, 84), (46, 96), (22, 94), (8, 74)]
-poly(d, LAKE, '#4a86c8')
-d.ellipse([P(28, 66), P(38, 74)], fill='#4f7d3c', outline='#2a4a2a')
-d.ellipse([P(22, 228), P(34, 238)], fill='#4a86c8')
-poly(d, [(80, 214), (104, 212), (108, 232), (86, 236)], '#6f8a5a')
+for _ in range(2200):
+    x, y = rnd.randrange(0, W), rnd.randrange(0, H)
+    box(d, x, y, x + 1, y + 1, (36, 84, 36, 150))
+# Mountains: a stepped band along the top; the notch road climbs through it.
+for (x0, x1, y1) in [(0, 30, 40), (30, 58, 46), (58, 84, 38), (84, 92, 30), (100, 116, 30), (116, 140, 44), (140, 179, 36)]:
+    box(d, x0, 0, x1, y1, '#8f8a80')
+for (x, y) in [(14, 16), (44, 20), (70, 14), (128, 20), (158, 14)]:
+    box(d, x - 6, y - 4, x + 6, y + 6, '#a8a398', '#6a665e'); box(d, x - 2, y - 4, x + 2, y - 1, '#ffffff')
+# Loon Lake: blocky, with its island. Pine Pond, the swamp, the quarry, the fire tower hill.
+for (x0, y0, x1, y1) in [(8, 50, 60, 90), (14, 46, 52, 52), (16, 88, 48, 96), (58, 58, 64, 84)]:
+    box(d, x0, y0, x1, y1, '#4a86c8')
+box(d, 28, 64, 38, 72, '#4f7d3c', '#2a4a2a')
+box(d, 22, 228, 34, 238, '#4a86c8')
+box(d, 78, 222, 102, 238, '#6f8a5a')
 for k in range(30):
-    x, y = rnd.uniform(82, 106), rnd.uniform(215, 233)
-    d.line([P(x, y), P(x + 1.5, y)], fill='#4a86c8', width=2)
-# The quarry, the fire tower hill.
-d.ellipse([P(62, 244), P(80, 258)], fill='#b8ad98', outline='#7a7060', width=2)
-d.ellipse([P(110, 56), P(128, 72)], fill='#6a8a50')
+    x, y = rnd.randrange(80, 100), rnd.randrange(224, 236); box(d, x, y, x + 2, y + 0.6, '#4a86c8')
+box(d, 62, 246, 80, 258, '#b8ad98', '#7a7060', 2)
+box(d, 110, 58, 126, 72, '#6a8a50')
+# Farmland round Apple Hill: rectangular fields; orchard rows.
+box(d, 0, 146, 64, 210, '#b9c97e')
+for gx in range(0, 64, 10): box(d, gx, 146, gx + 0.4, 210, (60, 90, 40, 140))
+for gy in range(146, 210, 9): box(d, 0, gy, 64, gy + 0.4, (60, 90, 40, 140))
+for (x, y) in [(50, 196), (50, 200), (50, 204), (6, 196), (6, 200), (6, 204)]:
+    for k in range(5): box(d, x + k * 2, y, x + k * 2 + 1, y + 1, '#2f6a2a')
 
-# The Kennock River: from the lake, past Haverly through its gorge, over the falls at the mills.
-RIVER = [(62, 88), (68, 100), (74, 116), (76, 132), (78, 148), (84, 162), (96, 176), (110, 190), (122, 204), (128, 214),
-         (138, 230), (152, 246), (166, 256), (178, 262)]
-line(d, RIVER[3:8], '#7a7166', 28)        # the gorge (crags) below Haverly
-line(d, RIVER, '#3f78c0', 18)
-line(d, RIVER, '#6fa0dc', 6)
-line(d, [(124, 211), (132, 211)], '#ffffff', 5)   # the falls and the dam
+# The Kennock River (5 wide): out of the lake, down past Haverly, the gorge, then east through
+# Carrick Mills (the falls) and off the map.
+RIVER = [(56, 92), (56, 104), (72, 104), (72, 160), (100, 160), (100, 214), (178, 214)]
+way(d, [(72, 140), (72, 160), (96, 160)], 11, '#7a7166')          # the gorge's crags
+way(d, RIVER, 5, '#3f78c0')
+box(d, 119, 211.5, 121, 216.5, '#ffffff')                           # the falls and the dam
 
-# Settlements: compact, each a few screens, with a strong identity.
+# Places: compact, rectangular, with streets on the grid and their exits marked (yellow).
 PLACES = [
-    ((80, 108, 114, 152), '#d9a37a', 'HAVERLY', 'the town'),
-    ((112, 204, 148, 240), '#c98b6a', 'CARRICK MILLS', 'the mill town'),
-    ((66, 58, 90, 84), '#e2c28e', 'LOON LAKE', 'the lake village'),
-    ((16, 158, 46, 190), '#e8d29a', 'APPLE HILL', 'the farm village'),
-    ((140, 96, 162, 114), '#dcb98a', "COOPER'S CORNER", 'the crossroads'),
+    ((80, 108, 114, 152), '#d9a37a', 'HAVERLY'),
+    ((112, 204, 148, 240), '#c98b6a', 'CARRICK MILLS'),
+    ((66, 58, 90, 84), '#e2c28e', 'LOON LAKE'),
+    ((16, 158, 46, 190), '#e8d29a', 'APPLE HILL'),
+    ((140, 96, 162, 114), '#dcb98a', "COOPER'S CORNER"),
 ]
-for (x0, y0, x1, y1), col, _, _ in PLACES:
-    d.rounded_rectangle([P(x0, y0), P(x1, y1)], radius=10, fill=col, outline='#6a4a2a', width=2)
-# Hint at their streets.
-def street(pts, w=4): line(d, pts, '#7a7a7a', w)
-street([(80, 130), (114, 130)], 5); street([(97, 108), (97, 152)], 4); street([(86, 116), (108, 116)], 3); street([(86, 144), (108, 144)], 3)
-d.rectangle([P(92, 124), P(102, 129)], fill='#8fbf6a')                       # the town green
-d.rectangle([P(95, 121), P(99, 124)], fill='#ffffff', outline='#555')        # the white church
-street([(112, 222), (148, 222)], 4); street([(126, 204), (126, 240)], 4)
-for k in range(3): d.rectangle([P(114 + k * 5, 208), P(118 + k * 5, 214)], fill='#9a4a3a', outline='#5a2a1a')   # the mills
-street([(66, 72), (90, 72)], 3); street([(78, 58), (78, 84)], 3)
-street([(16, 175), (46, 175)], 4); street([(30, 158), (30, 190)], 3)
-for (x, y) in [(20, 162), (38, 182), (22, 182)]: d.rectangle([P(x, y), P(x + 5, y + 6)], fill='#a8382a', outline='#5a1a10')   # barns
-street([(140, 105), (162, 105)], 4); street([(151, 96), (151, 114)], 4)
-d.rectangle([P(154, 108), P(162, 114)], fill='#333', outline='#999')          # the drive-in screen lot
+for (x0, y0, x1, y1), col, _ in PLACES:
+    box(d, x0, y0, x1, y1, col, '#6a4a2a', 2)
+grey = '#7a7a7a'
+way(d, [(80, 130), (114, 130)], 4, grey); way(d, [(97, 108), (97, 152)], 3, grey)        # Haverly: Main Street, Elm Street
+way(d, [(86, 116), (108, 116)], 2, grey); way(d, [(86, 144), (108, 144)], 2, grey); way(d, [(86, 116), (86, 144)], 2, grey)
+box(d, 89, 122, 95, 127, '#8fbf6a'); box(d, 91, 119, 93, 122, '#ffffff', '#555')         # the green and the white church
+way(d, [(112, 222), (148, 222)], 3, grey); way(d, [(124, 204), (124, 240)], 3, grey)      # Carrick Mills
+for k in range(3): box(d, 113 + k * 5, 206, 117 + k * 5, 212, '#9a4a3a', '#5a2a1a')       # mills on the north bank
+box(d, 128, 212, 131, 217, '#8a3a2a', '#222', 1)                                         # the covered bridge
+way(d, [(66, 72), (90, 72)], 2, grey); way(d, [(78, 58), (78, 84)], 2, grey)              # Loon Lake
+way(d, [(16, 170), (46, 170)], 3, grey); way(d, [(30, 158), (30, 190)], 2, grey)          # Apple Hill
+for (x, y) in [(18, 160), (38, 178), (18, 180)]: box(d, x, y, x + 5, y + 6, '#a8382a', '#5a1a10')   # barns
+way(d, [(140, 104), (162, 104)], 3, grey); way(d, [(151, 96), (151, 114)], 3, grey)       # the crossroads
+box(d, 154, 107, 161, 113, '#333', '#999')                                               # the drive-in
 
-# Roads between the places (gold), roadblocks where they leave the map (red).
-def road(pts, w=7):
-    line(d, pts, '#6a5a3a', w + 3); line(d, pts, '#e8c860', w)
-road([(0, 176), (16, 175)]); road([(46, 175), (60, 156), (70, 136), (80, 130)])          # Route 9 west: Apple Hill to Haverly
-road([(114, 130), (128, 118), (140, 105)]); road([(162, 105), (178, 100)])            # Route 9 east: the crossroads
-road([(97, 108), (102, 98), (92, 90), (84, 84)])                                       # Lake Road
-road([(78, 58), (88, 48), (96, 46)], 5)                                                # up to the notch
-road([(104, 152), (112, 170), (118, 186), (126, 204)])                                 # River Road to the mills
-road([(126, 240), (128, 279)]); road([(151, 114), (156, 160), (156, 196), (148, 222)])  # county road; south out
-road([(148, 222), (178, 226)])
-road([(151, 96), (150, 82)], 5); line(d, [(150, 82), (150, 52)], '#c9b98f', 5)       # logging road past the gate
-for (x, y) in [(1, 176), (177, 100), (128, 277), (177, 226), (96, 2)]:
-    d.rectangle([P(x - 2, y - 2), P(x + 2, y + 2)], fill='#d02020')
-# Trails (dashed).
-for t in [[(90, 70), (110, 64), (118, 64)], [(108, 110), (114, 80), (118, 70)], [(30, 190), (28, 212), (28, 228)],
-          [(126, 236), (110, 236), (96, 232), (80, 240), (72, 246)], [(46, 160), (40, 120), (24, 98)], [(16, 92), (10, 60), (18, 40)],
-          [(46, 190), (70, 200), (84, 214)]]:
-    dashed(d, t, '#f6efe0', 3)
+# Roads between the places (gold); red: roadblocks where they leave the map.
+GOLD = '#e8c860'
+ROADS = [
+    [(0, 170), (16, 170)],                                         # Route 9 west
+    [(46, 170), (52, 170), (52, 130), (80, 130)],                  # Route 9: Apple Hill to Haverly (iron bridge)
+    [(114, 130), (130, 130), (130, 104), (140, 104)],              # Route 9 east to the crossroads
+    [(162, 104), (178, 104)],                                      # Route 9 out east
+    [(97, 108), (97, 92), (78, 92), (78, 84)],                     # Lake Road
+    [(78, 58), (78, 50), (96, 50), (96, 0)],                       # Notch Road (rockslide in the notch)
+    [(106, 152), (106, 198), (124, 198), (124, 204)],              # River Road to Carrick Mills
+    [(151, 114), (151, 120), (156, 120), (156, 222), (148, 222)],  # County Road (county bridge)
+    [(156, 222), (178, 222)], [(124, 240), (124, 279)],            # out east and south
+    [(151, 96), (151, 82)],                                        # logging road to the gate
+]
+for r in ROADS: way(d, r, 4, '#6a5a3a')
+for r in ROADS: way(d, r, 3, GOLD)
+way(d, [(151, 82), (151, 52)], 2, '#c9b98f')
+for (x, y) in [(1, 170), (177, 104), (124, 277), (177, 222), (96, 2)]:
+    box(d, x - 2, y - 2, x + 2, y + 2, '#d02020')
+box(d, 148, 80, 154, 82, '#333')                                  # the padlocked gate
+box(d, 93, 26, 99, 30, '#6a665e')                                 # the rockslide
+# Crossings: the iron bridge, the county bridge, the lake footbridge; the shallows (waders).
+for (x0, y0, x1, y1) in [(68, 128, 76, 132), (153, 211, 159, 217), (54, 90, 58, 94)]:
+    box(d, x0, y0, x1, y1, '#d9c9a3', '#222', 2)
+box(d, 97, 182, 103, 188, None, '#9fd0ff', 3)
 
-# The railway: east edge, the crossroads, Haverly depot, over the gorge on the trestle, Apple Hill halt, west edge.
-RAIL = [(178, 128), (150, 120), (114, 136), (100, 140), (88, 150), (80, 158), (70, 166), (46, 178), (16, 186), (0, 190)]
-line(d, RAIL, '#222', 5); line(d, RAIL, '#f2ead6', 1)
-line(d, [(86, 151), (73, 164)], '#5a3a2a', 9)     # the trestle
-for k in range(3):
-    cx, cy = 85 - k * 4.2, 152.5 + k * 4.2
-    d.polygon([P(cx - 1, cy - 2.6), P(cx + 2.6, cy + 1), P(cx + 1, cy + 2.6), P(cx - 2.6, cy - 1)], fill='#c0392b', outline='#2a0a0a')
+# Trails (dashed): the shortcuts and the ways to the wild places.
+for t in [[(90, 66), (118, 66), (118, 72)], [(108, 108), (108, 80), (118, 80), (118, 72)], [(30, 190), (30, 228)],
+          [(112, 236), (90, 236), (90, 246), (80, 246)], [(46, 160), (50, 160), (50, 100), (24, 100), (24, 96)],
+          [(10, 92), (6, 92), (6, 40)], [(46, 186), (88, 186), (88, 222)], [(30, 232), (30, 260), (124, 260)]]:
+    dashed(d, t, '#f6efe0', 1.2)
 
-# Crossings of the river.
-for (x, y, col) in [(70, 136, '#d9c9a3'), (126, 212, '#8a3a2a'), (64, 92, '#a07040')]:
-    d.rectangle([P(x - 3, y - 2), P(x + 3, y + 2)], fill=col, outline='#222', width=2)
-d.ellipse([P(105, 184), P(111, 190)], outline='#1a4a8a', width=3)   # the shallows (waders)
+# The railway: from the east edge past the crossroads to Haverly depot, west across Haverly and
+# over the gorge on the trestle, down to Apple Hill halt and off the map west.
+RAIL = [(178, 120), (114, 120), (114, 146), (60, 146), (60, 184), (0, 184)]
+way(d, RAIL, 2, '#222'); way(d, RAIL, 0.5, '#bbb')
+box(d, 64, 144.5, 80, 147.5, '#5a3a2a')                           # the trestle
+for k in range(3): box(d, 79 - k * 6.2, 145.2, 84 - k * 6.2, 146.8, '#c0392b', '#2a0a0a')   # the stopped train
 
-# Screen grid and home.
+# Screen grid, home, labels.
 for i in range(26): d.line([P(7 * i + 2, 0), P(7 * i + 2, H)], fill=(0, 0, 0, 25), width=1)
 for j in range(26): d.line([P(0, 11 * j + 2), P(W, 11 * j + 2)], fill=(0, 0, 0, 25), width=1)
-d.rectangle([P(22, 164), P(28, 170)], outline='#ff2a8a', width=3)
-d.text(P(18, 152), 'HOME', font=f_label, fill='#ff2a8a')
-
-for (x0, y0, x1, y1), col, name, what in PLACES:
+box(d, 22, 164, 28, 168, None, '#ff2a8a', 3)
+d.text(P(17, 150.5), 'HOME', font=f_tag, fill='#ff2a8a')
+for (x0, y0, x1, y1), _, name in PLACES:
     cx, cy = P((x0 + x1) / 2, y1 + 1)
     tw = d.textlength(name, font=f_big)
-    d.rectangle([cx - tw / 2 - 4, cy, cx + tw / 2 + 4, cy + 21], fill=(255, 255, 255, 215))
+    d.rectangle([cx - tw / 2 - 4, cy, cx + tw / 2 + 4, cy + 20], fill=(255, 255, 255, 215))
     d.text((cx - tw / 2, cy + 1), name, font=f_big, fill='#3a1a0a')
 
 LM = [
-    (97, 126, "Haverly: Main Street, the green and the white church, diner, general store, bank, post office, police, theater"),
-    (110, 136, 'Haverly train depot'),
-    (80, 157, 'The trestle over the gorge, a passenger train stopped on it: 1-tile aisles, luggage loot'),
-    (70, 136, 'Iron bridge: Route 9 over the river into Haverly'),
-    (126, 212, 'Carrick Mills: brick mills on the falls, the dam, row houses, the covered bridge'),
+    (92, 124, 'Haverly: Main Street, the green and the white church, diner, stores, bank, post office, police, theater'),
+    (114, 124, 'Haverly train depot'),
+    (72, 146, 'The trestle over the gorge, a passenger train stopped on it: 1-tile aisles, luggage loot'),
+    (72, 130, 'Iron bridge: Route 9 over the river into Haverly'),
+    (120, 214, 'Carrick Mills: brick mills on the falls, the dam, row houses, the covered bridge'),
     (78, 70, 'Loon Lake village: summer cabins, the lodge, boathouse and marina'),
-    (33, 70, 'The island on the lake (needs a boat)'),
-    (30, 172, 'Apple Hill: farms, barns, orchards, feed store, grange hall. Home.'),
-    (151, 105, "Cooper's Corner: gas station, motel, bar"),
-    (158, 111, 'The drive-in'),
-    (118, 64, 'Fire tower on the hill: see the whole region'),
-    (96, 24, 'Ketchum Notch: road blocked by a rockslide; the ranger station beyond'),
-    (150, 66, 'Logging camp behind a padlocked gate (bolt cutters)'),
-    (20, 30, 'Old mine in the mountains (dark: flashlight)'),
+    (33, 68, 'The island on the lake (needs a boat)'),
+    (30, 176, 'Apple Hill: farms, barns, orchards, feed store, grange hall. Home.'),
+    (151, 101, "Cooper's Corner: gas station, motel, bar"),
+    (157, 110, 'The drive-in'),
+    (118, 65, 'Fire tower on the hill: see the whole region'),
+    (96, 28, 'Ketchum Notch: road blocked by a rockslide; the ranger station beyond'),
+    (151, 66, 'Logging camp behind a padlocked gate (bolt cutters)'),
+    (14, 30, 'Old mine in the mountains (dark: flashlight)'),
     (28, 233, 'Summer camp on Pine Pond: archery range (bows)'),
-    (94, 224, 'The swamp'),
-    (71, 251, 'The quarry'),
-    (108, 187, 'River shallows (waders)'),
-    (64, 92, 'Footbridge at the lake outlet'),
-    (12, 198, 'Orchard and cider mill'),
+    (90, 230, 'The swamp'),
+    (71, 252, 'The quarry'),
+    (100, 185, 'River shallows (waders)'),
+    (56, 92, 'Footbridge at the lake outlet'),
+    (11, 200, 'Orchard and cider mill'),
+    (156, 214, 'County bridge'),
 ]
 for n, (x, y, _) in enumerate(LM, 1):
     cx, cy = P(x, y)
     d.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill='#1d2a6b', outline='white', width=2)
     t = str(n); d.text((cx - d.textlength(t, font=f_num) / 2, cy - 6), t, font=f_num, fill='white')
-
 y0 = 40 + PAD * 2 + H * S + 6
 d.text((PAD, y0), 'Key (numbers on the map)', font=f_legb, fill='#222')
 for n, (_, _, text) in enumerate(LM, 1):
@@ -171,10 +179,10 @@ for n, (_, _, text) in enumerate(LM, 1):
     d.text((tx + 22, ty + 1), text, font=f_small, fill='#222')
 ky = y0 + 24 + len(LM) * 19 + 10
 notes = [
-    'Gold = roads (red squares: roadblocks where they leave the map). Dashed = trails. Black = railway.',
-    'Grey round the river below Haverly = the gorge. White on the river = the falls and dam.',
-    'Each place is 2x2 to 5x4 screens; everything else is wilderness. Faint grid = the 25 x 25 screens.',
-    'Walking Apple Hill to Haverly: ~9 screens (~2 game hours). Haverly to Carrick Mills: ~8 screens.',
+    'Everything on the grid, like movement: roads, trails, the railway and the river only run N-S or E-W,',
+    'with square corners. Places, fields, the lake and the mountains have blocky edges.',
+    'Gold = roads (red: roadblocks at the edge). Dashed = trails. Black = railway. Grey = the gorge.',
+    'Each place is 3x3 to 5x4 screens; the rest is wilderness. Faint grid = the 25 x 25 screens.',
     'Danger and loot: highest in Haverly, then Carrick Mills, the lake, the crossroads; Apple Hill is quietest.',
 ]
 for i, t in enumerate(notes): d.text((PAD, ky + i * 20), t, font=f_leg, fill='#333')

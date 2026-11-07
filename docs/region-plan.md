@@ -6,6 +6,9 @@ density, no arrivals, no landmarks, no reason for routes.
 
 ## Design rules (Pokémon / Zelda / Stardew)
 
+- On the grid, like the movement: roads, trails, the railway and the river only run north-south or east-west,
+  with square corners. Places, yards, fields, the lake and the mountains have blocky edges. No diagonals.
+
 - A few compact places, each small enough to learn by heart (2x2 to 5x4 screens), with a strong identity and
   one or two landmarks to steer by. Arriving somewhere is an event.
 - Wilderness between them: forest, the lake, the mountains, the river. Routes are designed: they wind, branch and
