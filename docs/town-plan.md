@@ -128,13 +128,15 @@ then runs past the industrial estate and out to the south-east.
 At true scale (1 tile is about 1.5 m) the whole map is only about 270 m x 420 m, while Knaresborough and Wetherby are
 each 2-3 km across. The fix (decided in playtesting) is Pokémon's: buildings are smaller outside than inside.
 
-- **Outside, on the town map,** each building is a shrunk token, about half true size: a terraced house is 3 x 3, a pub
-  6 x 5, the church 6 x 9, a train carriage 2 x 8 (full table in CLAUDE.md, "Scale").
+- **Outside, on the town map,** buildings are sized against the vehicles, which are close to real size (a car 2 x 3, a
+  van 2 x 4). Buildings are about three-quarters of true size: a terraced house is 4 x 5, a pub 8 x 8, the church
+  8 x 14, a train carriage 2 x 12 (full table in CLAUDE.md, "Scale").
 - **Inside, on separate interior screens,** everything is true scale: a terraced house is a full screen of rooms, and a
   carriage is a long screen with its one-tile aisle.
 
-So the town map fits a proper town's worth of streets: terrace rows of 8-12 houses rather than 3, several shops on each
-side of the High Street, and real estates of cul-de-sacs. The countryside at the edge is compressed further.
+So the town map fits more of a town than true scale would: terrace rows of 6-10 houses, a few shops on each side of
+the High Street, and small estates of cul-de-sacs. It's still a compressed town, a few representative streets per
+district. The countryside at the edge is compressed further.
 
 Walking: from the market to the edge of town is about 85 steps east or west (~3 game hours) and about 130 steps north
 or south (~4.5 hours). That's a real trip, with a reason to find a safe house out there before dark.
