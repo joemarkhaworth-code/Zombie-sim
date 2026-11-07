@@ -3,7 +3,7 @@ import { CONFIG } from '../src/config.js';
 import { createWorld, player, tileBlocks } from '../src/sim/world.js';
 import { applyInput, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
-import { computeLayout, tileAtPixel } from '../src/render/layout.js';
+import { computeLayout, tileAtPixel, buttonAt } from '../src/render/layout.js';
 
 let failures = 0;
 function check(cond, msg) {
@@ -31,12 +31,25 @@ function check(cond, msg) {
   check(w.inputs.length === w.turn, 'every turn-taking input recorded');
 }
 
-// Layout: phone portrait fits the whole screen with thumb-sized tiles.
-for (const [cw, ch] of [[360, 640], [390, 844], [430, 932]]) {
+// Layout: phone portrait fits the whole screen with thumb-sized tiles, the pad underneath.
+for (const [cw, ch] of [[320, 568], [360, 640], [390, 664], [390, 844], [430, 932]]) {
   const L = computeLayout(cw, ch);
-  check(L.tile >= 32, `tiles thumb-sized on ${cw}x${ch} (got ${L.tile})`);
-  check(L.mapW <= cw && L.mapY + L.mapH <= ch - CONFIG.ui.actionBarHeight, `screen fits ${cw}x${ch}`);
-  check(L.mapY === CONFIG.ui.topBarHeight && L.barY === L.mapY + L.mapH && L.barH >= CONFIG.ui.actionBarHeight, `no gaps on ${cw}x${ch}`);
+  const tag = `${cw}x${ch}`;
+  check(L.tile >= 32 || cw < 352, `tiles thumb-sized on ${tag} (got ${L.tile})`);
+  check(L.mapW <= cw && L.mapY === CONFIG.ui.topBarHeight, `map flush under the top bar on ${tag}`);
+  check(L.padY === L.mapY + L.mapH && L.padH >= CONFIG.ui.padMinHeight, `pad fills the rest on ${tag}`);
+  for (const a of L.buttons) {
+    check(a.x >= 0 && a.x + a.w <= cw && a.y >= L.padY && a.y + a.h <= ch, `${a.id} on the pad on ${tag}`);
+    for (const b of L.buttons) {
+      if (a === b) continue;
+      const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      check(!overlap, `${a.id} and ${b.id} don't overlap on ${tag}`);
+    }
+    const hit = buttonAt(L, a.x + a.w / 2, a.y + a.h / 2);
+    check(hit && hit.id === a.id, `pressing ${a.id}'s centre hits it on ${tag}`);
+  }
+  const up = L.buttons.find(b => b.id === 'up'), down = L.buttons.find(b => b.id === 'down');
+  check(up.x === down.x && up.y < down.y, `inverted-T d-pad on ${tag}`);
   const t = tileAtPixel(L, L.mapX + L.tile * 3.5, L.mapY + L.tile * 2.5);
   check(t && t.x === 3 && t.y === 2, 'pixel -> tile');
 }
