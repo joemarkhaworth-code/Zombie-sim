@@ -5,12 +5,14 @@ import { player } from './world.js';
 import { advance } from './scheduler.js';
 import { tryStep } from './systems/movement.js';
 import { updatePlayerView } from './systems/vision.js';
+import { clearNoise } from './systems/noise.js';
 
 // Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
   let took = false;
+  clearNoise(world);
   if (input.type === 'wait') {
     world.events.emit('entity_waited', { id: p.id });
     took = true;

@@ -17,12 +17,14 @@ export const CONFIG = {
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
 
-  player: { speed: 100, eyesight: 3 },  // one action per tick; full sight
+  player: { speed: 100, eyesight: 3, hearing: 2, footsteps: 1 },  // one action per tick; full sight; footsteps noise level 1
 
   zombie: {
     speed: 50,            // half speed: acts every other tick
     stagger: 0.15,        // chance a step goes a random way instead
     eyesight: 2,          // 0-3: poor eyes, so you usually see them first
+    hearing: 3,           // 0-3: good ears
+    footsteps: 0,         // shuffles quietly
     searchActions: 12,    // after losing you, shuffles about the last known spot this many moves
     searchRadius: 3,      // ...staying within this many tiles of it
     wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
@@ -32,6 +34,15 @@ export const CONFIG = {
   light: {
     range: 15,            // sight range in the open on a clear day (covers the whole screen)
     ambient: 3,           // every tile's light until day/night (step 15)
+  },
+
+  // Noise: makeNoise(x, y, level 0-3). Level sets the starting strength; strength drops 1 per
+  // tile (8 ways) and by wallCost more when passing through a wall, so walls muffle rather than
+  // block; the map edge blocks. Quiet noises die in a wall, loud ones carry through.
+  noise: {
+    radiusByLevel: [0, 4, 8, 12],
+    wallCost: 3,
+    minStrengthToHear: [Infinity, 3, 2, 1], // by hearing 0-3: the faintest strength still heard
   },
 
   vision: {
@@ -70,6 +81,7 @@ export const CONFIG = {
     inspectOutline: '#ffffff',
     // Remembered tiles: dark greys that keep each tile's shapes.
     memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', thing: '#5a5a5a' },
+    noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

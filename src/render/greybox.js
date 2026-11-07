@@ -3,8 +3,8 @@ import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
 import { canNotice } from '../sim/systems/vision.js';
 
-// inspect: { x, y } of a long-pressed tile to outline, or null.
-export function drawMap(ctx, world, L, inspect) {
+// inspect: { x, y } of a long-pressed tile to outline, or null. debug: draw the noise heatmap.
+export function drawMap(ctx, world, L, inspect, debug) {
   const c = CONFIG.colours, t = L.tile, m = c.memory;
   const p = world.entities.get(world.playerId);
   const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark };
@@ -54,7 +54,26 @@ export function drawMap(ctx, world, L, inspect) {
     if (mark) drawBadge(ctx, mark, L.mapX + e.Position.x * t, L.mapY + e.Position.y * t, t,
       mark === '!' ? c.alert : c.puzzled);
   }
+  if (debug) drawNoise(ctx, world, L);
   if (inspect) drawOutline(ctx, L, inspect.x, inspect.y);
+}
+
+// Debug: noise since your last action, everywhere (out of sight too), with strength numbers.
+function drawNoise(ctx, world, L) {
+  const t = L.tile, top = CONFIG.noise.radiusByLevel[3];
+  ctx.font = `bold ${Math.floor(t * 0.35)}px monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let y = 0; y < world.h; y++) {
+    for (let x = 0; x < world.w; x++) {
+      const s = world.noise[y * world.w + x];
+      if (s <= 0) continue;
+      const px = L.mapX + x * t, py = L.mapY + y * t;
+      ctx.fillStyle = `rgba(${CONFIG.colours.noise},${0.15 + 0.5 * s / top})`;
+      ctx.fillRect(px, py, t, t);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(String(s), px + t / 2, py + t / 2);
+    }
+  }
 }
 
 // A small mark at the top right of a tile, outlined in black so it reads on any colour.

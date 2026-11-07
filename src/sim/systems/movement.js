@@ -1,7 +1,8 @@
 // One step for anything: 4-way only, refused into walls, blockers and off the map.
 import { tileBlocks, blockerAt } from '../world.js';
+import { makeNoise } from './noise.js';
 
-// Returns 'moved', or 'blocked' (with the blocking entity, if any, as world.lastBlocker).
+// Returns 'moved', 'blocked' or 'invalid'.
 export function tryStep(world, e, dx, dy) {
   dx = Math.sign(dx); dy = Math.sign(dy);
   if ((dx === 0) === (dy === 0)) return 'invalid'; // standing still or diagonal
@@ -14,5 +15,7 @@ export function tryStep(world, e, dx, dy) {
   const from = { ...e.Position };
   e.Position.x = nx; e.Position.y = ny;
   world.events.emit('entity_moved', { id: e.id, from, to: { x: nx, y: ny } });
+  // Footsteps: anything Noisy makes its move noise where it lands. Bumping makes none (no turn).
+  if (e.Noisy && e.Noisy.move > 0) makeNoise(world, nx, ny, e.Noisy.move, e.id);
   return 'moved';
 }

@@ -7,6 +7,7 @@ import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
 import { createMessageLog, describeTile, LEVEL } from '../src/render/messages.js';
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
+import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -219,6 +220,69 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 
+// Noise: strength drops per tile, walls muffle, zombies investigate, footsteps.
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
+  const wall = (w, x, y) => { w.tiles[y * w.w + x] = TILE.WALL; };
+  let w = emptyWorld();
+  const at = (s, x, y) => s[y * w.w + x];
+  let s = spreadNoise(w, 2, 7, 1);
+  check(at(s, 2, 7) === 4 && at(s, 3, 7) === 3 && at(s, 5, 7) === 1 && at(s, 6, 7) === 0, 'level 1: strength 4 at the source, 1 less per tile');
+  check(at(s, 3, 8) === 3, 'diagonals count as one tile');
+  for (let y = 1; y < w.h - 1; y++) wall(w, 4, y); // a wall across the room
+  s = spreadNoise(w, 3, 7, 1);
+  check(at(s, 5, 7) === 0, 'a quiet noise dies in a wall');
+  s = spreadNoise(w, 3, 7, 2);
+  // 8 at the source; into the wall 8 - 1 - 3 = 4; out the other side 3.
+  check(at(s, 5, 7) === 3, `a loud noise carries through, muffled (got ${at(s, 5, 7)})`);
+
+  // A zombie behind the wall that can't see you hears a loud noise, goes there, searches, gives up.
+  const z = makeZombie(w, 7, 7);
+  const p = player(w); p.Position.x = 2; p.Position.y = 2; updatePlayerView(w);
+  const events = [];
+  for (const t of ['noise_heard', 'search_gave_up']) w.events.on(t, e => events.push(t));
+  makeNoise(w, 3, 10, 2);
+  check(events.includes('noise_heard') && z.Brain.goal && z.Brain.goal.why === 'heard' && z.Brain.goal.x === 3,
+    'the zombie hears the noise through the wall and makes it its goal');
+  let reachedWall = false;
+  for (let i = 0; i < 12; i++) { applyInput(w, { type: 'wait' }); if (z.Position.x === 5) reachedWall = true; }
+  check(reachedWall, 'it walks toward the noise (up to the wall)');
+  for (let i = 0; i < 80 && !events.includes('search_gave_up'); i++) applyInput(w, { type: 'wait' });
+  check(events.includes('search_gave_up'), 'it searches there, then gives up');
+  // Newest noise wins.
+  makeNoise(w, 6, 2, 2); makeNoise(w, 6, 12, 2);
+  check(z.Brain.goal && z.Brain.goal.y === 12, 'the newest noise wins');
+
+  // Footsteps: level 1, heard about 3 tiles off out of sight; waiting is silent.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 2; q.Position.y = 7;
+  for (let y = 4; y < 11; y++) wall(w, 4, y); // a short wall between you and it, open at both ends
+  const z2 = makeZombie(w, 5, 5); // just behind the wall: it can't see you
+  updatePlayerView(w);
+  check(!canNotice(w, z2, q), 'the zombie cannot see you round the wall');
+  for (let i = 0; i < 6; i++) applyInput(w, { type: 'wait' });
+  check(!z2.Brain.goal, 'waiting is silent');
+  // Walk up past the end of the wall: footsteps carry round it.
+  q.Position.x = 3; q.Position.y = 4; updatePlayerView(w);
+  applyInput(w, { type: 'move', dx: 0, dy: -1 });
+  check(w.noise[3 * w.w + 3] === 4, 'your footstep is a level-1 noise where you land');
+  check(z2.Brain.goal && z2.Brain.goal.why === 'heard', 'a zombie 3 tiles off hears your footsteps');
+  const z3 = makeZombie(w, 9, 12);
+  applyInput(w, { type: 'move', dx: 0, dy: 1 });
+  check(!z3.Brain.goal || z3.Brain.goal.why !== 'heard', 'a zombie far off does not');
+  // A zombie that sees you ignores noises.
+  const z4 = makeZombie(w, 3, 6); updatePlayerView(w);
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  makeNoise(w, 9, 12, 3);
+  check(z4.Brain.tracking && z4.Brain.goal.why === 'seen', 'seeing you beats hearing a noise');
+  // The heatmap clears at your next action.
+  makeNoise(w, 9, 12, 3);
+  applyInput(w, { type: 'wait' });
+  check(w.noise[12 * w.w + 9] === 0, 'the heatmap shows only noise since your last action');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -269,8 +333,8 @@ function check(cond, msg) {
   let crashed = null;
   for (let i = 0; i < 200 && !crashed; i++) {
     try {
-      drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 });
-      drawTopBar(fake, w, L, log);
+      drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
+      drawTopBar(fake, w, L, log, i % 2 === 0);
       drawActionBar(fake, L);
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });

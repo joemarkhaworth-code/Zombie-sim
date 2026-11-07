@@ -16,6 +16,7 @@ let world = createWorld(seed);
 let log = createMessageLog(world);
 let layout;
 let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
+let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -30,8 +31,8 @@ function resize() {
 function draw() {
   ctx.fillStyle = CONFIG.colours.background;
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
-  drawMap(ctx, world, layout, inspect);
-  drawTopBar(ctx, world, layout, log);
+  drawMap(ctx, world, layout, inspect, debug);
+  drawTopBar(ctx, world, layout, log, debug);
   drawActionBar(ctx, layout);
 }
 
@@ -79,6 +80,7 @@ canvas.addEventListener('pointercancel', () => { if (press) clearTimeout(press.t
 canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 
 function tap(px, py) {
+  if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
   const t = tileAtPixel(layout, px, py);
   if (!t) return;
   const p = player(world).Position;

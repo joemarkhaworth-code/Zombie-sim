@@ -17,6 +17,7 @@ export function createWorld(seed) {
     entities: new Map(),  // id -> { id, ...components }
     nextId: 1,
     playerId: 0,
+    noise: new Int16Array(CONFIG.screen.w * CONFIG.screen.h), // heard since your last action (debug heatmap)
     turn: 0,              // player actions taken
     tick: 0,              // scheduler ticks (world time)
     inputs: [],           // every player input, in order, for replay
@@ -33,6 +34,8 @@ export function createWorld(seed) {
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost },
     Vision: { eyesight: CONFIG.player.eyesight },
     Memory: { tiles: {} },
+    Hearing: { level: CONFIG.player.hearing },
+    Noisy: { move: CONFIG.player.footsteps },
   });
   world.playerId = player.id;
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
@@ -50,7 +53,9 @@ export function makeZombie(world, x, y) {
     Blocks: {},
     Actor: { speed: CONFIG.zombie.speed, energy: 0, brain: 'shamble' },
     Vision: { eyesight: CONFIG.zombie.eyesight },
-    // goal: { x, y, why: 'seen' } | null; search: { x, y, left } | null; tracking: prey id it saw last look
+    Hearing: { level: CONFIG.zombie.hearing },
+    Noisy: { move: CONFIG.zombie.footsteps },
+    // goal: { x, y, why: 'seen' | 'heard' } | null; search: { x, y, left } | null; tracking: prey id it saw last look
     Brain: { goal: null, search: null, tracking: 0 },
   });
 }

@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { LEVEL } from './messages.js';
 
 // Turn number on the left, then the latest message. With no message, the seed shows dimmed on the right.
-export function drawTopBar(ctx, world, L, log) {
+export function drawTopBar(ctx, world, L, log, debug) {
   const c = CONFIG.colours, h = CONFIG.ui.topBarHeight;
   ctx.fillStyle = c.topBar; ctx.fillRect(0, 0, L.cssW, h);
   ctx.font = `bold ${CONFIG.ui.messageFont}px monospace`; ctx.textBaseline = 'middle';
@@ -14,6 +14,9 @@ export function drawTopBar(ctx, world, L, log) {
     ctx.fillStyle = log.level === LEVEL.danger ? c.dangerText : c.topBarText;
     const x = 8 + ctx.measureText(turn + ' ').width;
     fitText(ctx, log.text, x, h / 2, L.cssW - x - 6);
+  } else if (debug) {
+    ctx.textAlign = 'right'; ctx.fillStyle = `rgb(${c.noise})`;
+    ctx.fillText(`DEBUG tick ${world.tick} seed ${world.seed}`, L.cssW - 8, h / 2);
   } else {
     ctx.textAlign = 'right'; ctx.fillStyle = c.dimText;
     ctx.fillText(`seed ${world.seed}`, L.cssW - 8, h / 2);
