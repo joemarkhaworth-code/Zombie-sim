@@ -63,8 +63,8 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 ## Lessons from the first prototype (follow these)
 - Line of sight and light are separate. Walls block sight. Light range sets how far you see in the open: long by day, short at night. Each visible tile has a visibility level 0–3 from light.
 - Map memory stores a snapshot of each tile as it was last seen (terrain, damage, doors, items), not the live tile. Creatures are not remembered.
-- Zombies must feel dangerous when they reach you: most attacks land, about 3–4 bites kill a healthy player, and they search the last known position for a while before giving up.
-- The player must be able to get the drop on zombies: a zombie that steps next to the player lets the player act first; attacking an unaware creature does heavy bonus damage; a zombie that has just noticed you spends a turn reacting.
+- Zombies must feel dangerous when they reach you, and they search the last known position for a while before giving up. (Health is now Zelda hearts: every bite lands and takes half a heart; see step 8.)
+- The player must be able to get the drop on zombies: a zombie that steps next to the player lets the player act first, and a zombie that has just noticed you spends a turn reacting. (No sneak-attack bonus damage: dropped in playtesting.)
 - Shove: one-shot action; pushes an adjacent creature one tile and staggers it (loses its next turn); bumping into something blocked does minor damage.
 
 ## Scale
@@ -78,7 +78,7 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 Stone, slate, brick, wood, glass, corrugated metal. Each has HP, flammability, see-through, and noise when hit or broken. Sheds can be wood or corrugated metal.
 
 ## Weapons
-- Melee like the Zelda sword: every weapon hit damages and knocks the zombie back 1 tile, staggering it (loses its next turn). Unarmed hits are weak with no knockback (shove still available). One zombie is easy with a weapon; several at once is the danger.
+- Melee like the Zelda sword: every weapon hit damages and knocks the zombie back 1 tile (staggering too was tried: it made zombies unable to ever bite; see step 8). Unarmed hits are weak with no knockback (shove still available). One zombie is easy with a weapon; several at once is the danger.
 - Melee: walking stick (starting weapon, weak, quick), cricket bat (all-rounder), garden fork (reach 2, light knockback), spade (heavy, big knockback, slow), golf club (strong, noisy), fire axe (best, rare). Light durability: weapons wear out and break.
 - Ranged, distinctly British, no armouries: catapult with stones/marbles (main ranged weapon, quiet, weak), pub darts (thrown, recoverable), bow and arrows from a scout hut or archery club (quiet, arrows recoverable), air rifle (rare, quiet, few pellets), one rare farmer's shotgun (devastating, very loud, few cartridges). No other guns.
 - Fireworks: a lure, not a weapon; zombies head to them.
@@ -101,7 +101,7 @@ Phase 1 — Core loop (one test screen)
 5. Map memory (snapshot as last seen, greyed out)
 6. Noise: actions make noise, walls muffle it, zombies investigate the source
 7. ~~Stealth: sneak toggle and hiding spots~~ (built, then dropped in playtesting: see Decisions)
-8. Combat: health, bleeding, melee with knockback, sneak attacks, shove
+8. Combat: Zelda-style hearts (each hit takes half a heart), melee with knockback, shove. No bleeding, no sneak attacks
 9. Items and inventory: pick up, drop, use; weapons change damage; bandages stop bleeding
 10. Throwing: any item can be thrown; it makes noise where it lands (distraction)
 11. Save/load (autosave every turn) + game over screen (days survived, deadpan cause of death, seed)
@@ -211,3 +211,15 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - Built a SNEAK toggle (silent footsteps, 2x slower steps, noticed from two-thirds of the distance) and bush tiles (walkable, see-through, hide anything in them except from next to it). Playtest: "Sneaking makes it too easy to lose them and so do bushes. I'm not sure what it adds to the game." On top of the ? stare and 5-tile zombie sight, losing a zombie became a formality with no real choice. Removed both (git revert of the step 7 commit; it's in the history if ever wanted).
 - So: cover comes from walls (later buildings, doors, cars); the ? stare is your one chance to react; your footsteps always make noise. Getting the drop on a zombie (step 8 sneak attacks) means reaching it while it hasn't seen you: from behind cover, or while it's busy with a noise.
 - The action bar is empty again until step 8 (shove).
+
+### Step 8 (combat: hearts, knockback, shove) - built
+- Playtest direction before building: "I don't want sneak attacks or bleeding; we keep it simple: health hearts that lose half a heart an attack at a time."
+- Health is a whole number of half-hearts (Health { hp, max }). You have player.hearts = 3 (6 halves), drawn as blocky red hearts in the top bar after the turn number (half-filled for a half). Every hit takes damage = 1 (half a heart). No misses, no bleeding, no bonus damage.
+- Melee (src/sim/systems/combat.js): walking into any creature with Health attacks it (the input stays a move; it takes a turn). Melee { damage, knockback, noise } is a component, so anything with it can attack anything with Health. Your melee (your walking stick until items, step 9): 1 damage, knocks the target back a tile (if that tile is free; into a wall it stays put), noise level 2, so fights draw other zombies. A zombie's bite: 1 damage (half a heart), no knockback, noise 2. Zombies have 3 health: three hits.
+- A zombie bites when it's next to its prey (4 ways) and it was already tracking it on its last look, so never on the action it first spots you (it reacts first): you always get to act. A hit or a shove makes the target notice who did it.
+- Knockback without stagger (balance): with knockback AND a stagger, a zombie could never bite (each hit cost it two actions at half speed); 300 one-on-one and 300 three-on-one fights were all won without a scratch. Now knockback.staggerActions = 0: a hit costs it the action of walking back. Measured (a bot that just hits whatever is next to it, open room): one zombie: always won, no damage; three at once: always won, about 1.5 hearts lost; five at once: always dead. One is manageable, a crowd is deadly. A zombie knocked into a wall or another zombie stays next to you, so corners are dangerous.
+- Shove (SHOVE button in the action bar; F on a keyboard): tap SHOVE (it turns orange, "SHOVE: TAP A WAY"), then tap a direction like moving. Tapping yourself cancels; a direction with nothing there says "Nothing to shove there." and costs no turn. The input is { type: 'shove', dx, dy }. The creature is pushed a tile directly away and staggered (loses its next action, shove.staggerActions = 1), unhurt; if the tile behind is blocked it slams into it instead and takes shove.slamDamage = 1. Shoving is quieter than hitting (noise 1).
+- Staggered { actions } is a general component: the scheduler still charges the time, but the action is wasted (entity_lost_action). Forced movement goes through pushEntity(), which emits entity_pushed (later water, fire and the like can react to where things land).
+- Death: a creature is removed and leaves a corpse (a "zombie corpse" thing: walkable, remembered, inspectable "A dead zombie. Deader, anyway."). If you die, world.gameOver = { cause, killerName, turn }, the world stops and nothing else takes a turn. For now a plain placeholder: the map darkened, "YOU DIED", the cause ("Bitten by a zombie."), turns lasted, and "Tap to start again" (taps ignored for ui.deathTapDelayMs = 1 s). The real game over screen is step 11.
+- Messages: "You hit the zombie.", "The zombie bites you!" (danger), "You shove the zombie.", "It slams into the wall.", "The zombie goes down.", "You died."
+- Tests: 3 hearts; a hit does 1, knocks back a tile, is heard 5 tiles off; into a wall it stays put; three hits kill and leave a walkable, remembered corpse; no bite on the action it spots you, then half a heart per bite, six kill you, then nothing takes a turn; shove pushes and staggers unhurt, slams into a wall for 1, nothing there costs no turn; the fight numbers above. Random play now has a normal run (you can die; replays must match exactly, health and death included) and a stress run with an unkillable player.

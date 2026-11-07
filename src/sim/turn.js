@@ -6,19 +6,33 @@ import { advance } from './scheduler.js';
 import { tryStep } from './systems/movement.js';
 import { updatePlayerView } from './systems/vision.js';
 import { clearNoise } from './systems/noise.js';
+import { attack, shove, creatureAt } from './systems/combat.js';
 
-// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
+// Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals; into a creature with
+// Health it attacks instead), { type: 'wait' }, { type: 'shove', dx, dy } (an adjacent creature).
 // Returns true if the input took a turn.
 export function applyInput(world, input) {
   const p = player(world);
+  if (world.gameOver) return false;
   let took = false;
   clearNoise(world);
   if (input.type === 'wait') {
     world.events.emit('entity_waited', { id: p.id });
     took = true;
-  } else if (input.type === 'move') {
-    // Blocked or diagonal: no turn spent. (Walking into a zombie attacks it from step 8.)
-    took = tryStep(world, p, input.dx, input.dy) === 'moved';
+  } else if (input.type === 'move' || input.type === 'shove') {
+    const dx = Math.sign(input.dx), dy = Math.sign(input.dy);
+    if ((dx === 0) === (dy === 0)) return false; // standing still or diagonal
+    const target = creatureAt(world, p.Position.x + dx, p.Position.y + dy);
+    if (input.type === 'shove') {
+      if (!target) return false; // nothing to shove: no turn
+      shove(world, p, target);
+      took = true;
+    } else if (target) {
+      attack(world, p, target); // walking into a creature attacks it (the input stays a move)
+      took = true;
+    } else {
+      took = tryStep(world, p, dx, dy) === 'moved'; // blocked: no turn spent
+    }
   }
   if (took) {
     world.inputs.push({ turn: world.turn, ...input });

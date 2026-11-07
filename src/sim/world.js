@@ -18,6 +18,7 @@ export function createWorld(seed) {
     nextId: 1,
     playerId: 0,
     noise: new Int16Array(CONFIG.screen.w * CONFIG.screen.h), // heard since your last action (debug heatmap)
+    gameOver: null,       // { cause, killerName, turn } once the player dies
     turn: 0,              // player actions taken
     tick: 0,              // scheduler ticks (world time)
     inputs: [],           // every player input, in order, for replay
@@ -34,6 +35,8 @@ export function createWorld(seed) {
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost },
     Vision: { eyesight: CONFIG.player.eyesight },
     Memory: { tiles: {} },
+    Health: { hp: CONFIG.player.hearts * 2, max: CONFIG.player.hearts * 2 },
+    Melee: { ...CONFIG.player.melee },
     Hearing: { level: CONFIG.player.hearing },
     Noisy: { move: CONFIG.player.footsteps },
   });
@@ -55,6 +58,8 @@ export function makeZombie(world, x, y) {
     Vision: { eyesight: CONFIG.zombie.eyesight },
     Hearing: { level: CONFIG.zombie.hearing },
     Noisy: { move: CONFIG.zombie.footsteps },
+    Health: { hp: CONFIG.zombie.health, max: CONFIG.zombie.health },
+    Melee: { ...CONFIG.zombie.melee },
     // goal: { x, y, why: 'seen' | 'glimpsed' | 'heard' } | null; glimpsed: prey id it stared at last look; search: { x, y, left } | null; tracking: prey id it saw last look
     Brain: { goal: null, search: null, tracking: 0, glimpsed: 0 },
   });

@@ -30,6 +30,20 @@ export function createMessageLog(world) {
       log.say('A wall blocks the way.', LEVEL.blocked);
     }
   });
+  // Fighting.
+  const nameOf = id => { const e = world.entities.get(id); return e && e.Name ? e.Name.name : 'thing'; };
+  ev.on('attacked', ({ id, targetId }) => {
+    if (isPlayer(id)) log.say(`You hit the ${nameOf(targetId)}.`, LEVEL.info);
+    else if (isPlayer(targetId)) log.say(`The ${nameOf(id)} bites you!`, LEVEL.danger);
+  });
+  ev.on('shoved', ({ id, targetId }) => { if (isPlayer(id)) log.say(`You shove the ${nameOf(targetId)}.`, LEVEL.info); });
+  ev.on('entity_slammed', ({ id, blockerId }) => {
+    if (!isPlayer(id)) log.say(`It slams into ${blockerId ? 'the ' + nameOf(blockerId) : 'the wall'}.`, LEVEL.info);
+  });
+  ev.on('entity_died', ({ id, by }) => {
+    if (isPlayer(id)) log.say('You died.', LEVEL.danger + 1);
+    else if (isPlayer(by)) log.say(`The ${nameOf(id)} goes down.`, LEVEL.info);
+  });
   // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {
     const p = world.entities.get(world.playerId);
@@ -57,7 +71,18 @@ const TILE_TEXT = {
 };
 const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',
+  'zombie corpse': 'A dead zombie. Deader, anyway.',
 };
+
+// Cause of death, for the death screen. Deadpan.
+export function deathText(gameOver) {
+  const by = gameOver.killerName || 'something';
+  return {
+    bite: `Bitten by a ${by}.`,
+    hit: `Beaten by a ${by}.`,
+    shove: 'Slammed into a wall.',
+  }[gameOver.cause] || 'Died.';
+}
 
 // Short names for remembered tiles (the line also says ", out of sight").
 const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };

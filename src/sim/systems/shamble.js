@@ -6,12 +6,13 @@
 //   3. ...then search: shuffle about within searchRadius of that spot for searchActions moves,
 //      so it can stumble onto you nearby, then give up.
 //   4. Nothing to do: stand about, now and then shuffling a random way.
-// Steps are greedy and 4-way, with a small random stagger. No biting yet (step 8): next to its
-// prey a zombie just stands there.
+// Steps are greedy and 4-way, with a small random stagger. Next to its
+// prey (4 ways) a zombie bites, but never on the action it first spots you.
 import { CONFIG } from '../../config.js';
 import { tileBlocks, blockerAt } from '../world.js';
 import { tryStep } from './movement.js';
 import { canNotice } from './vision.js';
+import { attack } from './combat.js';
 
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -80,6 +81,7 @@ export function shamble(world, e) {
     return;
   }
   b.glimpsed = 0;
+  const wasTracking = b.tracking;
   if (prey) {
     if (!b.tracking) world.events.emit('prey_spotted', { id: e.id, preyId: prey.id });
     b.tracking = prey.id;
@@ -90,11 +92,17 @@ export function shamble(world, e) {
     world.events.emit('prey_lost', { id: e.id });
   }
 
-  if (world.rng.chance(cfg.stagger)) { randomStep(world, e); return; }
+  // Stagger (a random lurch) never interrupts a zombie that's next to its prey.
+  if (!(prey && manhattan(prey.Position, e.Position) === 1) && world.rng.chance(cfg.stagger)) { randomStep(world, e); return; }
 
   if (b.goal) {
     const d = manhattan(e.Position, b.goal);
-    if (prey && d <= 1) return; // next to its prey: nothing to do until combat
+    if (prey && d <= 1) {
+      // Next to its prey (4 ways): bite. Not on the action it first spots you (it reacts first),
+      // so you always get to act.
+      if (d === 1 && wasTracking === prey.id) attack(world, e, prey);
+      return;
+    }
     if (d === 0 || !stepToward(world, e, b.goal.x, b.goal.y)) {
       // Arrived (or can't get any closer): search around the spot.
       if (!prey) startSearch(world, e, b.goal);

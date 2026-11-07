@@ -12,12 +12,20 @@ export const CONFIG = {
     tapSlop: 12,          // a finger moving further than this isn't a tap
     vibrateMs: 15,        // short buzz on inspect, where the phone supports it
     messageFont: 14,      // status bar text size (fits ~30 characters on a phone)
+    deathTapDelayMs: 1000, // taps are ignored this long after death, so you see the screen
   },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
 
-  player: { speed: 100, eyesight: 3, hearing: 2, footsteps: 1 },  // one action per tick; full sight; footsteps noise level 1
+  // Health is counted in half-hearts, Zelda-style: every hit takes half a heart (1).
+  player: {
+    speed: 100, eyesight: 3, hearing: 2, footsteps: 1, // one action per tick; full sight; footsteps noise level 1
+    hearts: 3,            // 6 half-hearts: six bites and you're dead
+    // Your melee, like Zelda's sword (your walking stick until items, step 9): every hit lands,
+    // does `damage`, knocks the target back a tile and staggers it (it loses its next action).
+    melee: { damage: 1, knockback: true, noise: 2 },
+  },
 
   zombie: {
     speed: 50,            // half speed: acts every other tick
@@ -25,6 +33,8 @@ export const CONFIG = {
     eyesight: 2,          // 0-3: poor eyes, so you usually see them first
     hearing: 3,           // 0-3: good ears
     footsteps: 0,         // shuffles quietly
+    health: 3,            // three hits to put one down
+    melee: { damage: 1, knockback: false, noise: 2 }, // a bite: half a heart, every time
     glimpseRange: 2,      // sees you further off than this: stops and stares (?) first; only comes
                           // for you (!) if it still sees you on its next look
     glimpseCost: 50,      // energy a stare costs (a normal action is 100): it looks again sooner, so
@@ -33,6 +43,11 @@ export const CONFIG = {
     searchRadius: 3,      // ...staying within this many tiles of it
     wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
   },
+
+  // Shove: push an adjacent creature one tile directly away and stagger it. No damage, unless the
+  // tile behind is blocked: then it slams into it and takes slamDamage. Quieter than a hit.
+  shove: { slamDamage: 1, noise: 1, staggerActions: 1 },
+  knockback: { staggerActions: 0 }, // a weapon hit staggers the target this many actions (0: knockback only)
 
   // Light: how far anyone can see in the open, and the light level (0-3) of every tile.
   light: {
@@ -86,6 +101,13 @@ export const CONFIG = {
     // Remembered tiles: dark greys that keep each tile's shapes.
     memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', thing: '#5a5a5a' },
     noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
+    heart: '#e0303a',
+    heartEmpty: '#4a1418',
+    corpse: '#7a2a2a',
+    shoveArmed: '#ff8c00',
+    button: '#2a2a2a',
+    buttonText: '#dddddd',
+    deadText: '#e0303a',
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

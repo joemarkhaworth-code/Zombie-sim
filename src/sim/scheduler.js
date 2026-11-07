@@ -15,8 +15,14 @@ export function tick(world) {
     if (!world.entities.has(e.id)) continue; // removed earlier this tick
     e.Actor.energy += e.Actor.speed;
     if (e.Player) continue;
-    while (e.Actor.energy >= cost) {
+    while (e.Actor && e.Actor.energy >= cost && world.entities.has(e.id)) {
       e.Actor.energy -= cost;
+      // Staggered: the time is spent but the action is wasted.
+      if (e.Staggered && e.Staggered.actions > 0) {
+        if (--e.Staggered.actions <= 0) delete e.Staggered;
+        world.events.emit('entity_lost_action', { id: e.id });
+        continue;
+      }
       const brain = BRAINS[e.Actor.brain];
       if (brain) brain(world, e);
     }
@@ -28,5 +34,5 @@ export function tick(world) {
 export function advance(world) {
   const p = player(world), cost = CONFIG.scheduler.actionCost;
   let guard = 0;
-  while (p.Actor.energy < cost && guard++ < 1000) tick(world);
+  while (!world.gameOver && p.Actor.energy < cost && guard++ < 1000) tick(world);
 }

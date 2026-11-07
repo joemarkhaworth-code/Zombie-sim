@@ -5,7 +5,8 @@ import { applyInput, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
-import { createMessageLog, describeTile, LEVEL } from '../src/render/messages.js';
+import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/messages.js';
+const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 
@@ -95,7 +96,7 @@ function check(cond, msg) {
   check(log.text === 'The zombie is next to you!' && log.level === LEVEL.danger, `zombie next to you is a danger message (got "${log.text}")`);
   turn({ type: 'wait' });
   check(log.text !== 'The zombie is next to you!', 'the warning only fires when it newly arrives');
-  check(!turn({ type: 'move', dx: 0, dy: 1 }) && log.text === 'The zombie is in the way.', `bumping the zombie says so (got "${log.text}")`);
+  check(turn({ type: 'move', dx: 0, dy: 1 }) && log.text === 'You hit the zombie.', `walking into the zombie hits it (got "${log.text}")`);
   // Several things in one turn: danger beats the rest.
   p.Position.x = 8; p.Position.y = 2; z.Position.x = 8; z.Position.y = 5;
   let arrived = false;
@@ -331,6 +332,116 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 
+// Combat: hearts, hits with knockback, bites, shove, death.
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance, savedG = CONFIG.zombie.glimpseRange;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0; CONFIG.zombie.glimpseRange = 99;
+  let w = emptyWorld();
+  const p = player(w);
+  check(p.Health.hp === CONFIG.player.hearts * 2 && p.Health.hp === 6, 'you start with 3 hearts (6 halves)');
+  p.Position.x = 5; p.Position.y = 3;
+  const z = makeZombie(w, 5, 4);
+  const heard = [];
+  const z2 = makeZombie(w, 9, 8); // 5 tiles off: it should hear the fight (level 2)
+  w.events.on('noise_heard', e => heard.push(e.id));
+  // Hit: half... one point of damage, knocked back a tile, staggered.
+  check(applyInput(w, { type: 'move', dx: 0, dy: 1 }), 'walking into a zombie attacks: takes a turn');
+  check(z.Health.hp === CONFIG.zombie.health - 1, 'the hit does 1 damage');
+  check(z.Position.y === 5 && p.Position.y === 3, 'it is knocked back a tile; you stay put');
+  check(heard.includes(z2.id), 'the fight is noisy: another zombie hears it');
+  if (CONFIG.knockback.staggerActions > 0) {
+    const lost = [];
+    w.events.on('entity_lost_action', e => lost.push(e.id));
+    applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+    check(lost.includes(z.id), 'it is staggered: loses its next action');
+  }
+  // Knocked into a wall: stays put, still staggered.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 5; q.Position.y = 12;
+  const zw = makeZombie(w, 5, 13); // against the bottom wall
+  applyInput(w, { type: 'move', dx: 0, dy: 1 });
+  check(zw.Position.y === 13, 'knocked into a wall: it stays put');
+  // Three hits put it down, leaving a corpse you can walk over.
+  applyInput(w, { type: 'move', dx: 0, dy: 1 }); applyInput(w, { type: 'move', dx: 0, dy: 1 });
+  check(!w.entities.has(zw.id), 'three hits kill it');
+  const corpse = [...w.entities.values()].find(e => e.Corpse);
+  check(corpse && corpse.Position.y === 13 && corpse.Name.name === 'zombie corpse', 'it leaves a corpse');
+  applyInput(w, { type: 'move', dx: 0, dy: 1 });
+  check(q.Position.y === 13, 'you can walk over the corpse');
+  check(q.Memory.tiles[13 * w.w + 5].things.some(t => t.name === 'zombie corpse'), 'the corpse is remembered');
+  // Bites: half a heart each, never on the action it first spots you; six kill you.
+  w = emptyWorld();
+  const r = player(w); r.Position.x = 5; r.Position.y = 3;
+  const zb = makeZombie(w, 5, 4); // right next to you, hasn't seen you yet
+  const bites = [];
+  w.events.on('attacked', e => { if (e.targetId === r.id) bites.push(w.turn); });
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(bites.length === 0 && zb.Brain.tracking === r.id, 'on the action it spots you it does not bite');
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(bites.length === 1 && r.Health.hp === 5, 'its next action is a bite: half a heart');
+  for (let i = 0; i < 40 && !w.gameOver; i++) applyInput(w, { type: 'wait' });
+  check(w.gameOver && bites.length === 6 && w.gameOver.cause === 'bite' && w.gameOver.killerName === 'zombie',
+    'six bites and you are dead');
+  const t0 = w.turn;
+  check(!applyInput(w, { type: 'wait' }) && w.turn === t0, 'after death nothing takes a turn');
+  check(deathTextOf(w) === 'Bitten by a zombie.', 'cause of death');
+  // Shove: pushed and staggered, unhurt; into a wall it slams and takes half a heart's worth.
+  w = emptyWorld();
+  const u = player(w); u.Position.x = 5; u.Position.y = 3;
+  const zs = makeZombie(w, 5, 4);
+  check(applyInput(w, { type: 'shove', dx: 0, dy: 1 }), 'shove takes a turn');
+  check(zs.Position.y === 5 && zs.Health.hp === CONFIG.zombie.health && zs.Staggered, 'shoved: pushed a tile, staggered, unhurt');
+  check(w.noise[3 * w.w + 5] === CONFIG.noise.radiusByLevel[1], 'a shove is quieter than a hit (level 1)');
+  zs.Position.y = 13; u.Position.y = 12;
+  applyInput(w, { type: 'shove', dx: 0, dy: 1 });
+  check(zs.Position.y === 13 && zs.Health.hp === CONFIG.zombie.health - 1, 'shoved into a wall: it slams and takes 1');
+  const t1 = w.turn;
+  check(!applyInput(w, { type: 'shove', dx: 1, dy: 0 }) && w.turn === t1, 'shoving nothing takes no turn');
+  // One on one you usually win; you get hurt a bit. A crowd is the danger.
+  let wins = 0, lostHp = 0;
+  const N = 300;
+  for (let i = 0; i < N; i++) {
+    const f = createWorld(1000 + i);
+    for (const zz of zombies(f)) f.entities.delete(zz.id);
+    const me = player(f);
+    for (let y = 1; y < f.h - 1; y++) for (let x = 1; x < f.w - 1; x++) f.tiles[y * f.w + x] = TILE.FLOOR;
+    me.Position.x = 5; me.Position.y = 3;
+    const foe = makeZombie(f, 5, 7);
+    for (let k = 0; k < 200 && !f.gameOver && f.entities.has(foe.id); k++) {
+      const d = dist(foe.Position, me.Position);
+      if (d === 1) applyInput(f, { type: 'move', dx: Math.sign(foe.Position.x - me.Position.x), dy: Math.sign(foe.Position.y - me.Position.y) });
+      else applyInput(f, { type: 'wait' });
+    }
+    if (!f.gameOver) { wins++; lostHp += me.Health.max - me.Health.hp; }
+  }
+  check(wins / N > 0.95, `one on one with a weapon you nearly always win (${wins}/${N})`);
+  console.log(`  one-on-one: won ${wins}/${N}, losing ${(lostHp / Math.max(1, wins) / 2).toFixed(2)} hearts on average`);
+  // Crowds: zombies from several sides at once. Returns [wins, average hearts lost by winners].
+  const crowd = (spots, base) => {
+    let won = 0, lost = 0;
+    for (let i = 0; i < N; i++) {
+      const f = createWorld(base + i);
+      for (const zz of zombies(f)) f.entities.delete(zz.id);
+      for (let y = 1; y < f.h - 1; y++) for (let x = 1; x < f.w - 1; x++) f.tiles[y * f.w + x] = TILE.FLOOR;
+      const me = player(f); me.Position.x = 5; me.Position.y = 7;
+      const foes = spots.map(([x, y]) => makeZombie(f, x, y));
+      for (let k = 0; k < 300 && !f.gameOver && foes.some(z => f.entities.has(z.id)); k++) {
+        const near = foes.find(z => f.entities.has(z.id) && dist(z.Position, me.Position) === 1);
+        if (near) applyInput(f, { type: 'move', dx: Math.sign(near.Position.x - me.Position.x), dy: Math.sign(near.Position.y - me.Position.y) });
+        else applyInput(f, { type: 'wait' });
+      }
+      if (!f.gameOver) { won++; lost += me.Health.max - me.Health.hp; }
+    }
+    return [won, lost / Math.max(1, won) / 2];
+  };
+  const [w3, l3] = crowd([[5, 10], [5, 4], [8, 7]], 2000);
+  const [w5, l5] = crowd([[5, 10], [5, 4], [8, 7], [2, 7], [8, 4]], 3000);
+  console.log(`  three at once: won ${w3}/${N}, losing ${l3.toFixed(2)} hearts; five at once: won ${w5}/${N}, losing ${l5.toFixed(2)} hearts`);
+  check(l3 > lostHp / Math.max(1, wins) / 2, 'three at once hurts more than one');
+  check(w5 < N * 0.8, 'five at once often kills you');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander; CONFIG.zombie.glimpseRange = savedG;
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -372,7 +483,7 @@ function check(cond, msg) {
 // call, so a broken draw function fails here, not on the phone.
 {
   const { drawMap } = await import('../src/render/greybox.js');
-  const { drawTopBar, drawActionBar } = await import('../src/render/ui.js');
+  const { drawTopBar, drawActionBar, drawDeath } = await import('../src/render/ui.js');
   const fake = new Proxy({}, {
     get: (o, k) => (k in o ? o[k] : (k === 'measureText' ? () => ({ width: 10 }) : () => {})),
     set: (o, k, v) => { o[k] = v; return true; },
@@ -383,7 +494,8 @@ function check(cond, msg) {
     try {
       drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
       drawTopBar(fake, w, L, log, i % 2 === 0);
-      drawActionBar(fake, L);
+      drawActionBar(fake, L, { shoveArmed: i % 3 === 0 });
+      if (w.gameOver) drawDeath(fake, w, L);
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
     applyInput(w, { type: 'move', dx: 0, dy: r.int(3) - 1 });
@@ -401,38 +513,47 @@ for (const [cw, ch] of [[360, 640], [390, 844], [430, 932]]) {
   check(t && t.x === 3 && t.y === 2, 'pixel -> tile');
 }
 
-// Random play over many seeds: no crashes, player never inside a wall, replays match exactly.
+// Random play over many seeds: no crashes, nobody inside a wall, replays match exactly.
+// Two runs per seed: a normal one (you can die) and a stress run with an unkillable player.
 const SEEDS = 100, TURNS = 500;
-let reached = 0;
+let reached = 0, deaths = 0, kills = 0;
+const zombieState = w => zombies(w).map(z => `${z.id}:${z.Position.x},${z.Position.y},${z.Health.hp}`).join(';');
 for (let s = 1; s <= SEEDS; s++) {
-  const w = createWorld(s);
-  const r = createRng(s * 7919);
-  let last = { ...player(w).Position };
-  const z = zombies(w)[0];
-  let zlast = { ...z.Position }, closest = Infinity;
-  for (let i = 0; i < TURNS * 2 && w.turn < TURNS; i++) {
-    const input = r.chance(0.1) ? { type: 'wait' } : { type: 'move', dx: r.int(3) - 1, dy: r.int(3) - 1 };
-    applyInput(w, input);
-    const p = player(w).Position;
-    if (tileBlocks(w, p.x, p.y)) { check(false, `seed ${s}: player in a wall`); break; }
-    if (Math.abs(p.x - last.x) + Math.abs(p.y - last.y) > 1) { check(false, `seed ${s}: moved diagonally`); break; }
-    last = { ...p };
-    if (tileBlocks(w, z.Position.x, z.Position.y)) { check(false, `seed ${s}: zombie in a wall`); break; }
-    if (dist(z.Position, zlast) > 1) { check(false, `seed ${s}: zombie moved diagonally or jumped`); break; }
-    if (z.Position.x === p.x && z.Position.y === p.y) { check(false, `seed ${s}: zombie on the player`); break; }
-    zlast = { ...z.Position };
-    closest = Math.min(closest, dist(z.Position, p));
+  for (const stress of [false, true]) {
+    const w = createWorld(s);
+    if (stress) player(w).Health.hp = player(w).Health.max = 1e9;
+    const r = createRng(s * 7919 + (stress ? 1 : 0));
+    let last = { ...player(w).Position };
+    const z = zombies(w)[0];
+    let zlast = { ...z.Position }, closest = Infinity;
+    for (let i = 0; i < TURNS * 2 && w.turn < TURNS && !w.gameOver; i++) {
+      const dx = r.int(3) - 1, dy = r.int(3) - 1;
+      const input = r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy } : { type: 'move', dx, dy };
+      applyInput(w, input);
+      const p = player(w).Position;
+      if (tileBlocks(w, p.x, p.y)) { check(false, `seed ${s}: player in a wall`); break; }
+      if (Math.abs(p.x - last.x) + Math.abs(p.y - last.y) > 1) { check(false, `seed ${s}: moved diagonally`); break; }
+      last = { ...p };
+      if (!w.entities.has(z.id)) continue; // killed
+      if (tileBlocks(w, z.Position.x, z.Position.y)) { check(false, `seed ${s}: zombie in a wall`); break; }
+      // A step plus a knockback in one turn can move it 2 tiles; never more.
+      if (dist(z.Position, zlast) > 2) { check(false, `seed ${s}: zombie jumped`); break; }
+      if (z.Position.x === p.x && z.Position.y === p.y) { check(false, `seed ${s}: zombie on the player`); break; }
+      zlast = { ...z.Position };
+      closest = Math.min(closest, dist(z.Position, p));
+    }
+    if (!stress) { if (closest <= 1) reached++; if (w.gameOver) deaths++; if (!w.entities.has(z.id)) kills++; }
+    const again = replay(createWorld, s, w.inputs);
+    if (stress) player(again).Health.hp = 1e9; // (replayed after the fact: hp only matters if bitten to 0)
+    const a = player(w), b = player(again);
+    check(stress || (a.Position.x === b.Position.x && a.Position.y === b.Position.y && again.turn === w.turn
+      && again.tick === w.tick && a.Health.hp === b.Health.hp && !!again.gameOver === !!w.gameOver
+      && zombieState(again) === zombieState(w)), `seed ${s}: replay matches (player, zombie, health, death)`);
   }
-  const again = replay(createWorld, s, w.inputs);
-  if (closest === 1) reached++;
-  const a = player(w).Position, b = player(again).Position;
-  const za = z.Position, zb = zombies(again)[0].Position;
-  check(a.x === b.x && a.y === b.y && again.turn === w.turn && again.tick === w.tick
-    && za.x === zb.x && za.y === zb.y, `seed ${s}: replay matches (player and zombie)`);
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.
 check(reached >= SEEDS * 0.7, `the zombie reaches the random walker in most runs (${reached}/${SEEDS})`);
 
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
-console.log(`headless: all checks passed (${SEEDS} seeds x ${TURNS} turns; zombie reached the random walker in ${reached})`);
+console.log(`headless: all checks passed (${SEEDS} seeds x ${TURNS} turns; random walker: reached by the zombie ${reached}, died ${deaths}, killed it ${kills})`);

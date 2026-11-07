@@ -2,9 +2,9 @@
 import { CONFIG } from './config.js';
 import { createWorld, player } from './sim/world.js';
 import { applyInput } from './sim/turn.js';
-import { computeLayout, tileAtPixel } from './render/layout.js';
+import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
-import { drawTopBar, drawActionBar } from './render/ui.js';
+import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
@@ -17,6 +17,15 @@ let log = createMessageLog(world);
 let layout;
 let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
 let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
+let shoveArmed = false; // SHOVE pressed: the next map tap picks the direction
+let diedAt = 0;     // when the player died (ms), so a fast tapper sees the death screen
+
+function newGame(newSeed) {
+  world = createWorld(newSeed);
+  log = createMessageLog(world);
+  inspect = null; shoveArmed = false; diedAt = 0;
+  draw();
+}
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -33,7 +42,8 @@ function draw() {
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
   drawMap(ctx, world, layout, inspect, debug);
   drawTopBar(ctx, world, layout, log, debug);
-  drawActionBar(ctx, layout);
+  drawActionBar(ctx, layout, { shoveArmed });
+  if (world.gameOver) drawDeath(ctx, world, layout);
 }
 
 // A player action: clears the status line and any inspect outline, then runs the turn.
@@ -41,8 +51,10 @@ function draw() {
 function act(input) {
   log.clear();
   inspect = null;
-  applyInput(world, input);
+  const took = applyInput(world, input);
+  if (world.gameOver && !diedAt) diedAt = performance.now();
   draw();
+  return took;
 }
 
 // Touch. A quick tap acts on release: tap your own tile to wait, anywhere else on the map to
@@ -80,28 +92,52 @@ canvas.addEventListener('pointercancel', () => { if (press) clearTimeout(press.t
 canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 
 function tap(px, py) {
+  if (world.gameOver) {
+    // Ignore taps for a moment so a fast tapper sees the death screen, then start again.
+    if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame((Math.random() * 2 ** 32) >>> 0);
+    return;
+  }
   if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
+  const btn = actionButtonAt(layout, px, py);
+  if (btn) return pressButton(btn.id);
   const t = tileAtPixel(layout, px, py);
   if (!t) return;
   const p = player(world).Position;
-  if (t.x === p.x && t.y === p.y) return act({ type: 'wait' });
+  const self = t.x === p.x && t.y === p.y;
   const ox = px - (layout.mapX + (p.x + 0.5) * layout.tile);
   const oy = py - (layout.mapY + (p.y + 0.5) * layout.tile);
-  act(Math.abs(ox) >= Math.abs(oy)
-    ? { type: 'move', dx: Math.sign(ox), dy: 0 }
-    : { type: 'move', dx: 0, dy: Math.sign(oy) });
+  const [dx, dy] = Math.abs(ox) >= Math.abs(oy) ? [Math.sign(ox), 0] : [0, Math.sign(oy)];
+  if (shoveArmed) {
+    // Armed: this tap picks the direction. Tapping yourself cancels; nothing there cancels too.
+    shoveArmed = false;
+    if (self) { draw(); return; }
+    if (!act({ type: 'shove', dx, dy })) { log.show('Nothing to shove there.'); draw(); }
+    return;
+  }
+  if (self) return act({ type: 'wait' });
+  act({ type: 'move', dx, dy });
 }
 
-// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait. No diagonals.
+// Action bar buttons. SHOVE arms (takes no turn); pressing it again disarms.
+function pressButton(id) {
+  if (id === 'shove') { shoveArmed = !shoveArmed; draw(); }
+}
+
+// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait, F shove. No diagonals.
 const KEYS = {
   ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
   8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0],
 };
 window.addEventListener('keydown', ev => {
+  if (world.gameOver) { if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame((Math.random() * 2 ** 32) >>> 0); return; }
+  if (ev.key === 'f') { ev.preventDefault(); pressButton('shove'); return; }
   let input = null;
   if (ev.key === ' ' || ev.key === '.' || ev.key === '5') input = { type: 'wait' };
-  else if (KEYS[ev.key]) input = { type: 'move', dx: KEYS[ev.key][0], dy: KEYS[ev.key][1] };
+  else if (KEYS[ev.key]) {
+    input = { type: shoveArmed ? 'shove' : 'move', dx: KEYS[ev.key][0], dy: KEYS[ev.key][1] };
+    shoveArmed = false;
+  }
   if (!input) return;
   ev.preventDefault();
   act(input);

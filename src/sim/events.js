@@ -9,6 +9,13 @@
 //   search_gave_up { id }               (a zombie finished searching and gave up)
 //   noise_made     { x, y, level, by }  (level 1-3; by = the maker's id, 0 for none)
 //   noise_heard    { id, x, y, strength, by } (id heard a noise from x, y)
+//   attacked       { id, targetId, damage }
+//   shoved         { id, targetId }
+//   entity_hurt    { id, amount, cause, by, hp }   (cause: 'hit' | 'bite' | 'shove')
+//   entity_died    { id, cause, by, x, y }
+//   entity_pushed  { id, by, from, to, dx, dy }   (any forced move)
+//   entity_slammed { id, x, y, blockerId }        (pushed into something solid)
+//   entity_lost_action { id }                     (staggered: its action was wasted)
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();
