@@ -58,7 +58,7 @@ then runs past the industrial estate and out to the south-east.
 - **Seven ways across.** These are what step 20's wellies and the run seed's blocked bridges play with:
   - a wooden footbridge in the gorge woods;
   - the Old Bridge, medieval and 3 tiles wide, carrying the main road (Knaresborough's High Bridge);
-  - the railway viaduct, walkable along the line, and high;
+  - the railway viaduct, high, with the stopped train on it: go through the carriages or along the ledge beside them;
   - the mill weir (a dare);
   - Low Bridge, at the foot of Briggate;
   - East Bridge, on the south-east road;
@@ -80,6 +80,16 @@ then runs past the industrial estate and out to the south-east.
   and the steep, setted Bond End dropping to the Old Bridge.
 - **The station** is just north of the High Street, with the line in a tunnel under the town, coming out onto the
   viaduct.
+- **The stopped train (decided: the railway is open in 1991).** A passenger train stopped across the viaduct on the
+  bank holiday weekend: its front carriages are out over the gorge and the rear ones are still in the tunnel mouth.
+  - **Narrow and dangerous.** The carriages are true scale: 3 tiles wide with their walls, so inside there's a one-tile
+    aisle between the seats. Zombie passengers are still in their seats, shut in behind the doors. Open one and they
+    come at you one at a time down the aisle: manageable, but there's nowhere to step aside and no way round.
+    Outside, there's only a one-tile ledge between the train and the viaduct's parapet, high above the river. Getting
+    across the viaduct means going through the train or along that ledge.
+  - **High rewards.** The luggage racks are full of day-trippers' holiday bags: suitcases, holdalls and handbags with
+    food, flasks, first aid and odd finds, maybe a bigger rucksack (more room in your bag). There's a buffet car with
+    tea and crisps, and the guard's van at the back has a locked cage of parcels and post sacks.
 - **Waterside,** below the crag and reached by steps: the boat landing, a café, the riverside pub, cottages, Castle Mill
   and its weir, and the old gasworks by Low Bridge.
 
@@ -130,8 +140,7 @@ or south (~4.5 hours). That's a real trip, with a reason to find a safe house ou
    not the Market Place itself, which should be the most dangerous place on the map.
 2. **Names.** "Brackenby" and "River Kell" are placeholders. Street names would follow the real pattern: High Street,
    Market Place, Back Lane, Bond End, Briggate, Kirkgate, Waterside, Station Road, York Road, North Road.
-3. **The railway.** I'd keep it open in 1991 (as Knaresborough's is), with a train stopped on the viaduct for the odd
-   sighting. Or it could be a line closed in the 1960s, as Wetherby's was, now a footpath.
+3. ~~The railway~~ Decided: open in 1991, with a passenger train stopped across the viaduct (see the town centre).
 
 ## Sources
 

@@ -97,6 +97,10 @@ line(d, [(78, 118), (74, 136), (72, 150)], (34, 34, 34, 140), 3)   # tunnel unde
 for t in range(0, 30, 4):
     pass
 line(d, [(72, 150), (70, 164)], '#5a3a2a', 9)                        # the viaduct over the gorge
+# The stopped train: carriages across the viaduct and back into the tunnel mouth
+for k in range(4):
+    y0 = 146 + k * 5
+    d.rectangle([P(70.6 - 0.002 * k, y0), P(73.4, y0 + 4)], fill='#c0392b', outline='#2a0a0a', width=1)
 
 # --- Roads ----------------------------------------------------------------------------------------
 def road(pts, w=9):
@@ -156,7 +160,7 @@ LM = [
     (84, 132, 'Post office (the queueing zombies)'),
     (97, 132, 'Two banks, chemist, Woolworths-style shop, newsagent'),
     (80, 115, 'Railway station; the line runs in a tunnel under the town'),
-    (71, 157, 'Railway viaduct over the gorge (a train stopped on it?)'),
+    (66, 155, 'Viaduct with a train stopped on it: 1-tile aisles, luggage loot'),
     (50, 146, 'Old Bridge: medieval stone, 3 wide, the main road crossing'),
     (112, 166, 'Low Bridge: Briggate down to Waterside and Abbey Road'),
     (98, 166, 'Castle Mill and its weir'),
