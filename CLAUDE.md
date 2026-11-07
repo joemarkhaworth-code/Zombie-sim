@@ -45,7 +45,7 @@ Look: simple 8-bit, inspired by old RPGs. Until the art pass, everything is grey
 ## Controls
 - Tap an adjacent tile to move or act (attack, open a door). Tap your own tile to wait.
 - Long-press any tile to inspect it in the status bar.
-- A thumb-friendly action bar at the bottom: sneak toggle, shove, inventory, and later sleep.
+- A thumb-friendly action bar at the bottom: shove, inventory, and later sleep.
 - Tiles must be big enough to tap easily with a thumb.
 
 ## Architecture rules
@@ -100,7 +100,7 @@ Phase 1 — Core loop (one test screen)
 4. Line of sight + light, visibility levels 0–3
 5. Map memory (snapshot as last seen, greyed out)
 6. Noise: actions make noise, walls muffle it, zombies investigate the source
-7. Stealth: sneak toggle (slower, quieter) and hiding spots
+7. ~~Stealth: sneak toggle and hiding spots~~ (built, then dropped in playtesting: see Decisions)
 8. Combat: health, bleeding, melee with knockback, sneak attacks, shove
 9. Items and inventory: pick up, drop, use; weapons change damage; bandages stop bleeding
 10. Throwing: any item can be thrown; it makes noise where it lands (distraction)
@@ -131,7 +131,7 @@ Phase 5 — Polish
 27. Art pass: 8-bit tiles and UI
 
 ## Not doing (keep it a game)
-Other zombie types, morale, factions, NPC relationships, simulated history, zombie evolution, flowing water, complex ecosystems, crafting trees, procedurally generated towns. Only revisit after the game is finished and fun.
+Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factions, NPC relationships, simulated history, zombie evolution, flowing water, complex ecosystems, crafting trees, procedurally generated towns. Only revisit after the game is finished and fun.
 
 ## Decisions
 (Record decisions from playtesting here.)
@@ -206,3 +206,8 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
   - Zombie sight 7 -> 5 tiles (vision.eyesightFactor[2] = 0.35).
   - Glimpses (zombie.glimpseRange = 2): a zombie that first catches sight of you further off than 2 tiles stops and stares (spends that action, ? badge, Brain.goal why 'glimpsed', prey_glimpsed). If it still sees you on its next look, it has spotted you (!, prey_spotted) and comes. If you've ducked out of view, it only shuffles over to check the spot, then searches and gives up. A stare costs zombie.glimpseCost (50) energy, half an action, so it looks again sooner: you get one move to get out of sight (two felt too generous in playtesting). Within 2 tiles there's no stare: it comes at once.
 - Tests: stay in view: glimpse, then spotted one move later; one move to cover: never spotted, it goes to check; two moves to cover: too slow; within 2 tiles: comes at once.
+
+### Step 7 (stealth) - built, then dropped
+- Built a SNEAK toggle (silent footsteps, 2x slower steps, noticed from two-thirds of the distance) and bush tiles (walkable, see-through, hide anything in them except from next to it). Playtest: "Sneaking makes it too easy to lose them and so do bushes. I'm not sure what it adds to the game." On top of the ? stare and 5-tile zombie sight, losing a zombie became a formality with no real choice. Removed both (git revert of the step 7 commit; it's in the history if ever wanted).
+- So: cover comes from walls (later buildings, doors, cars); the ? stare is your one chance to react; your footsteps always make noise. Getting the drop on a zombie (step 8 sneak attacks) means reaching it while it hasn't seen you: from behind cover, or while it's busy with a noise.
+- The action bar is empty again until step 8 (shove).
