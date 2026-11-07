@@ -10,15 +10,35 @@ import { drawTopBar, drawActionBar, drawDeath } from './render/ui.js';
 import { drawBag, bagHitAt } from './render/bag.js';
 import { itemsAt } from './sim/systems/items.js';
 import { validThrowTargets } from './sim/systems/throwing.js';
+import { saveWorld, loadWorld } from './sim/save.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Saving: after every action that reaches the sim, the whole game goes into localStorage.
+// On start, the save is loaded; ?seed=N always starts that seed fresh. A save that can't be read
+// (an older version, broken) starts a new game with a note. Dying deletes the save. If storage
+// is blocked or full, the game plays on unsaved.
+const store = {
+  get() { try { return localStorage.getItem(CONFIG.save.key); } catch (e) { return null; } },
+  set(v) { try { localStorage.setItem(CONFIG.save.key, v); } catch (e) { /* plays on unsaved */ } },
+  clear() { try { localStorage.removeItem(CONFIG.save.key); } catch (e) { /* nothing to clear */ } },
+};
+const randomSeed = () => (Math.random() * 2 ** 32) >>> 0;
 const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
-const seed = Number.isFinite(urlSeed) ? urlSeed >>> 0 : (Math.random() * 2 ** 32) >>> 0;
-let world = createWorld(seed);
+let world, startNote = '';
+if (Number.isFinite(urlSeed)) {
+  world = createWorld(urlSeed >>> 0);
+} else {
+  const saved = store.get();
+  if (saved) {
+    try { world = loadWorld(createWorld, saved); } catch (e) { startNote = 'Old save lost. New game.'; store.clear(); }
+  }
+  if (!world) world = createWorld(randomSeed());
+}
 let log = createMessageLog(world);
+if (startNote) log.show(startNote);
 let layout;
 let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
 let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
@@ -29,6 +49,7 @@ let aiming = 0;         // item id being aimed for a throw (THROW in the bag); 0
 let diedAt = 0;     // when the player died (ms), so a fast tapper sees the death screen
 
 function newGame(newSeed) {
+  store.clear();
   world = createWorld(newSeed);
   log = createMessageLog(world);
   inspect = null; shoveArmed = false; bagOpen = false; aiming = 0; diedAt = 0;
@@ -61,7 +82,8 @@ function act(input) {
   log.clear();
   inspect = null;
   const took = applyInput(world, input);
-  if (world.gameOver && !diedAt) diedAt = performance.now();
+  if (world.gameOver) { if (!diedAt) diedAt = performance.now(); store.clear(); }
+  else store.set(saveWorld(world));
   draw();
   return took;
 }
@@ -103,7 +125,7 @@ canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 function tap(px, py) {
   if (world.gameOver) {
     // Ignore taps for a moment so a fast tapper sees the death screen, then start again.
-    if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame((Math.random() * 2 ** 32) >>> 0);
+    if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame(randomSeed());
     return;
   }
   if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
@@ -178,7 +200,7 @@ const KEYS = {
   8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0],
 };
 window.addEventListener('keydown', ev => {
-  if (world.gameOver) { if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame((Math.random() * 2 ** 32) >>> 0); return; }
+  if (world.gameOver) { if (performance.now() - diedAt > CONFIG.ui.deathTapDelayMs) newGame(randomSeed()); return; }
   if (ev.key === 'f') { ev.preventDefault(); pressButton('shove'); return; }
   if (ev.key === 'i' || ev.key === 'b') { ev.preventDefault(); pressButton('bag'); return; }
   if (ev.key === 'g') { ev.preventDefault(); act({ type: 'pickup' }); return; }

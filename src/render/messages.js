@@ -96,16 +96,24 @@ const THING_TEXT = {
   'walking stick': 'A walking stick. Sturdy.',
 };
 
-// Cause of death, for the death screen. Deadpan.
-export function deathText(gameOver) {
+// Cause of death, for the game over screen. Deadpan. A few wordings per cause, picked from the
+// seed and turn so it's the same every time you look at the same death.
+export function deathText(gameOver, seed = 0) {
   const by = gameOver.killerName || 'something';
-  return {
-    bite: `Bitten by a ${by}.`,
-    hit: `Beaten by a ${by}.`,
-    shove: 'Slammed into a wall.',
-    thrown: `Hit by something a ${by} threw.`,
-  }[gameOver.cause] || 'Died.';
+  const held = gameOver.heldName ? `, ${gameOver.heldName} in hand` : ', empty-handed';
+  const lines = {
+    bite: [
+      `Bitten by a ${by}${held}.`,
+      `Eaten by a ${by}. Mostly.`,
+      `Bitten by a ${by}. It was nothing personal.`,
+    ],
+    hit: [`Beaten by a ${by}${held}.`],
+    shove: ['Slammed into a wall. The wall was fine.'],
+    thrown: [`Hit by something a ${by} threw. Unlucky.`],
+  }[gameOver.cause] || ['Died. Nobody saw how.'];
+  return lines[((seed >>> 0) + gameOver.turn) % lines.length];
 }
+
 
 // Short names for remembered tiles (the line also says ", out of sight").
 const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };

@@ -2,15 +2,17 @@
 import { CONFIG } from '../config.js';
 import { LEVEL, deathText } from './messages.js';
 import { actionButtons } from './layout.js';
+import { dayOf, clockOf, daysSurvived } from '../sim/time.js';
 
-// Turn number on the left, then your hearts, then the latest message. With no message, the seed
-// shows dimmed on the right.
+// Day and clock on the left (D1 08:24), then your hearts, then the latest message. With no
+// message, the seed shows dimmed on the right. The turn number is in the debug view.
 export function drawTopBar(ctx, world, L, log, debug) {
   const c = CONFIG.colours, h = CONFIG.ui.topBarHeight;
   ctx.fillStyle = c.topBar; ctx.fillRect(0, 0, L.cssW, h);
   ctx.font = `bold ${CONFIG.ui.messageFont}px monospace`; ctx.textBaseline = 'middle';
   ctx.textAlign = 'left'; ctx.fillStyle = c.topBarText;
-  const turn = `T${world.turn}`;
+  const now = world.gameOver ? world.gameOver.tick : world.tick; // stopped at the moment you died
+  const turn = `D${dayOf(now)} ${clockOf(now)}`;
   ctx.fillText(turn, 8, h / 2);
   const p = world.entities.get(world.playerId);
   let x = 8 + ctx.measureText(turn + ' ').width;
@@ -20,7 +22,7 @@ export function drawTopBar(ctx, world, L, log, debug) {
     fitText(ctx, log.text, x, h / 2, L.cssW - x - 6);
   } else if (debug) {
     ctx.textAlign = 'right'; ctx.fillStyle = `rgb(${c.noise})`;
-    ctx.fillText(`DEBUG tick ${world.tick} seed ${world.seed}`, L.cssW - 8, h / 2);
+    ctx.fillText(`T${world.turn} tick ${world.tick} seed ${world.seed}`, L.cssW - 8, h / 2);
   } else {
     ctx.textAlign = 'right'; ctx.fillStyle = c.dimText;
     ctx.fillText(`seed ${world.seed}`, L.cssW - 8, h / 2);
@@ -78,17 +80,44 @@ export function drawActionBar(ctx, L, ui = {}) {
   }
 }
 
-// Death (a plain placeholder until the game over screen, step 11): the map darkened, the cause.
+// Game over: a plain screen over the darkened map (the final look, e.g. a Teletext page, is
+// decided at the art pass). YOU DIED, the deadpan cause, when, days survived, zombies put down,
+// turns and the seed.
 export function drawDeath(ctx, world, L) {
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(L.mapX, L.mapY, L.mapW, L.mapH);
+  const c = CONFIG.colours, g = world.gameOver;
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.fillRect(0, L.mapY, L.cssW, L.mapH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const cx = L.cssW / 2, cy = L.mapY + L.mapH / 2;
-  ctx.fillStyle = CONFIG.colours.deadText; ctx.font = 'bold 36px monospace';
-  ctx.fillText('YOU DIED', cx, cy - 40);
+  const cx = L.cssW / 2;
+  let y = L.mapY + Math.max(40, L.mapH * 0.16);
+  ctx.fillStyle = c.deadText; ctx.font = 'bold 38px monospace';
+  ctx.fillText('YOU DIED', cx, y);
+  y += 50;
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px monospace';
-  ctx.fillText(deathText(world.gameOver), cx, cy);
-  ctx.fillText(`Lasted ${world.turn} turns.`, cx, cy + 26);
-  ctx.fillStyle = CONFIG.colours.dimText;
-  ctx.fillText('Tap to start again', cx, cy + 70);
+  for (const line of wrap(ctx, deathText(g, world.seed), L.cssW - 40)) { ctx.fillText(line, cx, y); y += 22; }
+  y += 18;
+  const days = daysSurvived(g.tick);
+  const rows = [
+    `Day ${dayOf(g.tick)}, ${clockOf(g.tick)}`,
+    `Survived ${days} day${days === 1 ? '' : 's'}`,
+    `Zombies put down: ${world.stats ? world.stats.kills : 0}`,
+    `Turns: ${g.turn}`,
+  ];
+  ctx.font = '15px monospace'; ctx.fillStyle = '#dddddd';
+  for (const r of rows) { ctx.fillText(r, cx, y); y += 24; }
+  ctx.fillStyle = c.dimText; ctx.font = '13px monospace';
+  ctx.fillText(`Seed ${world.seed}`, cx, y + 6);
+  ctx.fillStyle = c.bagTitle; ctx.font = 'bold 16px monospace';
+  ctx.fillText('Tap for a new game', cx, L.mapY + L.mapH - 40);
+}
+
+function wrap(ctx, text, maxW) {
+  const words = text.split(' '), lines = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (ctx.measureText(next).width > maxW && line) { lines.push(line); line = w; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
 }

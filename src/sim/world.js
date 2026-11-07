@@ -19,7 +19,8 @@ export function createWorld(seed) {
     nextId: 1,
     playerId: 0,
     noise: new Int16Array(CONFIG.screen.w * CONFIG.screen.h), // heard since your last action (debug heatmap)
-    gameOver: null,       // { cause, killerName, turn } once the player dies
+    gameOver: null,       // { cause, killerName, heldName, turn, tick } once the player dies
+    stats: { kills: 0 },  // zombies you've put down
     turn: 0,              // player actions taken
     tick: 0,              // scheduler ticks (world time)
     inputs: [],           // every player input, in order, for replay

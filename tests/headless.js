@@ -11,6 +11,8 @@ import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/s
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items.js';
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
+import { saveWorld, loadWorld } from '../src/sim/save.js';
+import { dayOf, clockOf, daysSurvived } from '../src/sim/time.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -390,7 +392,7 @@ function check(cond, msg) {
     'six bites and you are dead');
   const t0 = w.turn;
   check(!applyInput(w, { type: 'wait' }) && w.turn === t0, 'after death nothing takes a turn');
-  check(deathTextOf(w) === 'Bitten by a zombie.', 'cause of death');
+  check(/^(Bitten|Eaten) by a zombie/.test(deathTextOf(w)), `cause of death (${deathTextOf(w)})`);
   // Attacks reach 8 ways: you hit diagonally, it bites diagonally; not through a squeezed corner.
   w = emptyWorld();
   const dg = player(w); dg.Position.x = 5; dg.Position.y = 5;
@@ -641,6 +643,70 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 
+// Time, save/load and the game over screen.
+{
+  check(clockOf(0) === '08:00' && dayOf(0) === 1, 'a run starts at 08:00 on day 1');
+  check(clockOf(30) === '09:00', 'a tick is 2 minutes');
+  check(dayOf(480) === 2 && clockOf(480) === '00:00' && daysSurvived(480) === 0, 'midnight starts day 2');
+  check(daysSurvived(720) === 1 && daysSurvived(719) === 0, 'a day survived is a full 24 hours');
+  // A save taken mid-run, loaded, and played on with the same inputs ends exactly like the
+  // uninterrupted run: player, zombie, items, bag, memory, RNG.
+  const state = w => JSON.stringify({
+    t: w.turn, k: w.tick, g: w.gameOver, s: w.stats,
+    e: [...w.entities.values()].map(e => [e.id, e.Position, e.Health, e.Brain, e.Inventory, e.Staggered]),
+    m: player(w).Memory.tiles,
+  });
+  let same = 0;
+  for (let s = 1; s <= 20; s++) {
+    const r = createRng(s * 31337);
+    const inputs = [];
+    for (let i = 0; i < 400; i++) {
+      const dx = r.int(3) - 1, dy = r.int(3) - 1;
+      inputs.push(r.chance(0.1) ? { type: 'wait' } : r.chance(0.05) ? { type: 'shove', dx, dy } : r.chance(0.05) ? { type: 'pickup' } : { type: 'move', dx, dy });
+    }
+    const a = createWorld(s);
+    for (const i of inputs) { if (a.gameOver) break; applyInput(a, i); }
+    const b = createWorld(s);
+    let k = 0;
+    for (; k < 150; k++) { if (b.gameOver) break; applyInput(b, inputs[k]); }
+    const json = saveWorld(b);
+    const c = loadWorld(createWorld, JSON.parse(JSON.stringify(json)));
+    for (; k < inputs.length; k++) { if (c.gameOver) break; applyInput(c, inputs[k]); }
+    if (state(a) === state(c)) same++;
+    else check(false, `seed ${s}: a loaded save plays on exactly like the original`);
+  }
+  check(same === 20, `loaded saves play on exactly (${same}/20)`);
+  // Saves are small, and the view is rebuilt on load.
+  const w = createWorld(7);
+  for (let i = 0; i < 50; i++) applyInput(w, { type: 'move', dx: i % 2 ? 1 : -1, dy: 0 });
+  const json = saveWorld(w);
+  check(json.length < 60000, `a save is small (${json.length} bytes)`);
+  const back = loadWorld(createWorld, json);
+  check(back.view && back.view.length === w.view.length && back.view.every((v, i) => v === w.view[i]), 'the view is rebuilt on load');
+  // An old or broken save is refused (main.js then starts a fresh game).
+  const old = JSON.parse(json); old.version = CONFIG.save.version - 1;
+  let refused = 0;
+  for (const bad of [JSON.stringify(old), '{nope', '', 'null', JSON.stringify({ version: CONFIG.save.version })]) {
+    try { loadWorld(createWorld, bad); } catch (e) { refused++; }
+  }
+  check(refused === 5, `old and broken saves are refused (${refused}/5)`);
+  // Kills count; the game over screen has its numbers; the cause is deadpan and steady.
+  const k = emptyWorld();
+  const me = player(k); me.Position.x = 5; me.Position.y = 5;
+  const z = makeZombie(k, 5, 6);
+  for (let i = 0; i < 6 && k.entities.has(z.id); i++) applyInput(k, { type: 'move', dx: z.Position.x - me.Position.x, dy: z.Position.y - me.Position.y });
+  check(k.stats.kills === 1, 'killing a zombie counts');
+  const d = emptyWorld();
+  const you = player(d); you.Position.x = 5; you.Position.y = 5;
+  makeZombie(d, 5, 6);
+  for (let i = 0; i < 60 && !d.gameOver; i++) applyInput(d, { type: 'wait' });
+  check(d.gameOver && Math.abs(d.gameOver.tick - d.tick) <= 1 && d.gameOver.heldName === 'walking stick',
+    `game over records when, and what you held (${JSON.stringify(d.gameOver)}, tick ${d.tick})`);
+  const line = deathText(d.gameOver, d.seed);
+  check(/zombie/.test(line) && line === deathText(d.gameOver, d.seed), `a deadpan cause, the same each time ("${line}")`);
+  check(deathText({ cause: 'bite', killerName: 'zombie', heldName: '', turn: 0 }, 0) === 'Bitten by a zombie, empty-handed.', 'empty-handed');
+}
+
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -700,6 +766,13 @@ function check(cond, msg) {
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
     applyInput(w, { type: 'move', dx: 0, dy: r.int(3) - 1 });
+  }
+  if (!crashed) {
+    try {
+      const dw = createWorld(9); player(dw).Health.hp = 1;
+      dw.gameOver = { cause: 'bite', killerName: 'zombie', heldName: 'walking stick', turn: 40, tick: 40 };
+      drawDeath(fake, dw, L); drawTopBar(fake, dw, L, createMessageLog(dw), false);
+    } catch (e) { crashed = e; }
   }
   check(!crashed, `drawing never throws (${crashed && crashed.message})`);
 }

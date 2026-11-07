@@ -15,6 +15,14 @@ export const CONFIG = {
     deathTapDelayMs: 1000, // taps are ignored this long after death, so you see the screen
   },
 
+  // Time runs on scheduler ticks, so slow actions take longer. A run starts at 08:00 on day 1,
+  // the bank holiday Saturday. Day/night (step 15) builds on this.
+  time: { minutesPerTick: 2, startHour: 8 },
+
+  // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
+  // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
+  save: { key: 'zombie-survival-save', version: 1 },
+
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
 

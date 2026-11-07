@@ -46,8 +46,13 @@ export function damage(world, target, amount, cause, byId) {
 export function kill(world, e, cause, byId) {
   const killer = byId ? world.entities.get(byId) : null;
   world.events.emit('entity_died', { id: e.id, cause, by: byId, x: e.Position.x, y: e.Position.y });
+  if (killer && killer.Player && e.Zombie && world.stats) world.stats.kills++;
   if (e.Player) {
-    world.gameOver = { cause, killerName: killer && killer.Name ? killer.Name.name : '', turn: world.turn };
+    const held = e.Inventory && e.Inventory.hand ? world.entities.get(e.Inventory.hand) : null;
+    world.gameOver = {
+      cause, killerName: killer && killer.Name ? killer.Name.name : '',
+      heldName: held && held.Name ? held.Name.name : '', turn: world.turn, tick: world.tick,
+    };
     e.Glyph = { ch: '%', colour: CONFIG.colours.corpse };
     delete e.Actor;
     return;
