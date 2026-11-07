@@ -162,7 +162,8 @@ export const CONFIG = {
     bagThrow: '#8a5a10',
     aimTile: 'rgba(255,221,51,0.28)',   // a tile you can throw to
     aimCreature: 'rgba(255,140,0,0.5)', // ... with a creature on it
-    edgeArrow: '#ff3030',  // a creature right next to you across the screen's edge
+    edgeArrow: '#ff3030',
+    exitArrow: '#000000',  // on your tile at a screen edge: tap this side to go on  // a creature right next to you across the screen's edge
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

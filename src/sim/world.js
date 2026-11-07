@@ -91,6 +91,18 @@ export function screenOf(world, x, y) {
   return { sx, sy, ox: sx * world.screenW, oy: sy * world.screenH };
 }
 
+// Ways off the screen from where e stands: [dx, dy] for each screen edge it's standing on with
+// open ground just beyond. (Touch needs these: there's no tile beyond the edge to tap.)
+export function edgeExits(world, e) {
+  const { x, y } = e.Position, { ox, oy } = screenOf(world, x, y), out = [];
+  const tryExit = (dx, dy) => { if (!tileBlocks(world, x + dx, y + dy)) out.push([dx, dy]); };
+  if (x === ox) tryExit(-1, 0);
+  if (x === ox + world.screenW - 1) tryExit(1, 0);
+  if (y === oy) tryExit(0, -1);
+  if (y === oy + world.screenH - 1) tryExit(0, 1);
+  return out;
+}
+
 export function sameScreen(world, a, b) {
   return Math.floor(a.x / world.screenW) === Math.floor(b.x / world.screenW)
     && Math.floor(a.y / world.screenH) === Math.floor(b.y / world.screenH);

@@ -2,7 +2,7 @@
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
 import { canNotice } from '../sim/systems/vision.js';
-import { screenOf } from '../sim/world.js';
+import { screenOf, edgeExits } from '../sim/world.js';
 
 // The camera: the screen you're on (flip-screen: it jumps a whole screen when you cross an edge).
 export function camera(world) {
@@ -43,6 +43,8 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
       ctx.fillStyle = e.Glyph.colour;
       ctx.fillRect(px + 2, py + 2, t - 4, t - 4);
       drawGlyph(ctx, e.Glyph.ch, px, py, t, c.playerText);
+      // On a screen edge: arrows showing you can tap that side of yourself to go on.
+      if (!world.gameOver) for (const [dx, dy] of edgeExits(world, e)) drawEdgeArrow(ctx, px, py, t, dx, dy, c.exitArrow);
     } else {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, e.Glyph.colour);
     }
