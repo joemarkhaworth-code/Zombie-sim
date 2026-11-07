@@ -79,10 +79,12 @@ function populateTown(world, start) {
     for (let sx = 0; sx < world.screensX; sx++) {
       const spots = [];
       const r = screenRect(world, sx, sy);
-      // Each screen's own middle (not the tiles it shares with neighbours), never on your first screen.
-      for (let y = r.oy + 1; y < r.oy + world.screenH - 1; y++) {
-        for (let x = r.ox + 1; x < r.ox + world.screenW - 1; x++) {
-          if (!tileBlocks(world, x, y) && !inRect(world, homeRect, x, y)) spots.push({ x, y });
+      // Tiles whose home screen is this one, never on the screen you start on.
+      for (let y = r.oy; y < r.oy + world.screenH; y++) {
+        for (let x = r.ox; x < r.ox + world.screenW; x++) {
+          const h = screenOf(world, x, y);
+          if (h.sx !== sx || h.sy !== sy || tileBlocks(world, x, y) || inRect(world, homeRect, x, y)) continue;
+          spots.push({ x, y });
         }
       }
       const take = () => spots.splice(rng.int(spots.length), 1)[0];

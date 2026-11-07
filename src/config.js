@@ -10,7 +10,7 @@ export const CONFIG = {
     map: 'town',
     seed: 1991,
     screens: [10, 10],
-    overlap: 2,                // neighbouring screens share this many columns / rows
+    overlap: 3,                // neighbouring screens share this many columns / rows: you land 2 tiles in
     activeRadius: 1,           // screens round yours that run in full (1 = your screen and the 8 round it)
     zombiesPerScreen: [1, 2],  // placeholder town: zombies on each screen but your first
     itemsPerScreen: [0, 2],
@@ -36,7 +36,7 @@ export const CONFIG = {
 
   // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
   // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
-  save: { key: 'zombie-survival-save', version: 3 },
+  save: { key: 'zombie-survival-save', version: 4 },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },

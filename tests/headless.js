@@ -924,19 +924,22 @@ for (let s = 1; s <= SEEDS; s++) {
   }
   check(w.cam.sx === cam0.sx + 1 && w.cam.sy === cam0.sy, 'stepping onto the last tile flips the view to the next screen');
   check(!edgeSeen, 'you are never left standing on the outermost tile');
-  check(local().x === ov - 1, `you are on the new screen's second tile (${local().x})`);
-  check(inView().out === 0 && w.view[row * w.w + camR().ox], 'the tile behind you (the old screen) is on screen to tap');
+  check(local().x === ov - 1, `you land ${ov - 1} tiles in on the new screen (${local().x})`);
+  check(inView().out === 0 && w.view[row * w.w + camR().ox], 'the tiles behind you (the old screen) are on screen to tap');
   const prevMem = me.Memory.tiles[row * w.w + camR().ox - 4];
   check(prevMem, 'the screen you left stays in your memory');
+  for (let i = 0; i < ov - 2; i++) applyInput(w, { type: 'move', dx: -1, dy: 0 });
+  check(w.cam.sx === cam0.sx + 1, 'stepping back, the view stays put until the outermost tile');
   applyInput(w, { type: 'move', dx: -1, dy: 0 });
-  check(w.cam.sx === cam0.sx && local().x === w.screenW - ov, 'stepping back onto it flips you back');
-  applyInput(w, { type: 'move', dx: 1, dy: 0 });
+  check(w.cam.sx === cam0.sx && local().x === w.screenW - ov, `stepping onto it flips you back, ${ov - 1} tiles in (${local().x})`);
+  for (let i = 0; i < ov - 1; i++) applyInput(w, { type: 'move', dx: 1, dy: 0 });
   check(w.cam.sx === cam0.sx + 1, 'and forward again');
   const s1 = camR();
   // A zombie just over the edge (on the old screen, not this one) can't see you, but hears you,
   // and can follow you across.
-  const zz = makeZombie(w, s1.ox - 2, row);
-  check(!canNotice(w, zz, me) && !canNotice(w, me, zz), 'a zombie on the next screen 2 tiles off: neither of you sees the other');
+  w.tiles[row * w.w + s1.ox - 1] = TILE.FLOOR;
+  const zz = makeZombie(w, s1.ox - 1, row); // just off the screen you're looking at
+  check(!canNotice(w, zz, me) && !canNotice(w, me, zz), `a zombie on the old screen ${me.Position.x - zz.Position.x} tiles off: neither of you sees the other`);
   applyInput(w, { type: 'move', dx: 1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 });
   check(zz.Brain.goal && zz.Brain.goal.why === 'heard', 'it hears your footsteps across the edge');
   let close = false;
