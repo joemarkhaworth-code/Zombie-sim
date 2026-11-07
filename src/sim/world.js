@@ -158,8 +158,13 @@ export function updateCamera(world) {
 }
 
 export function makeZombie(world, x, y) {
-  return addEntity(world, {
-    Position: { x, y },
+  return addEntity(world, { Position: { x, y }, ...zombieComponents() });
+}
+
+// A fresh zombie's components (no Position). Saves store only what differs from this (Kind).
+export function zombieComponents() {
+  return {
+    Kind: 'zombie',
     Glyph: { ch: 'Z', colour: CONFIG.colours.zombie },
     Name: { name: 'zombie' },
     Zombie: {},
@@ -172,7 +177,7 @@ export function makeZombie(world, x, y) {
     Melee: { ...CONFIG.zombie.melee },
     // goal: { x, y, why: 'seen' | 'glimpsed' | 'heard' } | null; glimpsed: prey id it stared at last look; search: { x, y, left } | null; tracking: prey id it saw last look
     Brain: { goal: null, search: null, tracking: 0, glimpsed: 0, distracted: null },
-  });
+  };
 }
 
 // Test items on random open floor, not on anyone and not on another item.

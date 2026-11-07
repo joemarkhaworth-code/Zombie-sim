@@ -14,14 +14,20 @@ export function itemType(e) {
 }
 
 export function makeItem(world, type, x, y) {
+  const e = addEntity(world, itemComponents(type));
+  if (x !== undefined) e.Position = { x, y };
+  return e;
+}
+
+// A fresh item's components (no Position). Saves store only what differs from this (Kind).
+export function itemComponents(type) {
   const t = CONFIG.items[type];
-  const e = addEntity(world, {
+  return {
+    Kind: `item:${type}`,
     Item: { type },
     Glyph: { ch: t.glyph, colour: t.colour },
     Name: { name: t.name },
-  });
-  if (x !== undefined) e.Position = { x, y };
-  return e;
+  };
 }
 
 export function makeInventory(cols, rows) {

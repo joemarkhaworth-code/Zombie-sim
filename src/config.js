@@ -9,7 +9,7 @@ export const CONFIG = {
   world: {
     map: 'town',
     seed: 1991,
-    screens: [10, 10],
+    screens: [25, 25],
     // Crossing screens: the view flips when you step onto the tile flipAt tiles in from a screen's
     // edge (0 = the last tile, 1 = the second to last), and you land landIn tiles in on the new
     // screen. Neighbouring screens overlap by flipAt + landIn + 1 tiles so the two line up.
@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
   // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
-  save: { key: 'zombie-survival-save', version: 5 },
+  save: { key: 'zombie-survival-save', version: 6 },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },

@@ -21,9 +21,10 @@ export function drawTopBar(ctx, world, L, log, debug) {
     ctx.fillStyle = log.level >= LEVEL.danger ? c.dangerText : c.topBarText;
     fitText(ctx, log.text, x, h / 2, L.cssW - x - 6);
   } else if (debug) {
-    ctx.textAlign = 'right'; ctx.fillStyle = `rgb(${c.noise})`;
+    ctx.fillStyle = `rgb(${c.noise})`;
     const scr = `S${world.cam.sx},${world.cam.sy}`;
-    ctx.fillText(`${scr} T${world.turn} tick ${world.tick} seed ${world.seed}`, L.cssW - 8, h / 2);
+    // Shrinks to fit the space after the hearts.
+    fitText(ctx, `${scr} T${world.turn} tick ${world.tick} seed ${world.seed}`, x, h / 2, L.cssW - x - 6);
   } else {
     ctx.textAlign = 'right'; ctx.fillStyle = c.dimText;
     ctx.fillText(`seed ${world.seed}`, L.cssW - 8, h / 2);
