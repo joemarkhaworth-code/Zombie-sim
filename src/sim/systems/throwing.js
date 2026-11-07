@@ -32,6 +32,9 @@ export function throwItem(world, thrower, itemId, x, y) {
   takeOut(thrower, itemId);
   item.Position = { x, y };
   world.events.emit('item_thrown', { id: thrower.id, itemId, x, y });
+  // It clatters where it lands first (distracting zombies that hear it), then a creature it hit
+  // turns on the thrower.
+  makeNoise(world, x, y, CONFIG.throw.landNoise, thrower.id);
   const target = creatureAt(world, x, y);
   if (target) {
     world.events.emit('thrown_hit', { id: thrower.id, itemId, targetId: target.id });
@@ -40,8 +43,8 @@ export function throwItem(world, thrower, itemId, x, y) {
     if (world.entities.has(target.id) && target.Brain && thrower.Prey) {
       target.Brain.tracking = thrower.id; target.Brain.glimpsed = 0; target.Brain.search = null;
       target.Brain.goal = { x: thrower.Position.x, y: thrower.Position.y, why: 'seen' };
+      target.Brain.distracted = null;
     }
   }
-  makeNoise(world, x, y, CONFIG.throw.landNoise, thrower.id);
   return true;
 }

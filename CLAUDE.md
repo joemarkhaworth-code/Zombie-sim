@@ -248,3 +248,10 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - Input { type: 'throw', itemId, x, y }, recorded; random play includes throws.
 - Messages: "You throw the tin of beans.", "It hits the zombie." Cause of death if a thrown thing ever kills you: "Hit by something a ... threw."
 - Tests: range 6, not into or through a wall, one rule for targets; out of range refused with no turn; a throw takes a turn, the tin lands and leaves the bag, it clatters at level 2, and a zombie behind a wall hears it and goes to look; throwing at a zombie hits for 1 and it tracks you, the tin at its feet; you can throw what you hold.
+
+### Playtest: throwing didn't change what zombies did (after step 10) - built
+- "Throwing didn't make a difference to the zombies' movements." Cause: seeing always beat hearing, and a zombie after you (!) ignored noises, so in a small room the clatter was overridden at once.
+- Distraction (zombie.distractLevel 2, distractActions 3): a zombie that hears a loud noise (level 2+: a thing landing, a fight) turns to it for its next 3 moves (Brain.distracted), heading for the noise even if it can see you and even if it was after you (it drops the !, shows ?). It snaps back to you if you're within zombie.glimpseRange (2), so you can't throw a tin mid-fight to escape a bite. Quiet noises (footsteps, a shove) don't distract. Being hit or shoved cancels it (the hit one turns on you). When the distraction ends it follows the normal rules: if it sees you again it stares (?) before coming.
+- Throwing at a zombie: the clatter happens first, then the zombie that was hit turns on the thrower, so a direct hit still draws it to you.
+- Fight balance unchanged (one/three/five zombies: same numbers).
+- Tests: a quiet noise doesn't distract a zombie that's after you; within 2 tiles a loud noise doesn't pull it off you; a tin thrown past a zombie that's after you distracts it, it heads for the tin and away from you though it could see you, and when it spots you again it stares first.

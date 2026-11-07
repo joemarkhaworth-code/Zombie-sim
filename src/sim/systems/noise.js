@@ -5,7 +5,8 @@
 // (for the debug overlay).
 // Anything with Hearing { level } on a tile the noise reaches at strength >=
 // noise.minStrengthToHear[level] hears it (noise_heard). Zombies (Brain) that hear a noise and
-// can't see prey make its source their goal: the newest noise wins; seeing prey always wins.
+// can't see prey make its source their goal: the newest noise wins. A loud one (zombie.distractLevel)
+// distracts them for a few moves even if they can see prey (see shamble.js).
 import { CONFIG } from '../../config.js';
 import { inBounds, tileBlocks } from '../world.js';
 import { opaqueAt } from './vision.js';
@@ -53,7 +54,14 @@ export function makeNoise(world, x, y, level, byId = 0) {
     if (!canHear(e, s)) continue;
     world.events.emit('noise_heard', { id: e.id, x, y, strength: s, by: byId });
     const b = e.Brain;
-    if (b && !b.tracking) {
+    if (!b) continue;
+    if (level >= CONFIG.zombie.distractLevel) {
+      // A loud noise distracts it: it turns to look for a few moves, even if it's after you
+      // (shamble.js decides whether you're too close for that to work).
+      b.distracted = { x, y, left: CONFIG.zombie.distractActions };
+      b.goal = { x, y, why: 'heard' };
+      b.search = null;
+    } else if (!b.tracking) {
       b.goal = { x, y, why: 'heard' };
       b.search = null;
     }

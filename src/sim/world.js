@@ -65,7 +65,7 @@ export function makeZombie(world, x, y) {
     Health: { hp: CONFIG.zombie.health, max: CONFIG.zombie.health },
     Melee: { ...CONFIG.zombie.melee },
     // goal: { x, y, why: 'seen' | 'glimpsed' | 'heard' } | null; glimpsed: prey id it stared at last look; search: { x, y, left } | null; tracking: prey id it saw last look
-    Brain: { goal: null, search: null, tracking: 0, glimpsed: 0 },
+    Brain: { goal: null, search: null, tracking: 0, glimpsed: 0, distracted: null },
   });
 }
 

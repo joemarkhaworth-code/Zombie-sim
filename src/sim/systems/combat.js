@@ -74,6 +74,7 @@ export function attack(world, attacker, target) {
   if (target.Brain && attacker.Prey) {
     target.Brain.tracking = attacker.id; target.Brain.glimpsed = 0; target.Brain.search = null;
     target.Brain.goal = { x: attacker.Position.x, y: attacker.Position.y, why: 'seen' };
+    target.Brain.distracted = null; // being hit beats any noise
   }
   if (m.knockback) {
     pushEntity(world, target, dx, dy, attacker.id); // into a wall: it just stays put
@@ -98,6 +99,7 @@ export function shove(world, actor, target) {
   if (target.Brain && actor.Prey) {
     target.Brain.tracking = actor.id; target.Brain.glimpsed = 0; target.Brain.search = null;
     target.Brain.goal = { x: actor.Position.x, y: actor.Position.y, why: 'seen' };
+    target.Brain.distracted = null;
   }
 }
 

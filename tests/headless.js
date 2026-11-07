@@ -277,11 +277,14 @@ function check(cond, msg) {
   const z3 = makeZombie(w, 9, 12);
   applyInput(w, { type: 'move', dx: 0, dy: 1 });
   check(!z3.Brain.goal || z3.Brain.goal.why !== 'heard', 'a zombie far off does not');
-  // A zombie that sees you ignores noises.
-  const z4 = makeZombie(w, 3, 6); updatePlayerView(w);
+  // Quiet noises don't pull a zombie off you; a loud one distracts it unless you're close.
+  const z4 = makeZombie(w, 3, 5); updatePlayerView(w); // 2 tiles off
   applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  makeNoise(w, 9, 12, 1);
+  check(z4.Brain.tracking && !z4.Brain.distracted, 'a quiet noise does not distract a zombie that is after you');
   makeNoise(w, 9, 12, 3);
-  check(z4.Brain.tracking && z4.Brain.goal.why === 'seen', 'seeing you beats hearing a noise');
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  check(z4.Brain.tracking && z4.Brain.goal.why === 'seen', 'within 2 tiles, a loud noise does not pull it off you');
   // The heatmap clears at your next action.
   makeNoise(w, 9, 12, 3);
   applyInput(w, { type: 'wait' });
@@ -606,6 +609,33 @@ function check(cond, msg) {
   // You can throw what you hold.
   const stickId = r.Inventory.hand;
   check(applyInput(w, { type: 'throw', itemId: stickId, x: 2, y: 2 }) && r.Inventory.hand === 0 && itemsAt(w, 2, 2).length === 1, 'you can throw what you hold');
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
+// Distraction: a loud noise (a tin landing) pulls a zombie that's after you away for a few moves.
+{
+  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance, savedG = CONFIG.zombie.glimpseRange;
+  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
+  const w = emptyWorld();
+  const p = player(w); p.Position.x = 5; p.Position.y = 2;
+  const z = makeZombie(w, 5, 6); // 4 tiles off
+  updatePlayerView(w);
+  CONFIG.zombie.glimpseRange = 99;
+  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
+  CONFIG.zombie.glimpseRange = savedG;
+  check(z.Brain.tracking === p.id, 'it is after you (!)');
+  const tin = makeItem(w, 'beans', 5, 2); applyInput(w, { type: 'pickup' });
+  const startY = z.Position.y;
+  check(applyInput(w, { type: 'throw', itemId: tin.id, x: 8, y: 7 }), 'you throw a tin past it');
+  check(z.Brain.distracted && !z.Brain.tracking, 'the clatter distracts it: no longer after you');
+  for (let i = 0; i < 4; i++) { applyInput(w, { type: 'wait' }); }
+  check(dist(z.Position, { x: 8, y: 7 }) < dist({ x: 5, y: startY }, { x: 8, y: 7 }), 'it heads for the tin, though it could see you');
+  check(dist(z.Position, p.Position) > 3, 'and away from you');
+  // Afterwards, if it sees you again, it stares (?) before coming: you get your beat.
+  const ev = [];
+  w.events.on('prey_glimpsed', () => ev.push('glimpsed'));
+  for (let i = 0; i < 12 && !ev.length; i++) applyInput(w, { type: 'wait' });
+  check(ev.length === 1, 'when it spots you again it stares first');
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 

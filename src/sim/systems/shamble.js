@@ -6,6 +6,8 @@
 //   3. ...then search: shuffle about within searchRadius of that spot for searchActions moves,
 //      so it can stumble onto you nearby, then give up.
 //   4. Nothing to do: stand about, now and then shuffling a random way.
+//   Overriding these: a loud noise (zombie.distractLevel) distracts it for distractActions moves:
+//   it heads for the noise even if it can see you, unless you're within glimpseRange.
 // Steps are greedy and 4-way, with a small random stagger. Next to its
 // prey (8 ways, like yours) a zombie bites, but never on the action it first spots you.
 import { CONFIG } from '../../config.js';
@@ -69,6 +71,23 @@ function startSearch(world, e, spot) {
 export function shamble(world, e) {
   const b = e.Brain, cfg = CONFIG.zombie;
   const prey = visiblePrey(world, e);
+  // Distracted by a loud noise: go and look for a few moves, ignoring prey it can see, unless
+  // the prey is close (within glimpseRange): then it snaps back to the prey.
+  if (b.distracted) {
+    if (prey && manhattan(prey.Position, e.Position) <= cfg.glimpseRange) {
+      b.distracted = null;
+    } else {
+      const d = b.distracted;
+      b.tracking = 0; b.glimpsed = 0;
+      b.goal = { x: d.x, y: d.y, why: 'heard' };
+      if (--d.left <= 0) b.distracted = null;
+      if (manhattan(e.Position, d) === 0 || !stepToward(world, e, d.x, d.y)) {
+        b.distracted = null;
+        startSearch(world, e, d);
+      }
+      return;
+    }
+  }
   if (prey && !b.tracking && b.glimpsed !== prey.id && manhattan(prey.Position, e.Position) > cfg.glimpseRange) {
     // A glimpse at a distance: stop and stare (spends this action). It only comes for you if it
     // still sees you on its next look; if you've gone, it shuffles over to check the spot.
