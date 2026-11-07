@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { createEvents } from './events.js';
 import { generateTestScreen } from './gen/testscreen.js';
-import { generateTown } from './gen/town.js';
+import { generateTown } from './gen/region.js';
 import { TILE_INFO } from './tiles.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';

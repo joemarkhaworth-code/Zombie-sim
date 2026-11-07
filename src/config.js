@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
   // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
-  save: { key: 'zombie-survival-save', version: 7 },
+  save: { key: 'zombie-survival-save', version: 8 },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
@@ -161,7 +161,7 @@ export const CONFIG = {
       PLATFORM: ['#a8a296', '#e0c040'], TUNNEL: ['#0a0a0a', '#5e564e'], GRAVE: ['#5d8a3c', '#c8c8c0'], RUIN: ['#77736a', '#5c5850'],
       CARRIAGE: ['#7a2230', '#a83a48'], CARRIAGE_END: ['#7a2230', '#1a1a1a'], BARRIER: ['#d8d8d8', '#d02020'], ARCH: ['#1e1c1a', '#3a3632'],
       BEDS: ['#5a4430', '#4a8a3a'], CARPARK: ['#38393e', '#d8d8d0'], DRIVE: ['#9a958a', '#86817a'], MARKET_CROSS: ['#7a7064', '#c8c0b0'],
-      PARAPET: ['#a89c84', '#7e7462'], GATE: ['#5d8a3c', '#9a6a3a'], CROSSING: ['#2e2f33', '#b8b8b8'],
+      PARAPET: ['#a89c84', '#7e7462'], MARSH: ['#4e6a44', '#5a8ad0'], PADLOCK: ['#5d8a3c', '#4a4a4a'], GATE: ['#5d8a3c', '#9a6a3a'], CROSSING: ['#2e2f33', '#b8b8b8'],
       // Roofs: [far / lit slope, near / shaded slope]; walls: [wall, courses].
       ROOF_SLATE: ['#5c636b', '#474d54'], ROOF_TILES: ['#a85a44', '#8a4434'], ROOF_METAL: ['#8a949a', '#6e787e'],
       ROOF_FLAT: ['#55585c', '#4a4d50'], ROOF_GLASS: ['#bcd8e4', '#98b8c8'],

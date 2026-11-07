@@ -6,7 +6,7 @@ import { createRng } from '../src/sim/rng.js';
 import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
 import { TILE_INFO } from '../src/sim/tiles.js';
-import { RIVER } from '../src/sim/gen/town.js';
+import { RIVER } from '../src/sim/gen/region.js';
 import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/messages.js';
 const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
@@ -15,7 +15,7 @@ import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
 import { saveWorld, loadWorld } from '../src/sim/save.js';
 import { dayOf, clockOf, daysSurvived } from '../src/sim/time.js';
-import { screenOf, cameraRect, inRect } from '../src/sim/world.js';
+import { screenOf, cameraRect, inRect, updateCamera } from '../src/sim/world.js';
 import { isActive } from '../src/sim/scheduler.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
@@ -898,21 +898,22 @@ for (let s = 1; s <= SEEDS; s++) {
   const za = zombies(a).map(z => `${z.Position.x},${z.Position.y}`).join(), zb = zombies(b).map(z => `${z.Position.x},${z.Position.y}`).join();
   check(za !== zb, 'zombies are placed by the run seed');
   const p = player(a), home = screenOf(a, p.Position.x, p.Position.y);
-  check(home.sx === 11 && home.sy === 8 && a.cam.sx === 11 && a.cam.sy === 8, `you start at home, on screen 11,8 (${home.sx},${home.sy})`);
+  check(a.cam.sx === home.sx && a.cam.sy === home.sy, `the camera starts on your screen (${home.sx},${home.sy})`);
   const perScreen = {};
   for (const z of zombies(a)) { const s2 = screenOf(a, z.Position.x, z.Position.y); perScreen[`${s2.sx},${s2.sy}`] = (perScreen[`${s2.sx},${s2.sy}`] || 0) + 1; }
   check(!perScreen[`${home.sx},${home.sy}`], 'no zombies on your first screen');
   let roomy = 0;
   for (let sy = 0; sy < ny; sy++) for (let sx = 0; sx < nx; sx++) {
     if (sx === home.sx && sy === home.sy) continue;
-    let room = false;
-    for (let y = sy * a.stepY; y < sy * a.stepY + a.screenH && !room; y++) for (let x = sx * a.stepX; x < sx * a.stepX + a.screenW && !room; x++) {
+    let roomN = 0;
+    for (let y = sy * a.stepY; y < sy * a.stepY + a.screenH; y++) for (let x = sx * a.stepX; x < sx * a.stepX + a.screenW; x++) {
       const h2 = screenOf(a, x, y);
-      room = h2.sx === sx && h2.sy === sy && !tileBlocks(a, x, y);
+      if (h2.sx === sx && h2.sy === sy && !tileBlocks(a, x, y)) roomN++;
     }
+    const room = roomN >= 6; // a screen that's nearly all forest or mountain may have none
     if (room) { roomy++; if (!perScreen[`${sx},${sy}`]) check(false, `screen ${sx},${sy} has no zombies`); }
   }
-  check(Object.keys(perScreen).length === roomy, `every other screen with room for one has zombies (${Object.keys(perScreen).length}/${roomy})`);
+  check(Object.keys(perScreen).length >= roomy, `every other screen with room has zombies (${Object.keys(perScreen).length}/${roomy})`);
   check(zombies(a).every(z => !tileBlocks(a, z.Position.x, z.Position.y)), 'none in walls');
   // Everything open is reachable from the start, across all the screens.
   const seen = new Uint8Array(a.w * a.h), stack = [p.Position.y * a.w + p.Position.x];
@@ -926,7 +927,7 @@ for (let s = 1; s <= SEEDS; s++) {
   }
   let open = 0, reach = 0;
   for (let i = 0; i < a.w * a.h; i++) if (!tileBlocks(a, i % a.w, (i / a.w) | 0)) { open++; if (seen[i]) reach++; }
-  check(open === reach && open > a.w * a.h * 0.5, `every open tile is reachable (${reach}/${open})`);
+  check(open === reach && open > a.w * a.h * 0.3, `every open tile is reachable (${reach}/${open})`);
   townLayoutChecks(a);
   // You only see the screen you're looking at. Step onto its last tile and the view flips: you're
   // on the next screen's second tile, with a tile of the old screen behind you to step back onto.
@@ -1004,82 +1005,89 @@ for (let s = 1; s <= SEEDS; s++) {
   check(total / turns < 10, 'a turn in the town is quick');
 }
 
-// Brackenby's layout (step 13): the river and its crossings, the train on the viaduct, the
-// buildings at their outside sizes, your front door, the roadblocks at the edge.
+// The region (step 13): seven places joined by ways on the grid through forest, the lake, the
+// river and the mountains; the train on the trestle; your house; the closed edge.
 function townLayoutChecks(a) {
   const key = (x, y) => TILE_INFO[a.tiles[y * a.w + x]].key;
   const L = a.layout, me = player(a).Position;
-  // The river runs right across the map, west to east.
-  const hasWater = x => { for (let y = 0; y < a.h; y++) if (key(x, y) === 'WATER') return true; return false; };
-  check(hasWater(1) && hasWater(a.w - 2), 'the River Kell crosses the whole map');
-  // ...unbroken: all along its middle it's water, a crossing or the ford.
-  let broken = 0;
-  for (let k = 1; k < RIVER.length; k++) {
-    const [x0, y0] = RIVER[k - 1], [x1, y1] = RIVER[k];
-    for (let f = 0; f < 1; f += 0.05) {
-      const x = Math.min(a.w - 1, Math.floor(x0 + (x1 - x0) * f)), y = Math.floor(y0 + (y1 - y0) * f);
-      if (!['WATER', 'BRIDGE', 'WEIR', 'SHALLOWS', 'PARAPET', 'FENCE', 'RAIL', 'CARRIAGE', 'CARRIAGE_END'].includes(key(x, y))) broken++;
-    }
-  }
-  check(!broken, `the river is unbroken: water, or a crossing over it (${broken} gaps)`);
-  // Without its crossings (bridges, the weir, the viaduct's ledge) the river splits the town.
-  const reachable = (blocked) => {
+  const all = (() => {
     const seen = new Uint8Array(a.w * a.h), st = [me.y * a.w + me.x]; seen[st[0]] = 1;
     while (st.length) {
       const i = st.pop(), x = i % a.w, y = (i / a.w) | 0;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx2 = x + dx, ny2 = y + dy, j = ny2 * a.w + nx2;
-        if (tileBlocks(a, nx2, ny2) || seen[j] || blocked(nx2, ny2)) continue;
-        seen[j] = 1; st.push(j);
+        const j = (y + dy) * a.w + x + dx;
+        if (!tileBlocks(a, x + dx, y + dy) && !seen[j]) { seen[j] = 1; st.push(j); }
       }
     }
     return seen;
-  };
-  const hamlet = L.buildings.find(b => b.kind === 'cottage' && b.y > 190);
-  const all = reachable(() => false), cut = reachable((x, y) => ['BRIDGE', 'WEIR'].includes(key(x, y)));
-  check(hamlet && all[hamlet.entry.y * a.w + hamlet.entry.x], 'the hamlet across the river can be reached');
-  check(!cut[hamlet.entry.y * a.w + hamlet.entry.x], 'only over the bridges, the weir or the viaduct (the ford needs wellies)');
-  const crossings = new Set();
-  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) if (key(x, y) === 'BRIDGE' || key(x, y) === 'WEIR') crossings.add(`${screenOf(a, x, y).sx}`);
-  // The stopped train: three carriages (2 x 12) on the viaduct, a one-tile ledge beside them.
-  check(L.train.length === 3 && L.train.every(c2 => c2.w === 2 && c2.h === 12), 'three carriages, 2 x 12 each');
-  let ledge = true;
-  for (let y = 149; y <= 172; y++) {
-    ledge = ledge && key(71, y) === 'PARAPET' && key(72, y) === 'BRIDGE' && key(75, y) === 'PARAPET'
-      && ['CARRIAGE', 'CARRIAGE_END', 'RAIL'].includes(key(73, y)) && ['CARRIAGE', 'CARRIAGE_END', 'RAIL'].includes(key(74, y));
+  })();
+  // The places: seven, each reachable, each mostly open ground with streets.
+  check(L.places.length === 7, `seven places (${L.places.map(p => p.name).join(', ')})`);
+  for (const pl of L.places) {
+    let open = 0, reach = 0, n = 0;
+    for (let y = pl.y0; y <= pl.y1; y++) for (let x = pl.x0; x <= pl.x1; x++) { n++; if (!tileBlocks(a, x, y)) { open++; if (all[y * a.w + x]) reach++; } }
+    if (!(open > n * 0.6 && reach === open)) check(false, `${pl.name} is open and can be reached (${reach}/${open}/${n})`);
   }
-  check(ledge, 'on the viaduct: parapet, a one-tile ledge, the train, parapet');
-  check(all[160 * a.w + 72], 'the ledge can be reached (through the cutting)');
-  // Buildings: outside sizes, on the map, never on water, each with a way in that can be reached.
-  const sizes = { terrace: [4, 5], semi: [5, 6], pub: [8, 8], shop: [5, 6], church: [14, 8], station: [12, 5], superstore: [16, 12] };
-  let wrongSize = 0, badEntry = 0, onWater = 0;
-  for (const b of L.buildings) {
-    const sz = sizes[b.kind];
-    const len = b.facing === 'E' || b.facing === 'W' ? [b.h, b.w] : [b.w, b.h];
-    if (sz && b.name !== 'the Shambles' && (len[0] !== sz[0] || len[1] !== sz[1])) wrongSize++;
-    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) if (key(x, y) === 'WATER') onWater++;
-    if (!all[b.entry.y * a.w + b.entry.x]) badEntry++;
+  // The river runs from the lake off the east edge, unbroken: water or a crossing.
+  let broken = 0;
+  for (let k = 1; k < RIVER.length; k++) {
+    const [x0, y0] = RIVER[k - 1], [x1, y1] = RIVER[k];
+    for (let f = 0; f <= 1; f += 0.05) {
+      const x = Math.min(a.w - 1, Math.round(x0 + (x1 - x0) * f)), y = Math.round(y0 + (y1 - y0) * f);
+      if (!['WATER', 'BRIDGE', 'WEIR', 'SHALLOWS', 'PARAPET', 'RAIL', 'CARRIAGE', 'CARRIAGE_END', 'FENCE', 'CRAG'].includes(key(x, y))) broken++;
+    }
   }
-  check(L.buildings.length > 150, `a town's worth of buildings (${L.buildings.length})`);
-  check(!wrongSize, `buildings are their outside sizes (${wrongSize} wrong)`);
-  check(!onWater && !badEntry, `none on the river, and every way in can be reached (${onWater}, ${badEntry})`);
-  // Your front door: you start on the pavement outside it.
+  check(!broken && key(a.w - 1, 214) === 'WATER', `the Kennock River is unbroken to the east edge (${broken} gaps)`);
+  // Everything on the grid: no road, trail or rail tile touches another of its kind only diagonally.
+  const kinds = [['ROAD', 'ROAD_LINE_H', 'ROAD_LINE_V', 'CROSSING', 'BRIDGE', 'PAVEMENT', 'TRACK'], ['PATH', 'BRIDGE', 'TRACK', 'ROAD', 'ROAD_LINE_H', 'ROAD_LINE_V', 'GATE', 'GRASS'], ['RAIL', 'CROSSING', 'CARRIAGE', 'CARRIAGE_END']];
+  let diag = 0;
+  for (let y = 1; y < a.h - 1; y++) for (let x = 1; x < a.w - 1; x++) {
+    const k0 = key(x, y);
+    if (k0 !== 'RAIL') continue;
+    const set = kinds[2];
+    const orth = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => set.includes(key(x + dx, y + dy)));
+    if (!orth) diag++;
+  }
+  check(!diag, `the railway runs on the grid (${diag} loose rail tiles)`);
+  // The trestle: parapet, a one-tile ledge, the track with the train, parapet; reachable at both ends.
+  let ok = true;
+  for (let x = 66; x <= 78; x++) {
+    ok = ok && key(x, 143) === 'PARAPET' && key(x, 144) === 'BRIDGE' && key(x, 147) === 'PARAPET'
+      && ['CARRIAGE', 'CARRIAGE_END'].includes(key(x, 145)) && ['CARRIAGE', 'CARRIAGE_END'].includes(key(x, 146));
+  }
+  check(ok && L.train.length === 3 && L.train.every(t2 => t2.w === 12 && t2.h === 2), 'the train (three 12 x 2 carriages) stopped on the trestle, a one-tile ledge beside it');
+  check(all[144 * a.w + 70], 'the ledge over the gorge can be reached');
+  // Gated for later: the shallows (waders), the logging camp gate, the old mine, the rockslide.
+  const has = k => { for (let i = 0; i < a.tiles.length; i++) if (TILE_INFO[a.tiles[i]].key === k) return true; return false; };
+  check(has('SHALLOWS') && has('PADLOCK') && has('TUNNEL') && has('MARSH'), 'the shallows, the padlocked gate, the old mine and the swamp are there');
+  // Your house: you start outside its front door, in Apple Hill.
   const house = L.buildings[L.home];
-  check(house.name === 'your house' && house.kind === 'terrace' && key(me.x, me.y) === 'PAVEMENT' && TILE_INFO[a.tiles[(me.y - 1) * a.w + me.x]].part === 'door',
-    'you start on the pavement outside your own front door');
-  // The edge: nothing open on the map's border; roads out end at police roadblocks.
+  const inApple = L.places.find(p2 => p2.name === 'Apple Hill');
+  check(house.name === 'your house' && TILE_INFO[a.tiles[(me.y - 1) * a.w + me.x]].part === 'door'
+    && me.x >= inApple.x0 && me.x <= inApple.x1 && me.y >= inApple.y0 && me.y <= inApple.y1, 'you start outside your own front door, in Apple Hill');
+  // The edge: nothing open on the map's border; roads out end at roadblocks.
   let open2 = 0, blocks = 0;
   for (let x = 0; x < a.w; x++) for (const y of [0, a.h - 1]) { if (!tileBlocks(a, x, y)) open2++; if (key(x, y) === 'BARRIER') blocks++; }
   for (let y = 0; y < a.h; y++) for (const x of [0, a.w - 1]) { if (!tileBlocks(a, x, y)) open2++; if (key(x, y) === 'BARRIER') blocks++; }
   check(!open2 && blocks >= 12, `the map's edge is closed; roads out end at roadblocks (${blocks} tiles)`);
-  // Signs hang over walkable tiles.
-  check(L.signs.length > 5 && L.signs.every(sg => !tileBlocks(a, sg.x, sg.y)), `hanging signs over the pavement (${L.signs.length})`);
-  // Every kind of tile in the town has inspect wording.
+  // Most of the wilds are forest walls, not open ground (routes, not a field).
+  let trees = 0;
+  for (let i = 0; i < a.tiles.length; i++) if (TILE_INFO[a.tiles[i]].key === 'TREE') trees++;
+  check(trees > a.tiles.length * 0.25, `forest walls between the routes (${Math.round(trees * 100 / a.tiles.length)}% trees)`);
+  // Every kind of tile has inspect wording.
   const missing = new Set();
   a.view.fill(3);
   for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) { const d = describeTile(a, x, y); if (d === 'Nothing much.' || d.length > 30) missing.add(`${key(x, y)}: ${d}`); }
   updatePlayerView(a);
   check(!missing.size, `every tile has a short inspect line (${[...missing].slice(0, 4).join('; ')})`);
+  // Arriving somewhere says its name.
+  const w2 = createWorld(3, { map: 'town' }), log = createMessageLog(w2), p2 = player(w2);
+  for (const z of zombies(w2)) w2.entities.delete(z.id);
+  const hav = w2.layout.places.find(q => q.name === 'Haverly');
+  p2.Position.x = hav.x0 - 1; p2.Position.y = 130; updateCamera(w2); updatePlayerView(w2);
+  applyInput(w2, { type: 'wait' }); log.clear();
+  applyInput(w2, { type: 'move', dx: 1, dy: 0 });
+  check(log.text.startsWith('Haverly.'), `walking into Haverly says so ("${log.text}")`);
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.

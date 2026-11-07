@@ -35,7 +35,7 @@ const GROUND = [
   ['STEPS',      false, false],           // stone steps up the crag
   ['BRIDGE',     false, false],           // a bridge's deck
   ['WATER',      true,  false, { muffles: false }],
-  ['SHALLOWS',   true,  false, { muffles: false }], // the ford: needs wellies (step 20)
+  ['SHALLOWS',   true,  false, { muffles: false }], // the river shallows: need waders (step 20)
   ['WEIR',       false, false],           // the mill weir: walkable, if you dare
   ['CRAG',       true,  false, { muffles: false }], // the gorge's rock faces: you can see across
   ['ROCK',       true,  false, { muffles: false }], // a boulder
@@ -57,7 +57,9 @@ const GROUND = [
   ['CARPARK',    false, false],
   ['DRIVE',      false, false],           // a garden path or drive
   ['MARKET_CROSS', true, false, { muffles: false }],
-  ['PARAPET',    true,  false, { muffles: false }], // a bridge's or the viaduct's parapet (never a gate)
+  ['PARAPET',    true,  false, { muffles: false }], // a bridge's or the trestle's parapet (never a gate)
+  ['PADLOCK',    true,  false, { muffles: false }], // a padlocked gate (bolt cutters, step 20)
+  ['MARSH',      false, false],                     // the swamp: reeds and mud
 ];
 
 const ROOF_MATS = ['SLATE', 'TILES', 'METAL'];

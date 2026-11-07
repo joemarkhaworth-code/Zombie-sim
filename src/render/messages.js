@@ -62,6 +62,13 @@ export function createMessageLog(world) {
   });
   ev.on('item_thrown', ({ id, itemId }) => { if (isPlayer(id)) log.say(`You throw the ${nameOf(itemId)}.`, LEVEL.info); });
   ev.on('thrown_hit', ({ id, targetId }) => { if (isPlayer(id)) log.say(`It hits the ${nameOf(targetId)}.`, LEVEL.info); });
+  // Arriving somewhere: the place's name, Pokémon-style.
+  log.place = placeAt(world);
+  ev.on('turn_ended', () => {
+    const now = placeAt(world);
+    if (now && now !== log.place) log.say(PLACE_TEXT[now] || `${now}.`, LEVEL.info);
+    log.place = now;
+  });
   // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {
     const p = world.entities.get(world.playerId);
@@ -82,29 +89,46 @@ export function createMessageLog(world) {
   return log;
 }
 
+// The place you're in (layout.places), or null in the wilds.
+function placeAt(world) {
+  const p = world.entities.get(world.playerId), L = world.layout;
+  if (!p || !p.Position || !L || !L.places) return null;
+  const { x, y } = p.Position;
+  const pl = L.places.find(q => x >= q.x0 && x <= q.x1 && y >= q.y0 && y <= q.y1);
+  return pl ? pl.name : null;
+}
+const PLACE_TEXT = {
+  Haverly: 'Haverly. Pop. 2,140. Was.', 'Carrick Mills': 'Carrick Mills. Pop. 1,302.',
+  'Loon Lake': 'Loon Lake. Summer people only.', 'Apple Hill': 'Apple Hill. Pop. 212.',
+  "Cooper's Corner": "Cooper's Corner. Gas. Eats.", 'Spruce Hollow': 'Spruce Hollow. Pop. 480.',
+  Ledgeview: 'Ledgeview. Granite since 1871.',
+};
+
 // Inspect wording. Dry, short, under ~30 characters. By tile key (src/sim/tiles.js).
 const TILE_TEXT = {
   FLOOR: 'Bare floor. Seen better days.', WALL: 'A stone wall. Solid, at least.',
-  GRASS: 'Grass. Wants cutting.', FIELD: 'Barley. Nobody to harvest it.', MOOR: 'Heather. Bleak, but honest.',
+  GRASS: 'Grass. Wants cutting.', FIELD: 'Corn. Nobody to harvest it.', MOOR: 'Scree. Loose underfoot.',
   GREEN: 'Mown grass. Someone cared.', SAND: "A bunker. Golfers' bane.", ROAD: 'The road. No traffic now.',
-  ROAD_LINE_H: 'The road. No traffic now.', ROAD_LINE_V: 'The road. No traffic now.', PAVEMENT: 'Pavement. Mind the cracks.',
-  SETTS: 'Setts. Murder on the ankles.', TRACK: 'A rutted lane.', PATH: 'A footpath.', YARD: 'Flagstones. A yard.',
+  ROAD_LINE_H: 'The road. No traffic now.', ROAD_LINE_V: 'The road. No traffic now.', PAVEMENT: 'Sidewalk. Mind the cracks.',
+  SETTS: 'Setts. Murder on the ankles.', TRACK: 'A dirt road. Rutted.', PATH: 'A trail.', YARD: 'Flagstones. A yard.',
   DOORSTEP: 'A doorstep. No milk today.', GATE: 'A gate. Shut it behind you.', STEPS: 'Stone steps. Steep ones.',
-  BRIDGE: 'A bridge. Good solid stone.', WATER: 'The River Kell. Cold, deep.', SHALLOWS: 'The ford. Knee-deep.',
-  WEIR: 'The weir. Slippery.', CRAG: 'A crag. Long way down.', ROCK: 'A boulder.', LOWWALL: 'A dry stone wall.',
-  HEDGE: 'A hedge. Thick, thorny.', FENCE: 'A fence.', TREE: "A tree. Climbing's for kids.", RAIL: 'Railway track. No trains.',
-  PLATFORM: 'The platform. Mind the gap.', CROSSING: 'A level crossing.', TUNNEL: 'The tunnel. Pitch black.',
+  BRIDGE: 'A bridge. Solid enough.', WATER: 'Cold, deep water.', SHALLOWS: 'The shallows. Knee-deep.',
+  WEIR: 'The dam. Slippery.', CRAG: 'A crag. Long way down.', ROCK: 'A boulder.', LOWWALL: 'An old stone wall.',
+  HEDGE: 'A hedge. Thick, thorny.', FENCE: 'A fence.', TREE: "A tree. Climbing's for kids.", RAIL: 'Railroad track. No trains.',
+  PLATFORM: 'The platform. Mind the gap.', CROSSING: 'A railroad crossing.', TUNNEL: 'The old mine. Pitch black.',
   GRAVE: 'A headstone. Rest in peace.', RUIN: "Castle ruins. Cromwell's work.", BARRIER: 'A police roadblock. Abandoned.',
-  ARCH: 'An archway.', BEDS: 'Allotment beds. Leeks.', CARPARK: 'A car park. Pay and display.', DRIVE: 'A garden path.',
+  ARCH: 'An archway.', BEDS: 'Allotment beds. Leeks.', CARPARK: 'A parking lot. Plenty of room.', DRIVE: 'A garden path.',
   MARKET_CROSS: 'The market cross.', PARAPET: "A parapet. Don't look down.",
+  MARSH: 'Swamp. Smells like it, too.', PADLOCK: 'A padlocked gate. Private.',
 };
 // Walking into something.
 const BLOCKED_TEXT = {
-  WATER: 'Too deep to wade.', SHALLOWS: 'Too deep without wellies.', CRAG: 'A sheer drop. Not that way.',
+  WATER: 'Too deep to wade.', SHALLOWS: 'Too deep without waders.', CRAG: 'A sheer drop. Not that way.',
   HEDGE: 'The hedge is too thick.', TREE: "A tree's in the way.", FENCE: 'A fence blocks the way.',
   RUIN: 'The ruins block the way.', GRAVE: "A headstone's in the way.", ROCK: "A boulder's in the way.",
   BARRIER: 'The road out is blocked.', TUNNEL: 'Too dark in there. For now.', CARRIAGE: "The carriage door's shut.",
   CARRIAGE_END: "The carriage door's shut.", MARKET_CROSS: 'The market cross. In the way.', PARAPET: 'A parapet. Long way down.',
+  PADLOCK: "It's padlocked. Bolt cutters?",
 };
 // Buildings, by name, then by kind.
 const NAMED_TEXT = {

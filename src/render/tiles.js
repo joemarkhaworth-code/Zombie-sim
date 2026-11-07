@@ -90,6 +90,19 @@ export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
       if (key === 'GATE') { rect(ctx, mark, px, py + t * 0.15, 3, t * 0.7); rect(ctx, mark, px + t - 3, py + t * 0.15, 3, t * 0.7); }
       return;
     }
+    case 'MARSH': {
+      rect(ctx, base, px, py, t, t);
+      rect(ctx, mark, px + ((h & 3) + 1) * u, py + t * 0.55, t * 0.35, 2);
+      for (let k = 0; k < 3; k++) rect(ctx, pal('HEDGE', mem)[1], px + t * (0.2 + 0.25 * k), py + t * 0.15 + ((h >> k) & 1) * u, 2, t * 0.3);
+      return;
+    }
+    case 'PADLOCK': {
+      rect(ctx, base, px, py, t, t);
+      for (let k = 0; k < 4; k++) rect(ctx, mark, px + k * t / 4 + 1, py + t * 0.2, 2, t * 0.6);
+      rect(ctx, mark, px, py + t * 0.3, t, 2); rect(ctx, mark, px, py + t * 0.65, t, 2);
+      rect(ctx, mem ? grey('#d0b040') : '#d0b040', px + t * 0.4, py + t * 0.38, t * 0.2, t * 0.22);
+      return;
+    }
     case 'HEDGE': {
       rect(ctx, base, px, py, t, t);
       ctx.fillStyle = mark;
@@ -161,11 +174,19 @@ export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
       return;
     }
     case 'CARRIAGE': case 'CARRIAGE_END': {
+      // A carriage lies along the track: east-west if it carries on east or west.
       const [cb, cm] = pal('CARRIAGE', mem);
+      const car = (dx, dy) => { const n = world && world.tiles[(y + dy) * world.w + x + dx]; return n === TILE.CARRIAGE || n === TILE.CARRIAGE_END; };
+      const horiz = car(1, 0) || car(-1, 0);
       rect(ctx, cb, px, py, t, t);
-      rect(ctx, cm, px + t * 0.2, py, t * 0.6, t);              // the roof's lighter middle
-      if (x === 73) rect(ctx, grey('#000000'), px, py, 1, t);   // the two halves of the roof
-      if (key === 'CARRIAGE_END') rect(ctx, mark, px, py + t * 0.8, t, t * 0.2);
+      if (horiz) {
+        const top = !car(0, -1);                                   // the north half of the roof
+        rect(ctx, cm, px, top ? py + t * 0.4 : py, t, t * 0.6);
+        if (key === 'CARRIAGE_END') rect(ctx, mark, px, py, t * 0.2, t);
+      } else {
+        rect(ctx, cm, px + t * 0.2, py, t * 0.6, t);
+        if (key === 'CARRIAGE_END') rect(ctx, mark, px, py + t * 0.8, t, t * 0.2);
+      }
       return;
     }
     case 'BARRIER': {

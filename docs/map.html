@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Brackenby: the whole town</title>
+  <title>The region</title>
   <style>
     body { margin: 0; background: #000; color: #ddd; font: 14px monospace; }
     #bar { position: fixed; top: 0; left: 0; right: 0; padding: 8px 10px; background: #111; z-index: 1; min-height: 18px; }
@@ -14,7 +14,7 @@
 <body>
   <!-- The whole town drawn by the game's own tile renderer, everything in view. Faint lines are
        the 25 x 25 screens; the pink square is your front door. Tap a tile to read its line. -->
-  <div id="bar">Brackenby. Tap a tile.</div>
+  <div id="bar">The region. Tap a tile.</div>
   <div id="wrap"><canvas id="map"></canvas></div>
   <script type="module">
     let v = '';
@@ -42,7 +42,7 @@
       const sx = Math.min(Math.floor(Math.max(x - 1, 0) / world.stepX), world.screensX - 1), sy = Math.min(Math.floor(Math.max(y - 1, 0) / world.stepY), world.screensY - 1);
       document.getElementById('bar').textContent = `${describeTile(world, x, y)}  (${x},${y} screen ${sx},${sy})`;
     });
-    document.title = 'Brackenby: ready';
+    document.title = 'Region: ready';
   </script>
 </body>
 </html>
