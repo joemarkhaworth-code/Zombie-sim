@@ -36,7 +36,6 @@ export function createWorld(seed) {
     Memory: { tiles: {} },
     Hearing: { level: CONFIG.player.hearing },
     Noisy: { move: CONFIG.player.footsteps },
-    Stealth: { sneaking: false },
   });
   world.playerId = player.id;
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);

@@ -331,68 +331,6 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 
-// Stealth: sneaking (slower, silent, harder to notice) and bushes.
-{
-  const saved = CONFIG.zombie.stagger, savedWander = CONFIG.zombie.wanderChance, savedG = CONFIG.zombie.glimpseRange;
-  CONFIG.zombie.stagger = 0; CONFIG.zombie.wanderChance = 0;
-  // Toggling takes no turn but is recorded.
-  let w = emptyWorld();
-  const p = player(w); p.Position.x = 2; p.Position.y = 2;
-  check(!applyInput(w, { type: 'sneak', on: true }) && w.turn === 0 && p.Stealth.sneaking, 'sneak toggles on, no turn');
-  check(w.inputs.length === 1 && w.inputs[0].type === 'sneak', 'the toggle is recorded');
-  // A sneaking step takes twice the time and is silent.
-  applyInput(w, { type: 'move', dx: 1, dy: 0 });
-  check(w.tick === 2 && w.turn === 1, `a sneaking step takes 2 ticks (got ${w.tick})`);
-  check(w.noise[2 * w.w + 3] === 0, 'a sneaking step is silent');
-  applyInput(w, { type: 'wait' });
-  check(w.tick === 3, 'waiting costs the same as normal');
-  applyInput(w, { type: 'sneak', on: false });
-  applyInput(w, { type: 'move', dx: 1, dy: 0 });
-  check(w.tick === 4 && w.noise[2 * w.w + 4] === 4, 'back to normal: 1 tick, footsteps');
-  // Noticed from two-thirds of the distance: 4 tiles off, seen walking, not sneaking.
-  w = emptyWorld();
-  const q = player(w); q.Position.x = 5; q.Position.y = 3;
-  const z = makeZombie(w, 5, 7);
-  check(canNotice(w, z, q), '4 tiles off it notices you walking');
-  q.Stealth.sneaking = true;
-  check(!canNotice(w, z, q), 'but not sneaking');
-  q.Position.y = 4;
-  check(canNotice(w, z, q), 'sneaking, 3 tiles off it does');
-  // Bushes: in one you're only noticed from next to it, by you or by them.
-  w = emptyWorld();
-  const r = player(w); r.Position.x = 5; r.Position.y = 3;
-  w.tiles[3 * w.w + 5] = TILE.BUSH;
-  const z2 = makeZombie(w, 5, 5);
-  check(!canNotice(w, z2, r), 'in a bush, a zombie 2 tiles off does not notice you');
-  z2.Position.y = 4;
-  check(canNotice(w, z2, r), 'next to you it does');
-  z2.Position.y = 6; w.tiles[6 * w.w + 5] = TILE.BUSH; w.tiles[3 * w.w + 5] = TILE.FLOOR;
-  check(!canNotice(w, r, z2), 'a zombie in a bush is hidden from you too');
-  check(describeTile(w, 5, 6) === 'A bush. Good for hiding in.', 'inspecting its bush shows only the bush');
-  // A zombie that's already watching you isn't fooled by ducking into a bush in front of it.
-  w = emptyWorld();
-  CONFIG.zombie.glimpseRange = 99;
-  const u = player(w); u.Position.x = 5; u.Position.y = 3;
-  const z3 = makeZombie(w, 5, 7);
-  applyInput(w, { type: 'wait' }); applyInput(w, { type: 'wait' });
-  check(z3.Brain.tracking === u.id, 'it has seen you');
-  w.tiles[3 * w.w + 4] = TILE.BUSH;
-  applyInput(w, { type: 'sneak', on: true });
-  applyInput(w, { type: 'move', dx: -1, dy: 0 }); // into the bush, sneaking, in plain view
-  applyInput(w, { type: 'wait' });
-  check(z3.Brain.tracking === u.id && z3.Brain.goal.x === 4, 'it watched you go in: it keeps coming');
-  // But break its line of sight first, then hide, and it loses you.
-  CONFIG.zombie.glimpseRange = savedG;
-  // Bushes are on the test screen, walkable, and see-through.
-  let bushes = 0;
-  for (let s = 1; s <= 30; s++) bushes += createWorld(s).tiles.filter(t => t === TILE.BUSH).length;
-  check(bushes > 30 * 4, `test screens have bushes (${bushes} over 30 seeds)`);
-  w = emptyWorld();
-  w.tiles[7 * w.w + 5] = TILE.BUSH;
-  check(lineClear(w, 5, 2, 5, 12), 'you can see past a bush');
-  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
-}
-
 // Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
 {
   const w = emptyWorld();
@@ -445,8 +383,7 @@ function check(cond, msg) {
     try {
       drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 }, i % 2 === 0);
       drawTopBar(fake, w, L, log, i % 2 === 0);
-      drawActionBar(fake, L, w);
-      if (i === 50) applyInput(w, { type: 'sneak', on: true });
+      drawActionBar(fake, L);
     } catch (e) { crashed = e; }
     applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
     applyInput(w, { type: 'move', dx: 0, dy: r.int(3) - 1 });
@@ -474,8 +411,7 @@ for (let s = 1; s <= SEEDS; s++) {
   const z = zombies(w)[0];
   let zlast = { ...z.Position }, closest = Infinity;
   for (let i = 0; i < TURNS * 2 && w.turn < TURNS; i++) {
-    const input = r.chance(0.05) ? { type: 'sneak', on: r.chance(0.5) }
-      : r.chance(0.1) ? { type: 'wait' } : { type: 'move', dx: r.int(3) - 1, dy: r.int(3) - 1 };
+    const input = r.chance(0.1) ? { type: 'wait' } : { type: 'move', dx: r.int(3) - 1, dy: r.int(3) - 1 };
     applyInput(w, input);
     const p = player(w).Position;
     if (tileBlocks(w, p.x, p.y)) { check(false, `seed ${s}: player in a wall`); break; }

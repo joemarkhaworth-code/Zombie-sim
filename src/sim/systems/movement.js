@@ -16,8 +16,6 @@ export function tryStep(world, e, dx, dy) {
   e.Position.x = nx; e.Position.y = ny;
   world.events.emit('entity_moved', { id: e.id, from, to: { x: nx, y: ny } });
   // Footsteps: anything Noisy makes its move noise where it lands. Bumping makes none (no turn).
-  // Sneaking makes them one level quieter.
-  const level = e.Noisy ? e.Noisy.move - (e.Stealth && e.Stealth.sneaking ? 1 : 0) : 0;
-  if (level > 0) makeNoise(world, nx, ny, level, e.id);
+  if (e.Noisy && e.Noisy.move > 0) makeNoise(world, nx, ny, e.Noisy.move, e.id);
   return 'moved';
 }

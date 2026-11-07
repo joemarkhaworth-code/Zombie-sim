@@ -1,13 +1,11 @@
 // Test screen: floor walled round the edge, a few short walls and single-tile rocks, all seeded.
 // Any floor sealed off from the start is filled in, so everything open is reachable.
-export const TILE = { FLOOR: 0, WALL: 1, BUSH: 2 };
+export const TILE = { FLOOR: 0, WALL: 1 };
 
 // Tiles are properties, not special cases.
 export const TILE_INFO = {
   [TILE.FLOOR]: { name: 'floor', blocks: false, opaque: false },
   [TILE.WALL]: { name: 'wall', blocks: true, opaque: true },
-  // A hiding spot: walkable and see-through, but anything in it can only be noticed from next to it.
-  [TILE.BUSH]: { name: 'bush', blocks: false, opaque: false, cover: true },
 };
 
 export function generateTestScreen(world, cfg) {
@@ -42,17 +40,6 @@ export function generateTestScreen(world, cfg) {
     placed++;
   }
   fillSealedPockets(world, cx, cy);
-  // Bush clumps on open floor (walkable, so they never cut anything off).
-  for (let c = 0; c < cfg.bushClumps; c++) {
-    const [lo, hi] = cfg.bushClumpSize;
-    let n = lo + world.rng.int(hi - lo + 1);
-    let x = 1 + world.rng.int(w - 2), y = 1 + world.rng.int(h - 2), tries = 0;
-    while (n > 0 && tries++ < 40) {
-      if (world.tiles[y * w + x] === TILE.FLOOR && !nearStart(x, y)) { world.tiles[y * w + x] = TILE.BUSH; n--; }
-      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][world.rng.int(4)];
-      if (x + dx > 0 && x + dx < w - 1 && y + dy > 0 && y + dy < h - 1) { x += dx; y += dy; }
-    }
-  }
   return { x: cx, y: cy }; // player start
 }
 
@@ -66,9 +53,9 @@ function fillSealedPockets(world, sx, sy) {
     const i = stack.pop(), x = i % w, y = (i / w) | 0;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx, ny = y + dy, j = ny * w + nx;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[j] || TILE_INFO[world.tiles[j]].blocks) continue;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[j] || world.tiles[j] === TILE.WALL) continue;
       seen[j] = 1; stack.push(j);
     }
   }
-  for (let i = 0; i < w * h; i++) if (!seen[i] && world.tiles[i] !== TILE.WALL) world.tiles[i] = TILE.WALL;
+  for (let i = 0; i < w * h; i++) if (!seen[i]) world.tiles[i] = TILE.WALL;
 }

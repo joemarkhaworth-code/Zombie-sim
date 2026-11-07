@@ -2,7 +2,7 @@
 import { CONFIG } from './config.js';
 import { createWorld, player } from './sim/world.js';
 import { applyInput } from './sim/turn.js';
-import { computeLayout, tileAtPixel, actionButtonAt } from './render/layout.js';
+import { computeLayout, tileAtPixel } from './render/layout.js';
 import { drawMap } from './render/greybox.js';
 import { drawTopBar, drawActionBar } from './render/ui.js';
 import { createMessageLog, describeTile } from './render/messages.js';
@@ -33,7 +33,7 @@ function draw() {
   ctx.fillRect(0, 0, layout.cssW, layout.cssH);
   drawMap(ctx, world, layout, inspect, debug);
   drawTopBar(ctx, world, layout, log, debug);
-  drawActionBar(ctx, layout, world);
+  drawActionBar(ctx, layout);
 }
 
 // A player action: clears the status line and any inspect outline, then runs the turn.
@@ -81,8 +81,6 @@ canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 
 function tap(px, py) {
   if (py < CONFIG.ui.topBarHeight) { debug = !debug; draw(); return; }
-  const btn = actionButtonAt(layout, px, py);
-  if (btn) return pressButton(btn.id);
   const t = tileAtPixel(layout, px, py);
   if (!t) return;
   const p = player(world).Position;
@@ -94,22 +92,13 @@ function tap(px, py) {
     : { type: 'move', dx: 0, dy: Math.sign(oy) });
 }
 
-// Action bar buttons.
-function pressButton(id) {
-  if (id === 'sneak') {
-    const p = player(world);
-    act({ type: 'sneak', on: !p.Stealth.sneaking }); // takes no turn, but is recorded
-  }
-}
-
-// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait, X sneak. No diagonals.
+// Keyboard for desktop testing: arrows / WASD / numpad 8426, space or . to wait. No diagonals.
 const KEYS = {
   ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
   8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0],
 };
 window.addEventListener('keydown', ev => {
-  if (ev.key === 'x' || ev.key === 'c') { ev.preventDefault(); pressButton('sneak'); return; }
   let input = null;
   if (ev.key === ' ' || ev.key === '.' || ev.key === '5') input = { type: 'wait' };
   else if (KEYS[ev.key]) input = { type: 'move', dx: KEYS[ev.key][0], dy: KEYS[ev.key][1] };
