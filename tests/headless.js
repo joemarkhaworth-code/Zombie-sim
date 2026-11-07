@@ -197,7 +197,7 @@ function check(cond, msg) {
   check(searched && events.includes('search_gave_up'), 'it searches, then gives up');
   check(!z.Brain.goal && !z.Brain.search && z.Position.x > 5, 'after giving up it has no goal (and stayed its side)');
 
-  // Messages: "comes into view" and "has seen you".
+  // Messages: "comes into view"; being seen has no message (a ! badge shows instead).
   w = emptyWorld();
   const log = createMessageLog(w);
   const r = player(w); r.Position.x = 5; r.Position.y = 2;
@@ -211,7 +211,8 @@ function check(cond, msg) {
   for (const [dx, dy] of [[1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1]]) tr({ type: 'move', dx, dy });
   for (let i = 0; i < 4; i++) tr({ type: 'wait' });
   check(texts.includes('A zombie comes into view.'), 'a zombie coming into view says so');
-  check(texts.includes('The zombie has seen you!'), `seeing you is a danger message (got ${JSON.stringify(texts)})`);
+  check(!texts.some(t => /seen you/.test(t)), 'being seen has no message (the ! badge shows it)');
+  check([...w.entities.values()].some(e => e.Zombie && e.Brain.tracking), 'the zombie is tracking you (drawn with !)');
   r.Position.x = 2; r.Position.y = 2; updatePlayerView(w);
   check(describeTile(w, 2, 9) === "Can't see from here.", 'inspecting out of sight says so');
 

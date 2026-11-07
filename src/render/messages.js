@@ -30,13 +30,7 @@ export function createMessageLog(world) {
       log.say('A wall blocks the way.', LEVEL.blocked);
     }
   });
-  // A zombie that sees you, said only if you can see it (show, don't tell).
-  ev.on('prey_spotted', ({ id, preyId }) => {
-    const z = world.entities.get(id);
-    if (isPlayer(preyId) && z && canNotice(world, world.entities.get(world.playerId), z)) {
-      log.say('The zombie has seen you!', LEVEL.danger);
-    }
-  });
+  // A zombie seeing you has no message: a ! appears over it instead (show, don't tell).
   ev.on('turn_ended', () => {
     const p = world.entities.get(world.playerId);
     const now = new Set(), seen = new Set();
