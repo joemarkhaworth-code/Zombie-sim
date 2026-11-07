@@ -1,13 +1,8 @@
-// Screens of rocks and short walls, all seeded: the phase-1 test room, and (until the districts,
-// step 13) every screen of the placeholder town. Any floor sealed off from the start is filled
-// in, so everything open is reachable.
-export const TILE = { FLOOR: 0, WALL: 1 };
-
-// Tiles are properties, not special cases.
-export const TILE_INFO = {
-  [TILE.FLOOR]: { name: 'floor', blocks: false, opaque: false },
-  [TILE.WALL]: { name: 'wall', blocks: true, opaque: true },
-};
+// The phase-1 test room: a walled screen of seeded rocks and short walls (kept for the tests).
+// Any floor sealed off from the start is filled in, so everything open is reachable. The town
+// is gen/town.js.
+import { TILE, TILE_INFO } from '../tiles.js';
+export { TILE, TILE_INFO };
 
 // Rocks and short walls inside one screen at (ox, oy), kept 2 tiles off its edges (so you can
 // always get round them and between screens) and clear of `keepClear` (x, y) if given.
@@ -56,22 +51,8 @@ export function generateTestScreen(world, cfg) {
   return start;
 }
 
-// The placeholder town: every screen decorated like the test room from the fixed world seed,
-// open to its neighbours, with a wall only round the outside of the whole map. You start in
-// the middle of the middle screen. Returns the start.
-export function generatePlaceholderTown(world, rng, cfg) {
-  walledFloor(world);
-  const { screenW: sw, screenH: sh, screensX, screensY, stepX, stepY } = world;
-  const start = { x: (screensX >> 1) * stepX + (sw >> 1), y: (screensY >> 1) * stepY + (sh >> 1) };
-  for (let sy = 0; sy < screensY; sy++) {
-    for (let sx = 0; sx < screensX; sx++) decorateScreen(world, rng, sx * stepX, sy * stepY, sw, sh, cfg, start);
-  }
-  fillSealedPockets(world, start.x, start.y);
-  return start;
-}
-
 // Flood fill (4-way) from the start; floor it can't reach becomes wall.
-function fillSealedPockets(world, sx, sy) {
+export function fillSealedPockets(world, sx, sy) {
   const { w, h } = world;
   const seen = new Uint8Array(w * h);
   const stack = [sy * w + sx];

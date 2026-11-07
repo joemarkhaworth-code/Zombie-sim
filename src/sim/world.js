@@ -2,7 +2,9 @@
 import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { createEvents } from './events.js';
-import { generateTestScreen, generatePlaceholderTown, TILE_INFO } from './gen/testscreen.js';
+import { generateTestScreen } from './gen/testscreen.js';
+import { generateTown } from './gen/town.js';
+import { TILE_INFO } from './tiles.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';
 import { makeItem, makeInventory } from './systems/items.js';
@@ -37,8 +39,9 @@ export function createWorld(seed, opts = {}) {
   };
   // The layout: the test room from the run seed, or the town from the fixed world seed.
   const start = map === 'town'
-    ? generatePlaceholderTown(world, createRng(CONFIG.world.seed), CONFIG.testScreen)
+    ? generateTown(world, createRng(CONFIG.world.seed))
     : generateTestScreen(world, CONFIG.testScreen);
+  if (map === 'town') { const home = screenOf(world, start.x, start.y); world.cam = { sx: home.sx, sy: home.sy }; }
   initLight(world);
   const player = addEntity(world, {
     Position: { x: start.x, y: start.y },
@@ -69,7 +72,7 @@ export function createWorld(seed, opts = {}) {
   return world;
 }
 
-// The placeholder town's zombies and items, from the run seed: a few on each screen, none on
+// The town's zombies and items, from the run seed: a few on each screen, none on
 // your first screen.
 function populateTown(world, start) {
   const cfg = CONFIG.world, rng = world.rng;

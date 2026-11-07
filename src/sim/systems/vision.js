@@ -6,7 +6,7 @@
 //     tile's light level (0-3) is its visibility when it's in sight and in range.
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, cameraRect, screenOf, sameScreen } from '../world.js';
-import { TILE_INFO } from '../gen/testscreen.js';
+import { TILE_INFO } from '../tiles.js';
 import { updateMemory } from './memory.js';
 
 export function opaqueAt(world, x, y) {
@@ -70,6 +70,27 @@ export function computeView(world, e) {
     }
   }
   for (const [i, v] of faces) view[i] = v;
+  // The camera looks down on the town: a building you can see any part of shows whole (its
+  // roof and walls), though it still hides what's behind it.
+  const L = world.layout;
+  if (e.Player && L) {
+    const seen = new Map();
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = y * w + x, b = L.buildingAt[i];
+        if (b && view[i] > (seen.get(b) || 0)) seen.set(b, view[i]);
+      }
+    }
+    for (const [b, v] of seen) {
+      const B = L.buildings[b - 1];
+      for (let y = Math.max(B.y, y0); y < Math.min(B.y + B.h, y1); y++) {
+        for (let x = Math.max(B.x, x0); x < Math.min(B.x + B.w, x1); x++) {
+          const i = y * w + x;
+          if (L.buildingAt[i] === b && view[i] < v) view[i] = v;
+        }
+      }
+    }
+  }
   return view;
 }
 
@@ -99,5 +120,6 @@ export function canNotice(world, viewer, target) {
 export function updatePlayerView(world) {
   const p = world.entities.get(world.playerId);
   world.view = computeView(world, p);
-  updateMemory(world, p, world.view);
+  const { ox, oy } = cameraRect(world);
+  updateMemory(world, p, world.view, ox, oy, ox + world.screenW, oy + world.screenH);
 }

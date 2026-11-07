@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brackenby: the whole town</title>
+  <style>
+    body { margin: 0; background: #000; color: #ddd; font: 14px monospace; }
+    #bar { position: fixed; top: 0; left: 0; right: 0; padding: 8px 10px; background: #111; z-index: 1; min-height: 18px; }
+    #wrap { padding-top: 36px; }
+    canvas { display: block; image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <!-- The whole town drawn by the game's own tile renderer, everything in view. Faint lines are
+       the 25 x 25 screens; the pink square is your front door. Tap a tile to read its line. -->
+  <div id="bar">Brackenby. Tap a tile.</div>
+  <div id="wrap"><canvas id="map"></canvas></div>
+  <script type="module">
+    let v = '';
+    try { const r = await fetch('../version.json', { cache: 'no-store' }); if (r.ok) v = '?v=' + (await r.json()).v; } catch (e) { /* local */ }
+    const { createWorld } = await import(`../src/sim/world.js${v}`);
+    const { drawTile, drawSign } = await import(`../src/render/tiles.js${v}`);
+    const { describeTile } = await import(`../src/render/messages.js${v}`);
+    const T = Number(new URLSearchParams(location.search).get('t')) || 12;
+    const world = createWorld(1, { map: 'town' });
+    for (const e of [...world.entities.values()]) if (!e.Player) world.entities.delete(e.id); // no zombies or loot
+    world.view.fill(3);
+    const cv = document.getElementById('map');
+    cv.width = world.w * T; cv.height = world.h * T;
+    const ctx = cv.getContext('2d');
+    for (let y = 0; y < world.h; y++) for (let x = 0; x < world.w; x++) drawTile(ctx, world, world.tiles[y * world.w + x], x, y, x * T, y * T, T, false);
+    for (const s of world.layout.signs) drawSign(ctx, s.text, s.x * T, s.y * T, T, false);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    for (let i = 0; i <= world.screensX; i++) ctx.fillRect((i * world.stepX + 2) * T, 0, 1, cv.height);
+    for (let j = 0; j <= world.screensY; j++) ctx.fillRect(0, (j * world.stepY + 2) * T, cv.width, 1);
+    const st = world.layout.start;
+    ctx.strokeStyle = '#ff40a0'; ctx.lineWidth = 3; ctx.strokeRect(st.x * T - 2, st.y * T - 2, T + 4, T + 4);
+    cv.addEventListener('click', ev => {
+      const r = cv.getBoundingClientRect();
+      const x = Math.floor((ev.clientX - r.left) / (r.width / world.w)), y = Math.floor((ev.clientY - r.top) / (r.height / world.h));
+      const sx = Math.min(Math.floor(Math.max(x - 1, 0) / world.stepX), world.screensX - 1), sy = Math.min(Math.floor(Math.max(y - 1, 0) / world.stepY), world.screensY - 1);
+      document.getElementById('bar').textContent = `${describeTile(world, x, y)}  (${x},${y} screen ${sx},${sy})`;
+    });
+    document.title = 'Brackenby: ready';
+  </script>
+</body>
+</html>

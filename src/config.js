@@ -16,7 +16,7 @@ export const CONFIG = {
     flipAt: 1,
     landIn: 2,
     activeRadius: 1,           // screens round yours that run in full (1 = your screen and the 8 round it)
-    zombiesPerScreen: [1, 2],  // placeholder town: zombies on each screen but your first
+    zombiesPerScreen: [1, 2],  // zombies on each screen but your first (by district from 13d)
     itemsPerScreen: [0, 2],
     itemTypes: ['beans', 'beans', 'bandage', 'cricketBat'],
   },
@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // Autosave (localStorage) after every action. Bump version when the saved shape changes in a way
   // old saves can't be read with: an old or broken save starts a fresh game instead of crashing.
-  save: { key: 'zombie-survival-save', version: 6 },
+  save: { key: 'zombie-survival-save', version: 7 },
 
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
@@ -148,8 +148,28 @@ export const CONFIG = {
     dimText: '#777777',
     dangerText: '#ffdd33',
     inspectOutline: '#ffffff',
-    // Remembered tiles: dark greys that keep each tile's shapes.
-    memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', thing: '#5a5a5a' },
+    // Remembered tiles: dark greys that keep each tile's shapes (worked out from these colours).
+    memory: { thing: '#5a5a5a' },
+    // Town tiles: [base, mark] by tile key (src/sim/tiles.js). Greybox until the art pass.
+    tiles: {
+      GRASS: ['#5d8a3c', '#6c9a48'], FIELD: ['#a89a52', '#8e8044'], MOOR: ['#6e5468', '#7e6276'], GREEN: ['#7cc05a', '#88cc66'],
+      SAND: ['#d8c88a', '#c8b87a'], ROAD: ['#2e2f33', '#38393e'], PAVEMENT: ['#8d8b83', '#7a7870'], SETTS: ['#7a7064', '#665e54'],
+      TRACK: ['#8e7a58', '#7a684a'], PATH: ['#b0a07c', '#9c8c6a'], YARD: ['#8a857a', '#78736a'], DOORSTEP: ['#8d8b83', '#d8d0bc'],
+      STEPS: ['#a8a090', '#7a7266'], BRIDGE: ['#a89c84', '#8e836e'], WATER: ['#2f62a8', '#5a8ad0'], SHALLOWS: ['#5a8ed0', '#8ab4e4'],
+      WEIR: ['#2f62a8', '#e8f0f8'], CRAG: ['#5e564e', '#463f39'], ROCK: ['#5d8a3c', '#8a847c'], LOWWALL: ['#a39a88', '#857c6c'],
+      HEDGE: ['#2a4d22', '#376330'], FENCE: ['#5d8a3c', '#e4e4dc'], TREE: ['#4e7a32', '#1e4418'], RAIL: ['#5e544c', '#b8b8b8'],
+      PLATFORM: ['#a8a296', '#e0c040'], TUNNEL: ['#0a0a0a', '#5e564e'], GRAVE: ['#5d8a3c', '#c8c8c0'], RUIN: ['#77736a', '#5c5850'],
+      CARRIAGE: ['#7a2230', '#a83a48'], CARRIAGE_END: ['#7a2230', '#1a1a1a'], BARRIER: ['#d8d8d8', '#d02020'], ARCH: ['#1e1c1a', '#3a3632'],
+      BEDS: ['#5a4430', '#4a8a3a'], CARPARK: ['#38393e', '#d8d8d0'], DRIVE: ['#9a958a', '#86817a'], MARKET_CROSS: ['#7a7064', '#c8c0b0'],
+      PARAPET: ['#a89c84', '#7e7462'], GATE: ['#5d8a3c', '#9a6a3a'], CROSSING: ['#2e2f33', '#b8b8b8'],
+      // Roofs: [far / lit slope, near / shaded slope]; walls: [wall, courses].
+      ROOF_SLATE: ['#5c636b', '#474d54'], ROOF_TILES: ['#a85a44', '#8a4434'], ROOF_METAL: ['#8a949a', '#6e787e'],
+      ROOF_FLAT: ['#55585c', '#4a4d50'], ROOF_GLASS: ['#bcd8e4', '#98b8c8'],
+      STONE: ['#b3a688', '#9a8e72'], BRICK: ['#a8463a', '#8a3a2e'], RENDER: ['#dcd8cb', '#c4c0b2'], WOOD: ['#8a6a44', '#6e5234'],
+      METAL: ['#9aa2a8', '#7e868c'],
+      window: ['#9ccbe8', '#ece8e0'], door: ['#6a3a1a', '#d9c060'], ridge: ['#2a2e33', '#6a5a50'],
+      sign: ['#1e3a2a', '#f0e8c0'],
+    },
     noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
     heart: '#e0303a',
     heartEmpty: '#4a1418',

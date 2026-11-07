@@ -1,6 +1,6 @@
 // Greybox map: plain coloured squares and letters. Only reads world state.
 import { CONFIG } from '../config.js';
-import { TILE } from '../sim/gen/testscreen.js';
+import { drawTile, drawSign } from './tiles.js';
 import { canNotice } from '../sim/systems/vision.js';
 import { cameraRect } from '../sim/world.js';
 
@@ -15,19 +15,27 @@ export function camera(world) {
 export function drawMap(ctx, world, L, inspect, debug, aim) {
   const c = CONFIG.colours, t = L.tile, m = c.memory;
   const p = world.entities.get(world.playerId);
-  const live = { floor: c.floor, floorMark: c.floorMark, wall: c.wall, wallMark: c.wallMark };
   const { ox, oy } = camera(world);
   const sx = x => L.mapX + (x - ox) * t, sy = y => L.mapY + (y - oy) * t; // world tile -> screen pixel
   for (let y = oy; y < oy + world.screenH; y++) {
     for (let x = ox; x < ox + world.screenW; x++) {
       const px = sx(x), py = sy(y);
       const i = y * world.w + x;
-      if (world.view[i]) { drawTile(ctx, world.tiles[i], px, py, t, live); continue; }
+      if (world.view[i]) { drawTile(ctx, world, world.tiles[i], x, y, px, py, t, false); continue; }
       // Out of sight: draw what you remember, greyed; never seen stays black.
       const snap = p.Memory && p.Memory.tiles[i];
       if (!snap) continue;
-      drawTile(ctx, snap.t, px, py, t, m);
+      drawTile(ctx, world, snap.t, x, y, px, py, t, true);
       for (const th of snap.things) drawGlyph(ctx, th.ch, px, py, t, m.thing);
+    }
+  }
+  // Hanging signs (layout data: they never change), over tiles you can see or remember.
+  if (world.layout) {
+    for (const sg of world.layout.signs) {
+      if (sg.x < ox || sg.x >= ox + world.screenW || sg.y < oy || sg.y >= oy + world.screenH) continue;
+      const i = sg.y * world.w + sg.x;
+      const seen = world.view[i], mem = !seen && p.Memory && p.Memory.tiles[i];
+      if (seen || mem) drawSign(ctx, sg.text, sx(sg.x), sy(sg.y), t, !seen);
     }
   }
   // Creatures and things you notice, player last so it's always on top.
@@ -123,20 +131,6 @@ function drawEdgeArrow(ctx, px, py, t, dx, dy, colour) {
   if (dx) { ctx.moveTo(cx + dx * s, cy); ctx.lineTo(cx - dx * s, cy - s); ctx.lineTo(cx - dx * s, cy + s); }
   else { ctx.moveTo(cx, cy + dy * s); ctx.lineTo(cx - s, cy - dy * s); ctx.lineTo(cx + s, cy - dy * s); }
   ctx.closePath(); ctx.fill();
-}
-
-// One terrain tile in a palette (live colours or remembered greys).
-function drawTile(ctx, tile, px, py, t, pal) {
-  if (tile === TILE.WALL) {
-    ctx.fillStyle = pal.wall; ctx.fillRect(px, py, t, t);
-    ctx.fillStyle = pal.wallMark; // stone courses
-    ctx.fillRect(px, py + Math.floor(t / 2), t, 1);
-    ctx.fillRect(px + Math.floor(t / 2), py, 1, Math.floor(t / 2));
-  } else {
-    ctx.fillStyle = pal.floor; ctx.fillRect(px, py, t, t);
-    ctx.fillStyle = pal.floorMark;
-    ctx.fillRect(px + Math.floor(t / 2), py + Math.floor(t / 2), 2, 2);
-  }
 }
 
 function drawGlyph(ctx, ch, px, py, t, colour) {

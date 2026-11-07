@@ -15,13 +15,26 @@ export function snapshotTile(world, x, y) {
   return { t: world.tiles[y * world.w + x], things };
 }
 
-// Snapshot every tile in view (view: visibility per tile, 0 = out of sight).
-export function updateMemory(world, e, view) {
+// Snapshot every tile in view (view: visibility per tile, 0 = out of sight), within the box
+// x0..x1, y0..y1 (the screen you're looking at; the whole map if not given). Things are
+// gathered in one pass over the entities, not one per tile.
+export function updateMemory(world, e, view, x0 = 0, y0 = 0, x1 = world.w, y1 = world.h) {
   if (!e.Memory) return;
-  const mem = e.Memory.tiles;
-  for (let i = 0; i < view.length; i++) {
-    if (!view[i]) continue;
-    mem[i] = snapshotTile(world, i % world.w, (i / world.w) | 0);
+  const mem = e.Memory.tiles, w = world.w;
+  const things = new Map();
+  for (const t of world.entities.values()) {
+    if (!t.Position || t.Actor || !t.Glyph) continue;
+    const { x, y } = t.Position;
+    if (x < x0 || y < y0 || x >= x1 || y >= y1 || !view[y * w + x]) continue;
+    const i = y * w + x;
+    if (!things.has(i)) things.set(i, []);
+    things.get(i).push({ ch: t.Glyph.ch, colour: t.Glyph.colour, name: t.Name ? t.Name.name : '' });
+  }
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * w + x;
+      if (view[i]) mem[i] = { t: world.tiles[i], things: things.get(i) || [] };
+    }
   }
 }
 

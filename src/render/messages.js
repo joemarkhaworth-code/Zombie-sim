@@ -1,6 +1,6 @@
 // Turns sim events into the one-line status bar, and tiles into inspect text.
 // All player-facing wording lives here. The sim only emits data.
-import { TILE } from '../sim/gen/testscreen.js';
+import { TILE, TILE_INFO } from '../sim/tiles.js';
 import { canNotice } from '../sim/systems/vision.js';
 
 // Priorities: if several things happen in one turn, the most important message wins.
@@ -21,13 +21,13 @@ export function createMessageLog(world) {
   const isPlayer = id => id === world.playerId;
   const ev = world.events;
   ev.on('entity_waited', ({ id }) => { if (isPlayer(id)) log.say('You wait.', LEVEL.info); });
-  ev.on('move_blocked', ({ id, blockerId }) => {
+  ev.on('move_blocked', ({ id, x, y, blockerId }) => {
     if (!isPlayer(id)) return;
     if (blockerId) {
       const b = world.entities.get(blockerId);
       log.say(`The ${b && b.Name ? b.Name.name : 'thing'} is in the way.`, LEVEL.bump);
     } else {
-      log.say('A wall blocks the way.', LEVEL.blocked);
+      log.say(blockedText(world, x, y), LEVEL.blocked);
     }
   });
   // Fighting.
@@ -82,15 +82,89 @@ export function createMessageLog(world) {
   return log;
 }
 
-// Inspect wording. Dry, short, under ~30 characters.
+// Inspect wording. Dry, short, under ~30 characters. By tile key (src/sim/tiles.js).
 const TILE_TEXT = {
-  [TILE.FLOOR]: 'Bare floor. Seen better days.',
-  [TILE.WALL]: 'A stone wall. Solid, at least.',
+  FLOOR: 'Bare floor. Seen better days.', WALL: 'A stone wall. Solid, at least.',
+  GRASS: 'Grass. Wants cutting.', FIELD: 'Barley. Nobody to harvest it.', MOOR: 'Heather. Bleak, but honest.',
+  GREEN: 'Mown grass. Someone cared.', SAND: "A bunker. Golfers' bane.", ROAD: 'The road. No traffic now.',
+  ROAD_LINE_H: 'The road. No traffic now.', ROAD_LINE_V: 'The road. No traffic now.', PAVEMENT: 'Pavement. Mind the cracks.',
+  SETTS: 'Setts. Murder on the ankles.', TRACK: 'A rutted lane.', PATH: 'A footpath.', YARD: 'Flagstones. A yard.',
+  DOORSTEP: 'A doorstep. No milk today.', GATE: 'A gate. Shut it behind you.', STEPS: 'Stone steps. Steep ones.',
+  BRIDGE: 'A bridge. Good solid stone.', WATER: 'The River Kell. Cold, deep.', SHALLOWS: 'The ford. Knee-deep.',
+  WEIR: 'The weir. Slippery.', CRAG: 'A crag. Long way down.', ROCK: 'A boulder.', LOWWALL: 'A dry stone wall.',
+  HEDGE: 'A hedge. Thick, thorny.', FENCE: 'A fence.', TREE: "A tree. Climbing's for kids.", RAIL: 'Railway track. No trains.',
+  PLATFORM: 'The platform. Mind the gap.', CROSSING: 'A level crossing.', TUNNEL: 'The tunnel. Pitch black.',
+  GRAVE: 'A headstone. Rest in peace.', RUIN: "Castle ruins. Cromwell's work.", BARRIER: 'A police roadblock. Abandoned.',
+  ARCH: 'An archway.', BEDS: 'Allotment beds. Leeks.', CARPARK: 'A car park. Pay and display.', DRIVE: 'A garden path.',
+  MARKET_CROSS: 'The market cross.', PARAPET: "A parapet. Don't look down.",
 };
+// Walking into something.
+const BLOCKED_TEXT = {
+  WATER: 'Too deep to wade.', SHALLOWS: 'Too deep without wellies.', CRAG: 'A sheer drop. Not that way.',
+  HEDGE: 'The hedge is too thick.', TREE: "A tree's in the way.", FENCE: 'A fence blocks the way.',
+  RUIN: 'The ruins block the way.', GRAVE: "A headstone's in the way.", ROCK: "A boulder's in the way.",
+  BARRIER: 'The road out is blocked.', TUNNEL: 'Too dark in there. For now.', CARRIAGE: "The carriage door's shut.",
+  CARRIAGE_END: "The carriage door's shut.", MARKET_CROSS: 'The market cross. In the way.', PARAPET: 'A parapet. Long way down.',
+};
+// Buildings, by name, then by kind.
+const NAMED_TEXT = {
+  'your house': 'Your house. Still standing.', 'the post office': 'Post office. Back in 5 mins.',
+  'the Black Bull': 'The Black Bull. Free house.', 'the Angel': 'The Angel. Coaching inn, 1720.',
+  "St John's church": "St John's. Bells gone quiet.", 'the station': 'The station. No trains today.',
+  'the superstore': 'The superstore. Big car park.', 'the Town Hall': "Town Hall. Council's out.",
+  'the Shambles': 'The Shambles. Old market.', 'the Picture House': "Picture House. Matinee's off.",
+  'the Co-op': 'The Co-op. Divi stamps.', 'the police station': 'Police station. Nobody in.',
+  'the fire station': 'Fire station. Engines out.', "the World's End": "The World's End. Apt name.",
+  'Castle Mill': "Castle Mill. Wheel's still.", 'the board school': 'The board school. 1876.',
+  'the Grange hospital': 'The Grange. Hospital, just.', 'the Hall': "The Hall. His lordship's out.",
+  'the bandstand': 'The bandstand. No band.', 'the swimming baths': 'The baths. Verruca socks.',
+  'the high school': 'High school. Summer hols.', 'the football stand': 'The stand. Nil-nil, probably.',
+  'the scout hut': 'Scout hut. Bows inside?', 'the golf club': 'The golf club. Members only.',
+  'the grandstand': 'The grandstand. No runners.', 'the KGV pavilion': 'Cricket pavilion. Tea urn.', 'the garden centre': 'Garden centre. Seeds, maybe.',
+  'the rear carriage': 'A carriage. Bags on the racks.', 'the middle carriage': 'A carriage. Bags on the racks.',
+  'the front carriage': 'The front carriage. Cab dark.',
+};
+const KIND_TEXT = {
+  terrace: 'A terraced house. Nets drawn.', cottage: 'A stone cottage. Low beams.', semi: 'A semi. Pebbledash, sadly.',
+  detached: 'A detached house. Posh.', bighouse: 'A big house. Gravel drive.', bungalow: 'A bungalow. Very beige.',
+  farmhouse: 'A farmhouse. Smells of dog.', shop: 'A shop. Shutters down.', pub: 'A pub. Last orders, ever.',
+  bank: 'A bank. Vault, presumably.', factory: 'A factory unit. Shut.', barn: 'A barn. Hay and diesel.',
+  shed: 'A shed. Spiders, mostly.', garage: 'A garage.', greenhouse: 'A greenhouse. Tomatoes.', hall: 'A big old building.',
+  school: 'A school. Summer hols.', church: 'A church.', cinema: 'A cinema.', pavilion: 'A pavilion.', carriage: 'A carriage.',
+};
+const capital = s => s.charAt(0).toUpperCase() + s.slice(1);
+function buildingText(b) {
+  if (NAMED_TEXT[b.name]) return NAMED_TEXT[b.name];
+  if (b.name) {
+    const flavour = (KIND_TEXT[b.kind] || '').split('. ')[1];
+    const line = `${capital(b.name)}.${flavour ? ' ' + flavour : ''}`;
+    return line.length <= 30 ? line : `${capital(b.name)}.`;
+  }
+  return KIND_TEXT[b.kind] || 'A building.';
+}
+function buildingAt(world, x, y) {
+  const L = world.layout;
+  const n = L && L.buildingAt[y * world.w + x];
+  return n ? L.buildings[n - 1] : null;
+}
+function tileText(world, x, y, tile) {
+  const b = buildingAt(world, x, y);
+  if (b) return buildingText(b);
+  const sign = world.layout && world.layout.signs.find(s => s.x === x && s.y === y);
+  if (sign) return `A sign: ${sign.text}.`;
+  return TILE_TEXT[TILE_INFO[tile].key] || 'Nothing much.';
+}
+export function blockedText(world, x, y) {
+  if (x < 0 || y < 0 || x >= world.w || y >= world.h) return 'A wall blocks the way.';
+  const tile = world.tiles[y * world.w + x], info = TILE_INFO[tile];
+  if (info.part === 'door') return "The door's locked. For now.";
+  if (info.part) return "A building's in the way.";
+  return BLOCKED_TEXT[info.key] || 'A wall blocks the way.';
+}
 const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',
   'zombie corpse': 'A dead zombie. Deader, anyway.',
-  'tin of beans': 'A tin of beans. Cold, but beans.',
+  'tin of beans': 'Tin of beans. Cold, but beans.',
   bandage: 'A bandage. Fairly clean.',
   'cricket bat': 'A cricket bat. Well oiled.',
   'walking stick': 'A walking stick. Sturdy.',
@@ -115,8 +189,12 @@ export function deathText(gameOver, seed = 0) {
 }
 
 
-// Short names for remembered tiles (the line also says ", out of sight").
-const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };
+// Short names for remembered tiles (the line also says ", out of sight"): the inspect line up
+// to its first full stop.
+function rememberedName(world, x, y, tile) {
+  const text = tileText(world, x, y, tile);
+  return text.split('. ')[0].replace(/\.$/, '');
+}
 
 // Only what you can see. Out of sight, what you remember (never the live tile) with
 // ", out of sight"; never seen is "Unexplored." Creatures you haven't noticed aren't there.
@@ -129,12 +207,12 @@ export function describeTile(world, x, y) {
   if (!world.view[y * world.w + x]) {
     const snap = p.Memory && p.Memory.tiles[y * world.w + x];
     if (!snap) return 'Unexplored.';
-    const what = snap.things.length ? `A ${snap.things[snap.things.length - 1].name}` : (TILE_NAME[snap.t] || 'Something');
+    const what = snap.things.length ? `A ${snap.things[snap.things.length - 1].name}` : rememberedName(world, x, y, snap.t);
     return `${what}, out of sight.`;
   }
   // A creature you notice first, else the top thing on the tile, else the terrain.
   const here = [...world.entities.values()].filter(e => e.Position && e.Position.x === x && e.Position.y === y && e.Name);
   const who = here.find(e => e.Actor && canNotice(world, p, e)) || here.filter(e => !e.Actor).pop();
   if (who) return THING_TEXT[who.Name.name] || `A ${who.Name.name}.`;
-  return TILE_TEXT[world.tiles[y * world.w + x]] || 'Nothing much.';
+  return tileText(world, x, y, world.tiles[y * world.w + x]);
 }

@@ -5,6 +5,8 @@ import { applyInput, replay } from '../src/sim/turn.js';
 import { createRng } from '../src/sim/rng.js';
 import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
+import { TILE_INFO } from '../src/sim/tiles.js';
+import { RIVER } from '../src/sim/gen/town.js';
 import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/messages.js';
 const deathTextOf = w => deathText(w.gameOver);
 import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
@@ -816,6 +818,15 @@ function check(cond, msg) {
     try {
       const tw = createWorld(4, { map: 'town' });
       for (let i = 0; i < 30; i++) { applyInput(tw, { type: 'move', dx: 1, dy: 0 }); drawMap(fake, tw, L, { x: player(tw).Position.x, y: player(tw).Position.y }, true, validThrowTargets(tw, player(tw))); drawTopBar(fake, tw, L, createMessageLog(tw), true); }
+      // Every screen of the town, in view and then remembered.
+      const mem = player(tw).Memory.tiles, cam0 = { ...tw.cam };
+      for (let sy = 0; sy < tw.screensY; sy++) for (let sx = 0; sx < tw.screensX; sx++) {
+        tw.cam = { sx, sy };
+        tw.view.fill(sx & 1 ? 3 : 0);
+        if (!(sx & 1)) for (let y = sy * tw.stepY; y < sy * tw.stepY + tw.screenH; y++) for (let x = sx * tw.stepX; x < sx * tw.stepX + tw.screenW; x++) mem[y * tw.w + x] = { t: tw.tiles[y * tw.w + x], things: [] };
+        drawMap(fake, tw, L, null, false, null);
+      }
+      tw.cam = cam0;
     } catch (e) { crashed = e; }
   }
   check(!crashed, `drawing never throws (${crashed && crashed.message})`);
@@ -875,7 +886,7 @@ for (let s = 1; s <= SEEDS; s++) {
   }
 }
 
-// The town (step 12): a 10x10 grid of screens, the same layout every run, walking between screens.
+// The town (steps 12-13): a 25x25 grid of screens, the same layout every run, walking between screens.
 {
   const town = s => createWorld(s, { map: 'town' });
   const a = town(1), b = town(2);
@@ -887,11 +898,21 @@ for (let s = 1; s <= SEEDS; s++) {
   const za = zombies(a).map(z => `${z.Position.x},${z.Position.y}`).join(), zb = zombies(b).map(z => `${z.Position.x},${z.Position.y}`).join();
   check(za !== zb, 'zombies are placed by the run seed');
   const p = player(a), home = screenOf(a, p.Position.x, p.Position.y);
-  check(home.sx === nx >> 1 && home.sy === ny >> 1, 'you start in the middle screen');
+  check(home.sx === 11 && home.sy === 8 && a.cam.sx === 11 && a.cam.sy === 8, `you start at home, on screen 11,8 (${home.sx},${home.sy})`);
   const perScreen = {};
   for (const z of zombies(a)) { const s2 = screenOf(a, z.Position.x, z.Position.y); perScreen[`${s2.sx},${s2.sy}`] = (perScreen[`${s2.sx},${s2.sy}`] || 0) + 1; }
   check(!perScreen[`${home.sx},${home.sy}`], 'no zombies on your first screen');
-  check(Object.keys(perScreen).length === nx * ny - 1, `every other screen has zombies (${Object.keys(perScreen).length})`);
+  let roomy = 0;
+  for (let sy = 0; sy < ny; sy++) for (let sx = 0; sx < nx; sx++) {
+    if (sx === home.sx && sy === home.sy) continue;
+    let room = false;
+    for (let y = sy * a.stepY; y < sy * a.stepY + a.screenH && !room; y++) for (let x = sx * a.stepX; x < sx * a.stepX + a.screenW && !room; x++) {
+      const h2 = screenOf(a, x, y);
+      room = h2.sx === sx && h2.sy === sy && !tileBlocks(a, x, y);
+    }
+    if (room) { roomy++; if (!perScreen[`${sx},${sy}`]) check(false, `screen ${sx},${sy} has no zombies`); }
+  }
+  check(Object.keys(perScreen).length === roomy, `every other screen with room for one has zombies (${Object.keys(perScreen).length}/${roomy})`);
   check(zombies(a).every(z => !tileBlocks(a, z.Position.x, z.Position.y)), 'none in walls');
   // Everything open is reachable from the start, across all the screens.
   const seen = new Uint8Array(a.w * a.h), stack = [p.Position.y * a.w + p.Position.x];
@@ -905,7 +926,8 @@ for (let s = 1; s <= SEEDS; s++) {
   }
   let open = 0, reach = 0;
   for (let i = 0; i < a.w * a.h; i++) if (!tileBlocks(a, i % a.w, (i / a.w) | 0)) { open++; if (seen[i]) reach++; }
-  check(open === reach && open > a.w * a.h * 0.6, `every open tile is reachable (${reach}/${open})`);
+  check(open === reach && open > a.w * a.h * 0.5, `every open tile is reachable (${reach}/${open})`);
+  townLayoutChecks(a);
   // You only see the screen you're looking at. Step onto its last tile and the view flips: you're
   // on the next screen's second tile, with a tile of the old screen behind you to step back onto.
   const w = town(3), me = player(w);
@@ -980,6 +1002,84 @@ for (let s = 1; s <= SEEDS; s++) {
   }
   console.log(`  town: ${(total / turns).toFixed(2)} ms a turn on average, worst ${worst.toFixed(1)} ms`);
   check(total / turns < 10, 'a turn in the town is quick');
+}
+
+// Brackenby's layout (step 13): the river and its crossings, the train on the viaduct, the
+// buildings at their outside sizes, your front door, the roadblocks at the edge.
+function townLayoutChecks(a) {
+  const key = (x, y) => TILE_INFO[a.tiles[y * a.w + x]].key;
+  const L = a.layout, me = player(a).Position;
+  // The river runs right across the map, west to east.
+  const hasWater = x => { for (let y = 0; y < a.h; y++) if (key(x, y) === 'WATER') return true; return false; };
+  check(hasWater(1) && hasWater(a.w - 2), 'the River Kell crosses the whole map');
+  // ...unbroken: all along its middle it's water, a crossing or the ford.
+  let broken = 0;
+  for (let k = 1; k < RIVER.length; k++) {
+    const [x0, y0] = RIVER[k - 1], [x1, y1] = RIVER[k];
+    for (let f = 0; f < 1; f += 0.05) {
+      const x = Math.min(a.w - 1, Math.floor(x0 + (x1 - x0) * f)), y = Math.floor(y0 + (y1 - y0) * f);
+      if (!['WATER', 'BRIDGE', 'WEIR', 'SHALLOWS', 'PARAPET', 'FENCE', 'RAIL', 'CARRIAGE', 'CARRIAGE_END'].includes(key(x, y))) broken++;
+    }
+  }
+  check(!broken, `the river is unbroken: water, or a crossing over it (${broken} gaps)`);
+  // Without its crossings (bridges, the weir, the viaduct's ledge) the river splits the town.
+  const reachable = (blocked) => {
+    const seen = new Uint8Array(a.w * a.h), st = [me.y * a.w + me.x]; seen[st[0]] = 1;
+    while (st.length) {
+      const i = st.pop(), x = i % a.w, y = (i / a.w) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx2 = x + dx, ny2 = y + dy, j = ny2 * a.w + nx2;
+        if (tileBlocks(a, nx2, ny2) || seen[j] || blocked(nx2, ny2)) continue;
+        seen[j] = 1; st.push(j);
+      }
+    }
+    return seen;
+  };
+  const hamlet = L.buildings.find(b => b.kind === 'cottage' && b.y > 190);
+  const all = reachable(() => false), cut = reachable((x, y) => ['BRIDGE', 'WEIR'].includes(key(x, y)));
+  check(hamlet && all[hamlet.entry.y * a.w + hamlet.entry.x], 'the hamlet across the river can be reached');
+  check(!cut[hamlet.entry.y * a.w + hamlet.entry.x], 'only over the bridges, the weir or the viaduct (the ford needs wellies)');
+  const crossings = new Set();
+  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) if (key(x, y) === 'BRIDGE' || key(x, y) === 'WEIR') crossings.add(`${screenOf(a, x, y).sx}`);
+  // The stopped train: three carriages (2 x 12) on the viaduct, a one-tile ledge beside them.
+  check(L.train.length === 3 && L.train.every(c2 => c2.w === 2 && c2.h === 12), 'three carriages, 2 x 12 each');
+  let ledge = true;
+  for (let y = 149; y <= 172; y++) {
+    ledge = ledge && key(71, y) === 'PARAPET' && key(72, y) === 'BRIDGE' && key(75, y) === 'PARAPET'
+      && ['CARRIAGE', 'CARRIAGE_END', 'RAIL'].includes(key(73, y)) && ['CARRIAGE', 'CARRIAGE_END', 'RAIL'].includes(key(74, y));
+  }
+  check(ledge, 'on the viaduct: parapet, a one-tile ledge, the train, parapet');
+  check(all[160 * a.w + 72], 'the ledge can be reached (through the cutting)');
+  // Buildings: outside sizes, on the map, never on water, each with a way in that can be reached.
+  const sizes = { terrace: [4, 5], semi: [5, 6], pub: [8, 8], shop: [5, 6], church: [14, 8], station: [12, 5], superstore: [16, 12] };
+  let wrongSize = 0, badEntry = 0, onWater = 0;
+  for (const b of L.buildings) {
+    const sz = sizes[b.kind];
+    const len = b.facing === 'E' || b.facing === 'W' ? [b.h, b.w] : [b.w, b.h];
+    if (sz && b.name !== 'the Shambles' && (len[0] !== sz[0] || len[1] !== sz[1])) wrongSize++;
+    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) if (key(x, y) === 'WATER') onWater++;
+    if (!all[b.entry.y * a.w + b.entry.x]) badEntry++;
+  }
+  check(L.buildings.length > 150, `a town's worth of buildings (${L.buildings.length})`);
+  check(!wrongSize, `buildings are their outside sizes (${wrongSize} wrong)`);
+  check(!onWater && !badEntry, `none on the river, and every way in can be reached (${onWater}, ${badEntry})`);
+  // Your front door: you start on the pavement outside it.
+  const house = L.buildings[L.home];
+  check(house.name === 'your house' && house.kind === 'terrace' && key(me.x, me.y) === 'PAVEMENT' && TILE_INFO[a.tiles[(me.y - 1) * a.w + me.x]].part === 'door',
+    'you start on the pavement outside your own front door');
+  // The edge: nothing open on the map's border; roads out end at police roadblocks.
+  let open2 = 0, blocks = 0;
+  for (let x = 0; x < a.w; x++) for (const y of [0, a.h - 1]) { if (!tileBlocks(a, x, y)) open2++; if (key(x, y) === 'BARRIER') blocks++; }
+  for (let y = 0; y < a.h; y++) for (const x of [0, a.w - 1]) { if (!tileBlocks(a, x, y)) open2++; if (key(x, y) === 'BARRIER') blocks++; }
+  check(!open2 && blocks >= 12, `the map's edge is closed; roads out end at roadblocks (${blocks} tiles)`);
+  // Signs hang over walkable tiles.
+  check(L.signs.length > 5 && L.signs.every(sg => !tileBlocks(a, sg.x, sg.y)), `hanging signs over the pavement (${L.signs.length})`);
+  // Every kind of tile in the town has inspect wording.
+  const missing = new Set();
+  a.view.fill(3);
+  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) { const d = describeTile(a, x, y); if (d === 'Nothing much.' || d.length > 30) missing.add(`${key(x, y)}: ${d}`); }
+  updatePlayerView(a);
+  check(!missing.size, `every tile has a short inspect line (${[...missing].slice(0, 4).join('; ')})`);
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.

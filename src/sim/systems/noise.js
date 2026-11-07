@@ -1,6 +1,7 @@
 // Noise. makeNoise(world, x, y, level, byId) is the one entry point.
 // Strength starts at noise.radiusByLevel[level] and drops 1 per tile (8 ways); entering a wall
-// (an opaque or blocking tile) costs noise.wallCost more, so walls muffle rather than block.
+// (a tile that muffles: walls, buildings, hedges, trees; not water or a low wall) costs
+// noise.wallCost more, so walls muffle rather than block.
 // The map edge blocks. world.noise is a heatmap of everything heard since your last action
 // (for the debug overlay).
 // Anything with Hearing { level } on a tile the noise reaches at strength >=
@@ -8,8 +9,8 @@
 // can't see prey make its source their goal: the newest noise wins. A loud one (zombie.distractLevel)
 // distracts them for a few moves even if they can see prey (see shamble.js).
 import { CONFIG } from '../../config.js';
-import { inBounds, tileBlocks } from '../world.js';
-import { opaqueAt } from './vision.js';
+import { inBounds, tileAt } from '../world.js';
+import { TILE_INFO } from '../tiles.js';
 
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
@@ -26,7 +27,7 @@ export function spreadNoise(world, x, y, level) {
     for (const [dx, dy] of DIRS8) {
       const nx = cx + dx, ny = cy + dy;
       if (!inBounds(world, nx, ny)) continue;
-      const solid = opaqueAt(world, nx, ny) || tileBlocks(world, nx, ny);
+      const solid = TILE_INFO[tileAt(world, nx, ny)].muffles;
       const ns = s - 1 - (solid ? cfg.wallCost : 0);
       const j = ny * w + nx;
       if (ns <= 0 || ns <= strength[j]) continue;
