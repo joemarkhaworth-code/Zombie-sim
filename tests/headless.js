@@ -214,9 +214,69 @@ function check(cond, msg) {
   check(!texts.some(t => /seen you/.test(t)), 'being seen has no message (the ! badge shows it)');
   check([...w.entities.values()].some(e => e.Zombie && e.Brain.tracking), 'the zombie is tracking you (drawn with !)');
   r.Position.x = 2; r.Position.y = 2; updatePlayerView(w);
-  check(describeTile(w, 2, 9) === "Can't see from here.", 'inspecting out of sight says so');
+  check(describeTile(w, 2, 9) === 'Unexplored.', `a tile never seen is unexplored (got "${describeTile(w, 2, 9)}")`);
 
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
+// Map memory: a snapshot of each tile as last seen, never the live tile; creatures never.
+{
+  const w = emptyWorld();
+  const p = player(w); p.Position.x = 2; p.Position.y = 2;
+  for (let y = 1; y < w.h - 1; y++) w.tiles[y * w.w + 5] = TILE.WALL; // wall across the room
+  const z = makeZombie(w, 3, 3);
+  w.entities.get(z.id).Actor.brain = ''; // keep it still
+  p.Memory.tiles = {}; // forget the room as it was before the wall went up
+  updatePlayerView(w);
+  const mem = p.Memory.tiles, at = (x, y) => mem[y * w.w + x];
+  check(at(3, 7) && at(3, 7).t === TILE.FLOOR, 'a tile in view is remembered');
+  check(!at(8, 7), 'a tile behind the wall is not');
+  check(describeTile(w, 8, 7) === 'Unexplored.', 'never seen: "Unexplored."');
+  check(at(3, 3).things.length === 0, 'creatures are not remembered');
+  // A thing (no Actor) on a tile is remembered with it.
+  w.entities.set(999, { id: 999, Position: { x: 4, y: 9 }, Glyph: { ch: '%', colour: '#fff' }, Name: { name: 'tin of beans' } });
+  updatePlayerView(w);
+  check(at(4, 9).things.length === 1 && at(4, 9).things[0].name === 'tin of beans', 'things on a tile are remembered');
+  // Go behind the wall: the old side stays remembered but stops updating.
+  p.Position.x = 8; p.Position.y = 7;
+  updatePlayerView(w);
+  check(!w.view[9 * w.w + 4], 'the beans are now out of sight');
+  w.entities.get(999).Position.x = 3; // someone moves the beans behind your back
+  w.tiles[2 * w.w + 2] = TILE.WALL;   // and a wall appears where you stood
+  updatePlayerView(w);
+  check(at(4, 9).things.length === 1 && at(3, 9).things.length === 0, 'out of sight the beans stay where you last saw them');
+  check(at(2, 2).t === TILE.FLOOR, 'out of sight the remembered tile is the old one, not the live one');
+  check(describeTile(w, 4, 9) === 'A tin of beans, out of sight.', `inspect shows what you remember (got "${describeTile(w, 4, 9)}")`);
+  check(describeTile(w, 2, 2) === 'Bare floor, out of sight.', 'inspect never shows the live tile');
+  // Look again and it updates.
+  p.Position.x = 2; p.Position.y = 4;
+  updatePlayerView(w);
+  check(at(3, 9).things.length === 1 && at(4, 9).things.length === 0 && at(2, 2).t === TILE.WALL, 'looking again updates memory');
+  // Memory is plain data (saveable).
+  check(JSON.parse(JSON.stringify(p.Memory)).tiles[2 * w.w + 2].t === TILE.WALL, 'memory survives JSON');
+}
+
+// Drawing smoke test: render every frame of a short run into a fake canvas that accepts any
+// call, so a broken draw function fails here, not on the phone.
+{
+  const { drawMap } = await import('../src/render/greybox.js');
+  const { drawTopBar, drawActionBar } = await import('../src/render/ui.js');
+  const fake = new Proxy({}, {
+    get: (o, k) => (k in o ? o[k] : (k === 'measureText' ? () => ({ width: 10 }) : () => {})),
+    set: (o, k, v) => { o[k] = v; return true; },
+  });
+  const w = createWorld(3), log = createMessageLog(w), L = computeLayout(390, 664), r = createRng(5);
+  let crashed = null;
+  for (let i = 0; i < 200 && !crashed; i++) {
+    try {
+      drawMap(fake, w, L, i % 7 ? null : { x: 3, y: 3 });
+      drawTopBar(fake, w, L, log);
+      drawActionBar(fake, L);
+    } catch (e) { crashed = e; }
+    applyInput(w, { type: 'move', dx: r.int(3) - 1, dy: 0 });
+    applyInput(w, { type: 'move', dx: 0, dy: r.int(3) - 1 });
+  }
+  check(!crashed, `drawing never throws (${crashed && crashed.message})`);
 }
 
 // Layout: phone portrait fits the whole screen with thumb-sized tiles.

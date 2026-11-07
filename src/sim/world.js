@@ -32,6 +32,7 @@ export function createWorld(seed) {
     Blocks: {},
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost },
     Vision: { eyesight: CONFIG.player.eyesight },
+    Memory: { tiles: {} },
   });
   world.playerId = player.id;
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);

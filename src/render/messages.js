@@ -59,11 +59,20 @@ const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',
 };
 
-// Only what you can see: tiles out of sight say so; creatures you haven't noticed aren't there.
+// Short names for remembered tiles (the line also says ", out of sight").
+const TILE_NAME = { [TILE.FLOOR]: 'Bare floor', [TILE.WALL]: 'A wall' };
+
+// Only what you can see. Out of sight, what you remember (never the live tile) with
+// ", out of sight"; never seen is "Unexplored." Creatures you haven't noticed aren't there.
 export function describeTile(world, x, y) {
   const p = world.entities.get(world.playerId);
   if (p.Position.x === x && p.Position.y === y) return "That's you.";
-  if (!world.view[y * world.w + x]) return "Can't see from here.";
+  if (!world.view[y * world.w + x]) {
+    const snap = p.Memory && p.Memory.tiles[y * world.w + x];
+    if (!snap) return 'Unexplored.';
+    const what = snap.things.length ? `A ${snap.things[snap.things.length - 1].name}` : (TILE_NAME[snap.t] || 'Something');
+    return `${what}, out of sight.`;
+  }
   for (const e of world.entities.values()) {
     if (e.Position && e.Position.x === x && e.Position.y === y && e.Name && canNotice(world, p, e)) {
       return THING_TEXT[e.Name.name] || `A ${e.Name.name}.`;

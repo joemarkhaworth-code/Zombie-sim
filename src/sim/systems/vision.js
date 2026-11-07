@@ -7,6 +7,7 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt } from '../world.js';
 import { TILE_INFO } from '../gen/testscreen.js';
+import { updateMemory } from './memory.js';
 
 export function opaqueAt(world, x, y) {
   return !inBounds(world, x, y) || !!TILE_INFO[tileAt(world, x, y)].opaque;
@@ -83,8 +84,10 @@ export function canNotice(world, viewer, target) {
   return lineClear(world, vx, vy, x, y);
 }
 
-// The player's view, kept on the world for rendering, inspect and messages.
+// The player's view, kept on the world for rendering, inspect and messages. Everything in
+// view is snapshotted into the player's map memory.
 export function updatePlayerView(world) {
   const p = world.entities.get(world.playerId);
   world.view = computeView(world, p);
+  updateMemory(world, p, world.view);
 }

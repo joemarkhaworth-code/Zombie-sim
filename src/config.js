@@ -50,11 +50,8 @@ export const CONFIG = {
 
   render: {
     dimAlpha: [1, 0.5, 0.25, 0], // black over a tile by visibility 0-3
-    // How tiles out of sight look: 'black' (nothing), 'dim' (the layout, darkened) or
-    // 'dither' (the layout under an 8-bit checker of black). Creatures out of sight are never drawn.
-    shadow: 'dither',
-    shadowDimAlpha: 0.7,  // 'dim': black over out-of-sight tiles
-    ditherPx: 3,          // 'dither': size of each checker square, in CSS pixels
+    // Out of sight: tiles you remember are drawn in their grey colours (colours.memory);
+    // tiles you've never seen are black. Creatures out of sight are never drawn.
   },
 
   colours: {
@@ -71,6 +68,8 @@ export const CONFIG = {
     dimText: '#777777',
     dangerText: '#ffdd33',
     inspectOutline: '#ffffff',
+    // Remembered tiles: dark greys that keep each tile's shapes.
+    memory: { floor: '#1e1e1b', floorMark: '#262622', wall: '#4a4a46', wallMark: '#383835', thing: '#5a5a5a' },
     alert: '#ffdd33',     // ! over a zombie that's after you
     puzzled: '#dddddd',   // ? over a zombie looking for you
     actionBar: '#0b0b0b',

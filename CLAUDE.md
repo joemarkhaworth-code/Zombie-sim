@@ -180,6 +180,14 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
   The stagger (15% random steps) still applies.
 - Messages: "A zombie comes into view." (info, when a zombie you couldn't see appears; not for ones already in view at the start). Inspecting a tile you can't see: "Can't see from here."
 - Badges instead of a "has seen you" message (playtest): a yellow ! at the top right of a zombie that's after you (Brain.tracking), a grey ? on one that has lost you and is heading for the last spot or searching. Only on zombies you can see.
-- Out-of-sight look is CONFIG.render.shadow: 'black' (nothing), 'dim' (the layout, darkened) or 'dither' (the layout under an 8-bit black checker; live now for playtesting). Creatures out of sight are never drawn in any style. Being chosen in playtesting.
+- Out-of-sight look (playtest): tried 'dim' (the layout always shown, darkened) and 'dither' (under an 8-bit checker); chose black plus map memory (step 5).
 - Test screen: as well as 10 rocks, 3 short straight walls (testScreen.wallRuns, 3-5 long) to hide behind; any floor sealed off from the start is filled in.
 - Tests: walls block, the diagonal squeeze, symmetry over 30 rooms, light levels, dim light shrinks noticing, eyesight 7 vs 15, behind a wall unseen and dark, adjacent noticed in the dark; a zombie that can't see you stays put, spots you, loses you, goes to the last spot, searches near it and gives up; both messages; inspect out of sight. Random play: the zombie still reaches a random walker in ~97 of 100 runs.
+
+### Step 5 (map memory) - built
+- Map memory lives in the sim (src/sim/systems/memory.js), not the renderer. The player has Memory { tiles: { index: { t, things } } }: a snapshot of each tile as it looked when last seen, the terrain plus any non-creature things on it (anything with a Glyph and no Actor: items, doors later; add new tile state such as damage, door state or barricade health in snapshotTile()). Never the live tile, and creatures are never remembered.
+- A snapshot only updates while the tile is in view: updatePlayerView (end of every turn, and at the start) snapshots everything in view. So the remembered map can be out of date: beans someone moved are still where you last saw them until you look again. Plain data, so saves (step 11) can store it.
+- Drawn: tiles in view in full colour; out of sight, remembered tiles in their own dark greys (colours.memory, keeping each tile's shapes) with remembered things as grey letters; never seen is black.
+- Inspect out of sight shows the remembered snapshot, never the live tile, plus ", out of sight" ("A wall, out of sight.", "A tin of beans, out of sight."); never seen is "Unexplored."
+- Headless now has a drawing smoke test: a short run is drawn every turn into a fake canvas that accepts any call, so a broken draw function fails the test instead of the phone (it caught two).
+- Tests: in view remembered, behind a wall not, creatures not, things are; out of sight a moved thing stays where you saw it and a changed tile stays as it was; inspect shows the memory; looking again updates it; memory survives JSON.
