@@ -3,6 +3,9 @@
 //   entity_moved   { id, from: {x, y}, to: {x, y} }
 //   move_blocked   { id, x, y, blockerId }  (tried to step onto a wall, or into blockerId; 0 = a wall)
 //   entity_waited  { id }
+//   prey_spotted   { id, preyId }       (a zombie newly sees its prey)
+//   prey_lost      { id }               (a zombie lost sight of its prey; it heads for the last spot)
+//   search_gave_up { id }               (a zombie finished searching and gave up)
 //   turn_ended     { turn }
 export function createEvents() {
   const subs = new Map();

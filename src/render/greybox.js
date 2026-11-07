@@ -1,6 +1,7 @@
 // Greybox map: plain coloured squares and letters. Only reads world state.
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
+import { canNotice } from '../sim/systems/vision.js';
 
 // inspect: { x, y } of a long-pressed tile to outline, or null.
 export function drawMap(ctx, world, L, inspect) {
@@ -8,6 +9,8 @@ export function drawMap(ctx, world, L, inspect) {
   for (let y = 0; y < world.h; y++) {
     for (let x = 0; x < world.w; x++) {
       const px = L.mapX + x * t, py = L.mapY + y * t;
+      const vis = world.view[y * world.w + x];
+      if (!vis) continue; // out of sight: black (map memory, step 5, will grey it instead)
       const tile = world.tiles[y * world.w + x];
       if (tile === TILE.WALL) {
         ctx.fillStyle = c.wall; ctx.fillRect(px, py, t, t);
@@ -21,8 +24,10 @@ export function drawMap(ctx, world, L, inspect) {
       }
     }
   }
-  // Creatures and things, player last so it's always on top.
-  const ents = [...world.entities.values()].filter(e => e.Position && e.Glyph);
+  // Creatures and things you notice, player last so it's always on top.
+  const p = world.entities.get(world.playerId);
+  const ents = [...world.entities.values()].filter(e => e.Position && e.Glyph
+    && (e === p || canNotice(world, p, e)));
   ents.sort((a, b) => (a.Player ? 1 : 0) - (b.Player ? 1 : 0));
   for (const e of ents) {
     const px = L.mapX + e.Position.x * t, py = L.mapY + e.Position.y * t;
@@ -32,6 +37,16 @@ export function drawMap(ctx, world, L, inspect) {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, c.playerText);
     } else {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, e.Glyph.colour);
+    }
+  }
+  // Dim tiles by visibility: 3 full colour, 2 and 1 darker.
+  const alpha = CONFIG.render.dimAlpha;
+  for (let y = 0; y < world.h; y++) {
+    for (let x = 0; x < world.w; x++) {
+      const a = alpha[world.view[y * world.w + x]];
+      if (a <= 0 || a >= 1) continue;
+      ctx.fillStyle = `rgba(0,0,0,${a})`;
+      ctx.fillRect(L.mapX + x * t, L.mapY + y * t, t, t);
     }
   }
   if (inspect) drawOutline(ctx, L, inspect.x, inspect.y);

@@ -17,17 +17,39 @@ export const CONFIG = {
   // Energy scheduler: every tick each actor gains `speed` energy; an action costs actionCost.
   scheduler: { actionCost: 100 },
 
-  player: { speed: 100 },  // one action per tick
+  player: { speed: 100, eyesight: 3 },  // one action per tick; full sight
 
   zombie: {
     speed: 50,            // half speed: acts every other tick
     stagger: 0.15,        // chance a step goes a random way instead
+    eyesight: 2,          // 0-3: poor eyes, so you usually see them first
+    searchActions: 12,    // after losing you, shuffles about the last known spot this many moves
+    searchRadius: 3,      // ...staying within this many tiles of it
+    wanderChance: 0.3,    // with nothing to do, chance an action is a random shuffle
+  },
+
+  // Light: how far anyone can see in the open, and the light level (0-3) of every tile.
+  light: {
+    range: 15,            // sight range in the open on a clear day (covers the whole screen)
+    ambient: 3,           // every tile's light until day/night (step 15)
+  },
+
+  vision: {
+    eyesightFactor: [0, 0.25, 0.5, 1], // sight radius = light.range x this, by eyesight 0-3
+    minLevelToSpot: 1,    // a creature is only noticed on a tile at least this visible
+    noticeByLight: [0, 0.34, 0.67, 1], // noticing distance x this, by the tile's light level
   },
 
   // Step 1 test screen: a walled room with a few seeded obstacles.
   testScreen: {
     rocks: 10,            // single wall tiles scattered inside
     zombieDist: [5, 9],   // the test zombie starts this many steps (4-way) from you
+    wallRuns: 3,          // short straight walls to hide behind
+    wallLength: [3, 5],
+  },
+
+  render: {
+    dimAlpha: [1, 0.5, 0.25, 0], // black over a tile by visibility 0-3 (0 is drawn black)
   },
 
   colours: {

@@ -6,6 +6,7 @@ import { createRng } from '../src/sim/rng.js';
 import { makeZombie } from '../src/sim/world.js';
 import { TILE } from '../src/sim/gen/testscreen.js';
 import { createMessageLog, describeTile, LEVEL } from '../src/render/messages.js';
+import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
 const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -59,10 +60,10 @@ function check(cond, msg) {
   const w = emptyWorld();
   const p = player(w);
   p.Position.x = 5; p.Position.y = 2;
-  const z = makeZombie(w, 5, 10);
+  const z = makeZombie(w, 5, 8); // 6 tiles off: within its sight (7)
   const ds = [];
   for (let i = 0; i < 8; i++) { applyInput(w, { type: 'wait' }); ds.push(dist(z.Position, p.Position)); }
-  check(ds.join() === '8,7,7,6,6,5,5,4', `zombie moves every other turn (got ${ds.join()})`);
+  check(ds.join() === '6,5,5,4,4,3,3,2', `zombie moves every other turn (got ${ds.join()})`);
   check(w.tick === w.turn, 'one tick per player action');
   // It stops next to you and doesn't step into you.
   for (let i = 0; i < 20; i++) applyInput(w, { type: 'wait' });
@@ -90,7 +91,7 @@ function check(cond, msg) {
   turn({ type: 'move', dx: 0, dy: 1 }); // into the zombie's way? it's 2 below: step to y=2, now adjacent
   check(log.text === 'The zombie is next to you!' && log.level === LEVEL.danger, `zombie next to you is a danger message (got "${log.text}")`);
   turn({ type: 'wait' });
-  check(log.text === 'You wait.', 'the warning only fires when it newly arrives');
+  check(log.text !== 'The zombie is next to you!', 'the warning only fires when it newly arrives');
   check(!turn({ type: 'move', dx: 0, dy: 1 }) && log.text === 'The zombie is in the way.', `bumping the zombie says so (got "${log.text}")`);
   // Several things in one turn: danger beats the rest.
   p.Position.x = 8; p.Position.y = 2; z.Position.x = 8; z.Position.y = 5;
@@ -114,6 +115,109 @@ function check(cond, msg) {
   CONFIG.zombie.stagger = saved;
 }
 
+// Line of sight, light and what zombies see.
+{
+  const saved = CONFIG.zombie.stagger; CONFIG.zombie.stagger = 0;
+  const savedWander = CONFIG.zombie.wanderChance; CONFIG.zombie.wanderChance = 0;
+  const wall = (w, x, y) => { w.tiles[y * w.w + x] = TILE.WALL; };
+  // Walls block sight; open floor doesn't.
+  let w = emptyWorld();
+  check(lineClear(w, 2, 2, 8, 6), 'clear line across open floor');
+  wall(w, 5, 4);
+  check(!lineClear(w, 2, 4, 8, 4), 'a wall blocks the line');
+  // Squeezing exactly between two diagonal walls is blocked; one wall at a corner isn't.
+  w = emptyWorld();
+  wall(w, 3, 2);
+  check(lineClear(w, 2, 2, 3, 3) && lineClear(w, 2, 2, 4, 4), 'one wall at a corner lets the line past');
+  wall(w, 2, 3);
+  check(!lineClear(w, 2, 2, 4, 4), 'two diagonal walls block the squeeze');
+  // Symmetric on random rooms.
+  let asym = 0;
+  for (let s = 1; s <= 30; s++) {
+    const r = createWorld(s);
+    for (let i = 0; i < 200; i++) {
+      const rr = createRng(s * 31 + i);
+      const a = [rr.int(r.w), rr.int(r.h)], b = [rr.int(r.w), rr.int(r.h)];
+      if (lineClear(r, a[0], a[1], b[0], b[1]) !== lineClear(r, b[0], b[1], a[0], a[1])) asym++;
+    }
+  }
+  check(asym === 0, `line of sight is symmetric (${asym} mismatches)`);
+  // Visibility is the tile's light level; dim light shrinks how far things are noticed.
+  w = emptyWorld();
+  const p = player(w); p.Position.x = 5; p.Position.y = 2;
+  check(tileVisibility(w, p, 5, 10) === 3, 'daylight: tiles in sight are level 3');
+  w.light[10 * w.w + 5] = 1;
+  check(tileVisibility(w, p, 5, 10) === 1, 'a dim tile is level 1');
+  const far = makeZombie(w, 5, 10);
+  check(!canNotice(w, p, far), 'in dim light a zombie 8 tiles off goes unnoticed');
+  w.light.fill(3);
+  check(canNotice(w, p, far), 'in daylight you notice it');
+  check(!canNotice(w, far, p), 'but it does not see you yet (poor eyes: 7 tiles)');
+  wall(w, 5, 6);
+  updatePlayerView(w);
+  check(!canNotice(w, p, far) && !w.view[10 * w.w + 5], 'behind a wall: unseen, tile dark');
+  // Adjacent is always noticed, even in pitch darkness.
+  w.entities.delete(far.id);
+  const near = makeZombie(w, 6, 2);
+  w.light.fill(0);
+  check(canNotice(w, p, near) && canNotice(w, near, p), 'next to you in the dark: noticed both ways');
+  w.light.fill(3);
+  w.entities.delete(near.id);
+
+  // Out of sight a zombie doesn't chase; seeing you, it does; losing you, it goes to the
+  // last spot, searches, then gives up.
+  w = emptyWorld();
+  const q = player(w); q.Position.x = 2; q.Position.y = 2;
+  for (let y = 1; y < w.h - 1; y++) wall(w, 5, y); // a wall across the room
+  const z = makeZombie(w, 8, 2);
+  updatePlayerView(w);
+  for (let i = 0; i < 10; i++) applyInput(w, { type: 'wait' });
+  check(z.Position.x === 8 && z.Position.y === 2 && !z.Brain.goal, 'a zombie that cannot see you stays put');
+  const events = [];
+  for (const t of ['prey_spotted', 'prey_lost', 'search_gave_up']) w.events.on(t, () => events.push(t));
+  q.Position.x = 8; q.Position.y = 7; // step into its view (5 tiles off)
+  updatePlayerView(w);
+  for (let i = 0; i < 3; i++) applyInput(w, { type: 'wait' });
+  check(events.includes('prey_spotted') && z.Brain.goal && z.Brain.goal.why === 'seen', 'it spots you and makes for you');
+  q.Position.x = 2; q.Position.y = 10; // gone behind the wall
+  updatePlayerView(w);
+  for (let i = 0; i < 4 && !events.includes('prey_lost'); i++) applyInput(w, { type: 'wait' });
+  check(events.includes('prey_lost') && z.Brain.goal && z.Brain.goal.x === 8 && z.Brain.goal.y === 7,
+    'it loses you and heads for where it last saw you');
+  let searched = false;
+  for (let i = 0; i < 80 && !events.includes('search_gave_up'); i++) {
+    applyInput(w, { type: 'wait' });
+    if (z.Brain.search) {
+      searched = true;
+      if (Math.abs(z.Position.x - 8) > CONFIG.zombie.searchRadius + 1 || Math.abs(z.Position.y - 7) > CONFIG.zombie.searchRadius + 1) {
+        check(false, 'it searches near the last spot'); break;
+      }
+    }
+  }
+  check(searched && events.includes('search_gave_up'), 'it searches, then gives up');
+  check(!z.Brain.goal && !z.Brain.search && z.Position.x > 5, 'after giving up it has no goal (and stayed its side)');
+
+  // Messages: "comes into view" and "has seen you".
+  w = emptyWorld();
+  const log = createMessageLog(w);
+  const r = player(w); r.Position.x = 5; r.Position.y = 2;
+  for (let x = 1; x < w.w - 1; x++) wall(w, x, 6);
+  w.tiles[6 * w.w + 9] = TILE.FLOOR; // a gap at x=9
+  makeZombie(w, 9, 9);
+  updatePlayerView(w);
+  log.inView = new Set();
+  const texts = [];
+  const tr = input => { log.clear(); applyInput(w, input); texts.push(log.text); };
+  for (const [dx, dy] of [[1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1]]) tr({ type: 'move', dx, dy });
+  for (let i = 0; i < 4; i++) tr({ type: 'wait' });
+  check(texts.includes('A zombie comes into view.'), 'a zombie coming into view says so');
+  check(texts.includes('The zombie has seen you!'), `seeing you is a danger message (got ${JSON.stringify(texts)})`);
+  r.Position.x = 2; r.Position.y = 2; updatePlayerView(w);
+  check(describeTile(w, 2, 9) === "Can't see from here.", 'inspecting out of sight says so');
+
+  CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
+}
+
 // Layout: phone portrait fits the whole screen with thumb-sized tiles.
 for (const [cw, ch] of [[360, 640], [390, 844], [430, 932]]) {
   const L = computeLayout(cw, ch);
@@ -126,6 +230,7 @@ for (const [cw, ch] of [[360, 640], [390, 844], [430, 932]]) {
 
 // Random play over many seeds: no crashes, player never inside a wall, replays match exactly.
 const SEEDS = 100, TURNS = 500;
+let reached = 0;
 for (let s = 1; s <= SEEDS; s++) {
   const w = createWorld(s);
   const r = createRng(s * 7919);
@@ -146,12 +251,15 @@ for (let s = 1; s <= SEEDS; s++) {
     closest = Math.min(closest, dist(z.Position, p));
   }
   const again = replay(createWorld, s, w.inputs);
-  check(closest === 1, `seed ${s}: the zombie reaches you at some point`);
+  if (closest === 1) reached++;
   const a = player(w).Position, b = player(again).Position;
   const za = z.Position, zb = zombies(again)[0].Position;
   check(a.x === b.x && a.y === b.y && again.turn === w.turn && again.tick === w.tick
     && za.x === zb.x && za.y === zb.y, `seed ${s}: replay matches (player and zombie)`);
 }
 
+// Zombies only chase what they see, so a random walker isn't always found; most are.
+check(reached >= SEEDS * 0.7, `the zombie reaches the random walker in most runs (${reached}/${SEEDS})`);
+
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
-console.log(`headless: all checks passed (${SEEDS} seeds x ${TURNS} turns)`);
+console.log(`headless: all checks passed (${SEEDS} seeds x ${TURNS} turns; zombie reached the random walker in ${reached})`);

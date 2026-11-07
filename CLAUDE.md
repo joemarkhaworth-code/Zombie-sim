@@ -164,3 +164,20 @@ Other zombie types, morale, factions, NPC relationships, simulated history, zomb
 - Because of long-press, a tap now acts when your finger lifts (not when it lands). A finger that slides more than ui.tapSlop (12 px) does nothing.
 - Inspect wording (messages.js describeTile): your own tile "That's you."; a creature or thing on the tile; else the terrain. Dry and short, e.g. "A zombie. Not a people person.", "A stone wall. Solid, at least.", "Bare floor. Seen better days." Until line of sight (step 4) you can inspect anything on the screen.
 - Tests: each message, blocked moves take no turn, the warning only fires on arrival, danger outranks waiting, the inspect lines (all 30 characters or fewer), and inspecting takes no turn.
+
+### Step 4 (line of sight + light) - built
+- Vision is our own code (src/sim/systems/vision.js), not rot.js: rot.js's shadowcasting lets you see through diagonal gaps and round corners. It has two separate parts:
+  - Line of sight (lineClear): the straight line between tile centres, walking every tile it passes through. Opaque tiles in between block it (TILE_INFO opaque: walls). A line squeezing exactly between two diagonal walls is blocked; one wall at a corner isn't. It's symmetric (tested), and has no distance limit of its own.
+  - Light: CONFIG.light.range (15, covers the whole screen) is how far anyone sees in the open on a clear day. world.light holds a 0-3 level per tile (src/sim/systems/light.js; all 3 for now, day/night is step 15). Eyesight 0-3 scales the range (vision.eyesightFactor): player 3 = full, zombie 2 = half (7 tiles), so you usually see them first.
+- A tile's visibility (0-3) = its light level if it's in line of sight and in range, else 0. You always see your own tile. Wall faces next to a visible open tile are shown at its level, so walls don't look patchy. world.view holds the player's view, recomputed at the end of every turn.
+- Noticing a creature (canNotice): its tile must be in sight with light >= vision.minLevelToSpot (1), and within sight radius x vision.noticeByLight[light] (1 / 0.67 / 0.34 for light 3/2/1). Anything right next to you (8 ways) with no wall between is always noticed, even in pitch darkness, both ways. You only see (and can inspect) creatures you notice.
+- Drawn: visibility 3 full colour, 2 and 1 darker (render.dimAlpha), 0 black until map memory (step 5).
+- Zombies only chase what they see (shamble.js, Brain { goal, search, tracking }):
+  - prey in view: its spot is the goal; step toward it (prey_spotted when it newly sees you);
+  - lost sight: walk to where it last saw you (prey_lost);
+  - there, search: shuffle about within zombie.searchRadius (3) of that spot for zombie.searchActions (12) moves, about 24 of your turns, so it can stumble onto you nearby, then give up (search_gave_up);
+  - nothing to do: stand about, shuffling a random way 30% of its actions (zombie.wanderChance).
+  The stagger (15% random steps) still applies.
+- Messages: "A zombie comes into view." (info, when a zombie you couldn't see appears; not for ones already in view at the start), "The zombie has seen you!" (danger, only if you can see that zombie: show, don't tell). Inspecting a tile you can't see: "Can't see from here."
+- Test screen: as well as 10 rocks, 3 short straight walls (testScreen.wallRuns, 3-5 long) to hide behind; any floor sealed off from the start is filled in.
+- Tests: walls block, the diagonal squeeze, symmetry over 30 rooms, light levels, dim light shrinks noticing, eyesight 7 vs 15, behind a wall unseen and dark, adjacent noticed in the dark; a zombie that can't see you stays put, spots you, loses you, goes to the last spot, searches near it and gives up; both messages; inspect out of sight. Random play: the zombie still reaches a random walker in ~97 of 100 runs.

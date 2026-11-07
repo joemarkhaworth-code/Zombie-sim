@@ -4,6 +4,7 @@ import { CONFIG } from '../config.js';
 import { player } from './world.js';
 import { advance } from './scheduler.js';
 import { tryStep } from './systems/movement.js';
+import { updatePlayerView } from './systems/vision.js';
 
 // Inputs: { type: 'move', dx, dy } (one of dx, dy is 0: no diagonals) or { type: 'wait' }.
 // Returns true if the input took a turn.
@@ -27,6 +28,7 @@ export function applyInput(world, input) {
 function endTurn(world) {
   player(world).Actor.energy -= CONFIG.scheduler.actionCost;
   advance(world);
+  updatePlayerView(world);
   world.turn++;
   world.events.emit('turn_ended', { turn: world.turn });
 }

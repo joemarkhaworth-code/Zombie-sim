@@ -3,6 +3,8 @@ import { CONFIG } from '../config.js';
 import { createRng } from './rng.js';
 import { createEvents } from './events.js';
 import { generateTestScreen, TILE_INFO } from './gen/testscreen.js';
+import { initLight } from './systems/light.js';
+import { updatePlayerView } from './systems/vision.js';
 
 export function createWorld(seed) {
   const { w, h } = CONFIG.screen;
@@ -20,6 +22,7 @@ export function createWorld(seed) {
     inputs: [],           // every player input, in order, for replay
   };
   const start = generateTestScreen(world, CONFIG.testScreen);
+  initLight(world);
   const player = addEntity(world, {
     Position: { x: start.x, y: start.y },
     Glyph: { ch: '@', colour: CONFIG.colours.player },
@@ -28,10 +31,12 @@ export function createWorld(seed) {
     Prey: {},
     Blocks: {},
     Actor: { speed: CONFIG.player.speed, energy: CONFIG.scheduler.actionCost },
+    Vision: { eyesight: CONFIG.player.eyesight },
   });
   world.playerId = player.id;
   const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
   if (zpos) makeZombie(world, zpos.x, zpos.y);
+  updatePlayerView(world);
   return world;
 }
 
@@ -43,6 +48,9 @@ export function makeZombie(world, x, y) {
     Zombie: {},
     Blocks: {},
     Actor: { speed: CONFIG.zombie.speed, energy: 0, brain: 'shamble' },
+    Vision: { eyesight: CONFIG.zombie.eyesight },
+    // goal: { x, y, why: 'seen' } | null; search: { x, y, left } | null; tracking: prey id it saw last look
+    Brain: { goal: null, search: null, tracking: 0 },
   });
 }
 
