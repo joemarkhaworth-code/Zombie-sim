@@ -25,7 +25,7 @@ export const CONFIG = {
     // Bare hands: every hit lands for `damage`; weak, no knockback. A held weapon's numbers
     // replace these (like Zelda's sword: damage and a knockback).
     melee: { damage: 1, knockback: false, noise: 2 },
-    bag: { cols: 4, rows: 3 }, // the bag is a grid; items take up their shape in it
+    bag: { cols: 5, rows: 4 }, // the bag is a grid; items take up their shape in it (was 4 x 3)
     startHolding: 'walkingStick', // in your hand (not in the bag) at the start
   },
 

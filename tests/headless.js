@@ -468,6 +468,20 @@ function check(cond, msg) {
 {
   // You start holding a walking stick (in hand, not in the bag); test items lie about.
   const w0 = createWorld(1), p0 = player(w0);
+  check(p0.Inventory.cols === CONFIG.player.bag.cols && p0.Inventory.rows === CONFIG.player.bag.rows, 'the bag is the configured size');
+  // The bag panel fits inside the map on phones, full or empty, with its buttons on screen.
+  {
+    const { bagLayout } = await import('../src/render/bag.js');
+    const wf = createWorld(2), pf = player(wf);
+    for (let i = 0; i < 40; i++) { const it = makeItem(wf, i % 3 ? 'beans' : 'cricketBat', pf.Position.x, pf.Position.y); applyInput(wf, { type: 'pickup' }); }
+    for (const [cw, ch] of [[320, 568], [360, 640], [390, 664], [390, 844], [430, 932]]) {
+      const L = computeLayout(cw, ch);
+      const B = bagLayout(wf, L, pf.Inventory.items[0].id);
+      const bottom = Math.max(...B.hits.map(b => b.y + b.h));
+      check(bottom <= B.y + B.h && B.gx + B.cell * B.inv.cols <= B.x + B.w, `bag panel fits on ${cw}x${ch} (cell ${B.cell})`);
+      check(B.cell >= 36, `bag squares big enough to tap on ${cw}x${ch} (${B.cell})`);
+    }
+  }
   const stick = w0.entities.get(p0.Inventory.hand);
   check(stick && stick.Item.type === 'walkingStick' && p0.Inventory.items.length === 0, 'you start with the stick in hand and an empty bag');
   const lying = [...w0.entities.values()].filter(e => e.Item && e.Position).map(e => e.Item.type).sort();
@@ -477,6 +491,7 @@ function check(cond, msg) {
   let w = emptyWorld();
   const p = player(w); p.Position.x = 1; p.Position.y = 5;
   const inv = p.Inventory;
+  inv.cols = 4; inv.rows = 3; // the mechanics below are checked on a 4x3 bag
   const log = createMessageLog(w);
   const turn = i => { log.clear(); return applyInput(w, i); };
   const overlaps = () => {
@@ -525,7 +540,7 @@ function check(cond, msg) {
   w = emptyWorld();
   const q = player(w); q.Position.x = 5; q.Position.y = 5;
   const qi = q.Inventory;
-  qi.hand = 0;
+  qi.hand = 0; qi.cols = 4; qi.rows = 3;
   // Four tins on the diagonal of the 4x3 grid leave no straight run of 3 free.
   const tins = [[0, 0], [1, 1], [2, 2], [3, 0]].map(([x, y]) => { const t = makeItem(w, 'beans'); qi.items.push({ id: t.id, x, y, w: 1, h: 1 }); return t; });
   const tidied = [];

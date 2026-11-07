@@ -17,7 +17,9 @@ export function bagLayout(world, L, selected) {
   const hand = { x: x + 12, y: y + 76, w: w - 24, h: 52 };
   if (inv.hand) hits.push({ action: 'select', itemId: inv.hand, ...hand });
   // The grid.
-  const cell = Math.floor(Math.min(64, (w - 24) / inv.cols));
+  // Squares as big as fit: across the panel, and down it leaving room for the buttons below.
+  const below = 14 + 30 + 52 + 10;
+  const cell = Math.floor(Math.min(64, (w - 24) / inv.cols, (y + h - (hand.y + hand.h + 34) - below) / inv.rows));
   const gx = x + Math.floor((w - cell * inv.cols) / 2), gy = hand.y + hand.h + 34;
   const blocks = inv.items.map(s => ({ ...s, px: gx + s.x * cell, py: gy + s.y * cell, pw: s.w * cell, ph: s.h * cell }));
   for (const b of blocks) hits.push({ action: 'select', itemId: b.id, x: b.px, y: b.py, w: b.pw, h: b.ph });
