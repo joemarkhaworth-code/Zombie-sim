@@ -48,6 +48,7 @@ export function saveWorld(world) {
     tick: world.tick,
     nextId: world.nextId,
     playerId: world.playerId,
+    cam: world.cam,
     rng: world.rng.state,
     inputs: world.inputs,
     tiles: rle(world.tiles),
@@ -68,6 +69,7 @@ export function loadWorld(createWorld, json) {
   unrle(s.light, world.light);
   world.turn = s.turn; world.tick = s.tick; world.nextId = s.nextId; world.playerId = s.playerId;
   world.rng.state = s.rng;
+  world.cam = s.cam || world.cam;
   world.inputs = s.inputs;
   world.stats = s.stats;
   world.gameOver = s.gameOver;

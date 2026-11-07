@@ -13,7 +13,7 @@ import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
 import { saveWorld, loadWorld } from '../src/sim/save.js';
 import { dayOf, clockOf, daysSurvived } from '../src/sim/time.js';
-import { screenOf } from '../src/sim/world.js';
+import { screenOf, cameraRect, inRect } from '../src/sim/world.js';
 import { isActive } from '../src/sim/scheduler.js';
 
 const zombies = w => [...w.entities.values()].filter(e => e.Zombie);
@@ -880,7 +880,9 @@ for (let s = 1; s <= SEEDS; s++) {
   const town = s => createWorld(s, { map: 'town' });
   const a = town(1), b = town(2);
   const [nx, ny] = CONFIG.world.screens;
-  check(a.w === nx * CONFIG.screen.w && a.h === ny * CONFIG.screen.h, `the town is ${nx}x${ny} screens (${a.w}x${a.h} tiles)`);
+  const ov = CONFIG.world.overlap;
+  check(a.w === nx * (CONFIG.screen.w - ov) + ov && a.h === ny * (CONFIG.screen.h - ov) + ov,
+    `the town is ${nx}x${ny} screens overlapping by ${ov} (${a.w}x${a.h} tiles)`);
   check(a.tiles.every((t, i) => t === b.tiles[i]), 'the layout is the same every run (fixed world seed)');
   const za = zombies(a).map(z => `${z.Position.x},${z.Position.y}`).join(), zb = zombies(b).map(z => `${z.Position.x},${z.Position.y}`).join();
   check(za !== zb, 'zombies are placed by the run seed');
@@ -904,25 +906,36 @@ for (let s = 1; s <= SEEDS; s++) {
   let open = 0, reach = 0;
   for (let i = 0; i < a.w * a.h; i++) if (!tileBlocks(a, i % a.w, (i / a.w) | 0)) { open++; if (seen[i]) reach++; }
   check(open === reach && open > a.w * a.h * 0.6, `every open tile is reachable (${reach}/${open})`);
-  // You only see the screen you're on; walk off an edge and you're on the next screen.
+  // You only see the screen you're looking at. Step onto its last tile and the view flips: you're
+  // on the next screen's second tile, with a tile of the old screen behind you to step back onto.
   const w = town(3), me = player(w);
   for (const z of zombies(w)) w.entities.delete(z.id);
-  const s0 = screenOf(w, me.Position.x, me.Position.y);
-  const inView = () => { let n = 0, out = 0; const c = screenOf(w, me.Position.x, me.Position.y); for (let i = 0; i < w.view.length; i++) if (w.view[i]) { n++; const x = i % w.w, y = (i / w.w) | 0; if (x < c.ox || x >= c.ox + w.screenW || y < c.oy || y >= c.oy + w.screenH) out++; } return { n, out }; };
-  check(inView().n > 0 && inView().out === 0, 'you see only your own screen');
-  // Clear a corridor to the right edge, then walk across it.
-  const row = me.Position.y;
-  for (let x = me.Position.x; x <= s0.ox + w.screenW + 2; x++) w.tiles[row * w.w + x] = TILE.FLOOR;
+  const camR = () => cameraRect(w);
+  const local = () => ({ x: me.Position.x - camR().ox, y: me.Position.y - camR().oy });
+  const inView = () => { let n = 0, out = 0; const c = camR(); for (let i = 0; i < w.view.length; i++) if (w.view[i]) { n++; if (!inRect(w, c, i % w.w, (i / w.w) | 0)) out++; } return { n, out }; };
+  check(inView().n > 0 && inView().out === 0, 'you see only the screen you are looking at');
+  const row = me.Position.y, cam0 = { ...w.cam };
+  for (let x = me.Position.x; x <= camR().ox + w.screenW + 3; x++) w.tiles[row * w.w + x] = TILE.FLOOR;
   updatePlayerView(w);
-  let steps = 0;
-  while (screenOf(w, me.Position.x, me.Position.y).sx === s0.sx && steps++ < 20) applyInput(w, { type: 'move', dx: 1, dy: 0 });
-  const s1 = screenOf(w, me.Position.x, me.Position.y);
-  check(s1.sx === s0.sx + 1 && s1.sy === s0.sy, 'walking off the right edge puts you on the next screen');
-  check(inView().out === 0 && w.view[row * w.w + s1.ox], 'the view flips to the new screen');
-  check(me.Memory.tiles[row * w.w + s0.ox + 3], 'the screen you left stays in your memory');
-  // A zombie just over the edge can't see you, but hears you, and can follow you across.
-  const edgeX = s1.ox; // you're on the first column of the new screen
-  const zz = makeZombie(w, edgeX - 2, row);
+  let edgeSeen = false;
+  for (let i = 0; i < 20 && w.cam.sx === cam0.sx; i++) {
+    applyInput(w, { type: 'move', dx: 1, dy: 0 });
+    if (w.cam.sx === cam0.sx && local().x === w.screenW - 1) edgeSeen = true;
+  }
+  check(w.cam.sx === cam0.sx + 1 && w.cam.sy === cam0.sy, 'stepping onto the last tile flips the view to the next screen');
+  check(!edgeSeen, 'you are never left standing on the outermost tile');
+  check(local().x === ov - 1, `you are on the new screen's second tile (${local().x})`);
+  check(inView().out === 0 && w.view[row * w.w + camR().ox], 'the tile behind you (the old screen) is on screen to tap');
+  const prevMem = me.Memory.tiles[row * w.w + camR().ox - 4];
+  check(prevMem, 'the screen you left stays in your memory');
+  applyInput(w, { type: 'move', dx: -1, dy: 0 });
+  check(w.cam.sx === cam0.sx && local().x === w.screenW - ov, 'stepping back onto it flips you back');
+  applyInput(w, { type: 'move', dx: 1, dy: 0 });
+  check(w.cam.sx === cam0.sx + 1, 'and forward again');
+  const s1 = camR();
+  // A zombie just over the edge (on the old screen, not this one) can't see you, but hears you,
+  // and can follow you across.
+  const zz = makeZombie(w, s1.ox - 2, row);
   check(!canNotice(w, zz, me) && !canNotice(w, me, zz), 'a zombie on the next screen 2 tiles off: neither of you sees the other');
   applyInput(w, { type: 'move', dx: 1, dy: 0 }); applyInput(w, { type: 'move', dx: -1, dy: 0 });
   check(zz.Brain.goal && zz.Brain.goal.why === 'heard', 'it hears your footsteps across the edge');

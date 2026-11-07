@@ -2,12 +2,12 @@
 import { CONFIG } from '../config.js';
 import { TILE } from '../sim/gen/testscreen.js';
 import { canNotice } from '../sim/systems/vision.js';
-import { screenOf } from '../sim/world.js';
+import { cameraRect } from '../sim/world.js';
 
-// The camera: the screen you're on (flip-screen: it jumps a whole screen when you cross an edge).
+// The camera: the screen you're looking at (flip-screen: it jumps to the next screen when you
+// step onto the last tile of this one). It's sim state (world.cam): sight depends on it.
 export function camera(world) {
-  const p = world.entities.get(world.playerId);
-  return screenOf(world, p.Position.x, p.Position.y);
+  return cameraRect(world);
 }
 
 // inspect: { x, y } of a long-pressed tile to outline, or null. debug: draw the noise heatmap.

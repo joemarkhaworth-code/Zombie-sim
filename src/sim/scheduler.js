@@ -3,7 +3,7 @@
 // The player's actions are spent by input (turn.js); the scheduler runs the world until
 // the player has enough energy to act again.
 import { CONFIG } from '../config.js';
-import { player } from './world.js';
+import { player, screenOf } from './world.js';
 import { shamble } from './systems/shamble.js';
 
 const BRAINS = { shamble };
@@ -13,9 +13,8 @@ const BRAINS = { shamble };
 export function isActive(world, e) {
   const p = world.entities.get(world.playerId);
   if (!p || !p.Position || e === p) return true;
-  const r = CONFIG.world.activeRadius;
-  return Math.abs(Math.floor(e.Position.x / world.screenW) - Math.floor(p.Position.x / world.screenW)) <= r
-    && Math.abs(Math.floor(e.Position.y / world.screenH) - Math.floor(p.Position.y / world.screenH)) <= r;
+  const r = CONFIG.world.activeRadius, home = screenOf(world, e.Position.x, e.Position.y);
+  return Math.abs(home.sx - world.cam.sx) <= r && Math.abs(home.sy - world.cam.sy) <= r;
 }
 
 export function tick(world) {

@@ -11,13 +11,18 @@ import { makeItem, makeInventory } from './systems/items.js';
 export function createWorld(seed, opts = {}) {
   const map = opts.map || CONFIG.world.map;
   const [screensX, screensY] = map === 'town' ? CONFIG.world.screens : [1, 1];
-  const screenW = CONFIG.screen.w, screenH = CONFIG.screen.h;
-  const w = screenW * screensX, h = screenH * screensY;
+  // Neighbouring screens overlap by world.overlap (2) tiles: step onto a screen's last tile and
+  // the view flips to the next screen, where you're on its second tile with one tile of the old
+  // screen still behind you, so there's always a tile to tap either way.
+  const screenW = CONFIG.screen.w, screenH = CONFIG.screen.h, overlap = CONFIG.world.overlap;
+  const stepX = screenW - overlap, stepY = screenH - overlap;
+  const w = stepX * screensX + overlap, h = stepY * screensY + overlap;
   const world = {
     seed, map,
     rng: createRng(seed),
     events: createEvents(),
-    w, h, screenW, screenH, screensX, screensY,
+    w, h, screenW, screenH, screensX, screensY, stepX, stepY,
+    cam: { sx: screensX >> 1, sy: screensY >> 1 }, // the screen you're looking at
     tiles: new Uint8Array(w * h),
     entities: new Map(),  // id -> { id, ...components }
     nextId: 1,
@@ -67,13 +72,18 @@ export function createWorld(seed, opts = {}) {
 // your first screen.
 function populateTown(world, start) {
   const cfg = CONFIG.world, rng = world.rng;
-  const home = screenOf(world, start.x, start.y);
+  const home = world.cam;
+  const homeRect = cameraRect(world);
   const between = ([lo, hi]) => lo + rng.int(hi - lo + 1);
   for (let sy = 0; sy < world.screensY; sy++) {
     for (let sx = 0; sx < world.screensX; sx++) {
       const spots = [];
-      for (let y = sy * world.screenH; y < (sy + 1) * world.screenH; y++) {
-        for (let x = sx * world.screenW; x < (sx + 1) * world.screenW; x++) if (!tileBlocks(world, x, y)) spots.push({ x, y });
+      const r = screenRect(world, sx, sy);
+      // Each screen's own middle (not the tiles it shares with neighbours), never on your first screen.
+      for (let y = r.oy + 1; y < r.oy + world.screenH - 1; y++) {
+        for (let x = r.ox + 1; x < r.ox + world.screenW - 1; x++) {
+          if (!tileBlocks(world, x, y) && !inRect(world, homeRect, x, y)) spots.push({ x, y });
+        }
       }
       const take = () => spots.splice(rng.int(spots.length), 1)[0];
       const items = between(cfg.itemsPerScreen);
@@ -85,15 +95,62 @@ function populateTown(world, start) {
   }
 }
 
-// Which screen a tile is on, and that screen's top-left tile.
-export function screenOf(world, x, y) {
-  const sx = Math.floor(x / world.screenW), sy = Math.floor(y / world.screenH);
-  return { sx, sy, ox: sx * world.screenW, oy: sy * world.screenH };
+// Screen (sx, sy)'s top-left tile. Screens overlap, so a tile near an edge is on two (or four).
+export function screenRect(world, sx, sy) {
+  return { sx, sy, ox: sx * world.stepX, oy: sy * world.stepY };
 }
 
+export function cameraRect(world) {
+  return screenRect(world, world.cam.sx, world.cam.sy);
+}
+
+export function inRect(world, r, x, y) {
+  return x >= r.ox && x < r.ox + world.screenW && y >= r.oy && y < r.oy + world.screenH;
+}
+
+// A tile's "home" screen (the one it's furthest into the middle of; for placing and for which
+// screens run).
+export function screenOf(world, x, y) {
+  const clamp = (v, n) => Math.min(Math.max(v, 0), n - 1);
+  const sx = clamp(Math.floor((x - 1) / world.stepX), world.screensX);
+  const sy = clamp(Math.floor((y - 1) / world.stepY), world.screensY);
+  return screenRect(world, sx, sy);
+}
+
+// Every screen a tile is on.
+function screensAt(world, x, y) {
+  const out = [];
+  for (let sy = 0; sy < world.screensY; sy++) {
+    for (let sx = 0; sx < world.screensX; sx++) if (inRect(world, screenRect(world, sx, sy), x, y)) out.push(sx + ',' + sy);
+  }
+  return out;
+}
+
+// Can a and b be on the same screen? You're only ever on the screen you're looking at; anything
+// else is on every screen its tile is on.
 export function sameScreen(world, a, b) {
-  return Math.floor(a.x / world.screenW) === Math.floor(b.x / world.screenW)
-    && Math.floor(a.y / world.screenH) === Math.floor(b.y / world.screenH);
+  const on = e => (e.Player ? [world.cam.sx + ',' + world.cam.sy] : screensAt(world, e.Position.x, e.Position.y));
+  const sa = on(a);
+  return on(b).some(k => sa.includes(k));
+}
+
+// After you move: step onto the last tile of the screen you're looking at and the view flips to
+// the next screen that way. If you're somehow off the screen (loading, tests), look at your
+// home screen.
+export function updateCamera(world) {
+  const p = world.entities.get(world.playerId);
+  if (!p || !p.Position) return;
+  const { x, y } = p.Position;
+  const r = cameraRect(world);
+  if (!inRect(world, r, x, y)) {
+    const home = screenOf(world, x, y);
+    world.cam = { sx: home.sx, sy: home.sy };
+    return;
+  }
+  if (x === r.ox + world.screenW - 1 && world.cam.sx < world.screensX - 1) world.cam.sx++;
+  else if (x === r.ox && world.cam.sx > 0) world.cam.sx--;
+  if (y === r.oy + world.screenH - 1 && world.cam.sy < world.screensY - 1) world.cam.sy++;
+  else if (y === r.oy && world.cam.sy > 0) world.cam.sy--;
 }
 
 export function makeZombie(world, x, y) {

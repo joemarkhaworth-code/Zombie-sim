@@ -61,10 +61,10 @@ export function generateTestScreen(world, cfg) {
 // the middle of the middle screen. Returns the start.
 export function generatePlaceholderTown(world, rng, cfg) {
   walledFloor(world);
-  const { screenW: sw, screenH: sh, screensX, screensY } = world;
-  const start = { x: Math.floor(screensX / 2) * sw + (sw >> 1), y: Math.floor(screensY / 2) * sh + (sh >> 1) };
+  const { screenW: sw, screenH: sh, screensX, screensY, stepX, stepY } = world;
+  const start = { x: (screensX >> 1) * stepX + (sw >> 1), y: (screensY >> 1) * stepY + (sh >> 1) };
   for (let sy = 0; sy < screensY; sy++) {
-    for (let sx = 0; sx < screensX; sx++) decorateScreen(world, rng, sx * sw, sy * sh, sw, sh, cfg, start);
+    for (let sx = 0; sx < screensX; sx++) decorateScreen(world, rng, sx * stepX, sy * stepY, sw, sh, cfg, start);
   }
   fillSealedPockets(world, start.x, start.y);
   return start;

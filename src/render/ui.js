@@ -22,8 +22,7 @@ export function drawTopBar(ctx, world, L, log, debug) {
     fitText(ctx, log.text, x, h / 2, L.cssW - x - 6);
   } else if (debug) {
     ctx.textAlign = 'right'; ctx.fillStyle = `rgb(${c.noise})`;
-    const p2 = world.entities.get(world.playerId);
-    const scr = `S${Math.floor(p2.Position.x / world.screenW)},${Math.floor(p2.Position.y / world.screenH)}`;
+    const scr = `S${world.cam.sx},${world.cam.sy}`;
     ctx.fillText(`${scr} T${world.turn} tick ${world.tick} seed ${world.seed}`, L.cssW - 8, h / 2);
   } else {
     ctx.textAlign = 'right'; ctx.fillStyle = c.dimText;

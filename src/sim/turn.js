@@ -5,6 +5,7 @@ import { player } from './world.js';
 import { advance } from './scheduler.js';
 import { tryStep } from './systems/movement.js';
 import { updatePlayerView } from './systems/vision.js';
+import { updateCamera } from './world.js';
 import { clearNoise } from './systems/noise.js';
 import { attack, shove, creatureAt, inReach } from './systems/combat.js';
 import { pickUp, drop, useItem, itemsAt } from './systems/items.js';
@@ -52,6 +53,7 @@ export function applyInput(world, input) {
     }
   }
   if (took) {
+    updateCamera(world); // stepped onto the last tile of the screen: flip to the next one
     world.inputs.push({ turn: world.turn, ...input });
     endTurn(world);
   }

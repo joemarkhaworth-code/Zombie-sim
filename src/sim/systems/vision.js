@@ -5,7 +5,7 @@
 //   Light: light.range sets how far anyone sees in the open; eyesight (0-3) scales it; each
 //     tile's light level (0-3) is its visibility when it's in sight and in range.
 import { CONFIG } from '../../config.js';
-import { inBounds, tileAt, screenOf, sameScreen } from '../world.js';
+import { inBounds, tileAt, cameraRect, screenOf, sameScreen } from '../world.js';
 import { TILE_INFO } from '../gen/testscreen.js';
 import { updateMemory } from './memory.js';
 
@@ -47,13 +47,13 @@ export function tileVisibility(world, e, x, y) {
   return world.light[y * world.w + x];
 }
 
-// Every tile's visibility for e, as a Uint8Array over the whole map, but only its own screen is
-// filled in: you only see the screen you're on (flip-screen). Walls next to a visible open tile
+// Every tile's visibility for e, as a Uint8Array over the whole map, but only one screen is
+// filled in: for you, the screen you're looking at (world.cam; flip-screen). Walls next to a visible open tile
 // are shown at that tile's level, so wall faces don't look patchy.
 export function computeView(world, e) {
   const { w, h } = world;
   const view = new Uint8Array(w * h);
-  const { ox: x0, oy: y0 } = screenOf(world, e.Position.x, e.Position.y);
+  const { ox: x0, oy: y0 } = e.Player ? cameraRect(world) : screenOf(world, e.Position.x, e.Position.y);
   const x1 = x0 + world.screenW, y1 = y0 + world.screenH;
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) view[y * w + x] = tileVisibility(world, e, x, y);
   const faces = [];
@@ -81,7 +81,7 @@ export function computeView(world, e) {
 // stand beside you unseen; it's shown as an arrow at the edge). Noise does cross screens.
 export function canNotice(world, viewer, target) {
   if (!viewer.Position || !target.Position) return false;
-  if (!sameScreen(world, viewer.Position, target.Position)) {
+  if (!sameScreen(world, viewer, target)) {
     const near = Math.abs(viewer.Position.x - target.Position.x) <= 1 && Math.abs(viewer.Position.y - target.Position.y) <= 1;
     if (!near) return false;
   }
