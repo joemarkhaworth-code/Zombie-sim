@@ -625,17 +625,19 @@ function check(cond, msg) {
   CONFIG.zombie.glimpseRange = savedG;
   check(z.Brain.tracking === p.id, 'it is after you (!)');
   const tin = makeItem(w, 'beans', 5, 2); applyInput(w, { type: 'pickup' });
-  const startY = z.Position.y;
-  check(applyInput(w, { type: 'throw', itemId: tin.id, x: 8, y: 7 }), 'you throw a tin past it');
-  check(z.Brain.distracted && !z.Brain.tracking, 'the clatter distracts it: no longer after you');
-  for (let i = 0; i < 4; i++) { applyInput(w, { type: 'wait' }); }
-  check(dist(z.Position, { x: 8, y: 7 }) < dist({ x: 5, y: startY }, { x: 8, y: 7 }), 'it heads for the tin, though it could see you');
-  check(dist(z.Position, p.Position) > 3, 'and away from you');
-  // Afterwards, if it sees you again, it stares (?) before coming: you get your beat.
+  const before = { ...z.Position };
   const ev = [];
   w.events.on('prey_glimpsed', () => ev.push('glimpsed'));
-  for (let i = 0; i < 12 && !ev.length; i++) applyInput(w, { type: 'wait' });
-  check(ev.length === 1, 'when it spots you again it stares first');
+  w.events.on('prey_spotted', () => ev.push('spotted'));
+  const moves = [];
+  w.events.on('entity_moved', e => { if (e.id === z.id) moves.push(e.to); });
+  check(applyInput(w, { type: 'throw', itemId: tin.id, x: 8, y: 7 }), 'you throw a tin past it');
+  for (let i = 0; i < 8; i++) applyInput(w, { type: 'wait' });
+  const first = moves[0];
+  check(first && dist(first, { x: 8, y: 7 }) < dist(before, { x: 8, y: 7 }), 'its next move is toward the tin, though it could see you');
+  check(first && dist(first, p.Position) > dist(before, p.Position), 'and away from you');
+  check(!z.Brain.distracted, 'one move only, then it is back to normal');
+  check(ev[0] === 'glimpsed' && ev[1] === 'spotted', `when it sees you again it stares first, then comes (${ev.join()})`);
   CONFIG.zombie.stagger = saved; CONFIG.zombie.wanderChance = savedWander;
 }
 

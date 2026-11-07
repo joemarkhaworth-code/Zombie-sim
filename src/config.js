@@ -53,7 +53,7 @@ export const CONFIG = {
     glimpseCost: 50,      // energy a stare costs (a normal action is 100): it looks again sooner, so
                           // at half speed you get one move to get out of sight, not two
     distractLevel: 2,     // a noise this loud (a thing landing, a fight) distracts a zombie that hears it:
-    distractActions: 3,   // for this many of its moves it goes to look, even if it can see you,
+    distractActions: 1,   // for this many of its moves it goes to look, even if it can see you (3 was too strong),
                           // unless you're within glimpseRange of it (then it stays on you)
     searchActions: 12,    // after losing you, shuffles about the last known spot this many moves
     searchRadius: 3,      // ...staying within this many tiles of it
