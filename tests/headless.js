@@ -1406,6 +1406,23 @@ function townLayoutChecks(a) {
   check(!crashed, `drawing new kinds never throws (${crashed && crashed.stack})`);
 }
 
+// Pieces that join up: the right piece for each spot, inner corners, turning.
+{
+  const ad = await import('../src/artdata.js');
+  const plan = ['.....', '.###.', '.###.', '..#..', '.....'];
+  const on = (x, y) => plan[y] && plan[y][x] === '#';
+  const at = (x, y) => ad.piecesFor((dx, dy) => on(x + dx, y + dy));
+  check(at(2, 2).piece === 'jNESW' && at(2, 2).inner.join() === 'iSE,iSW', `inside a bend gets its inner corners (${at(2, 2).inner})`);
+  check(at(1, 1).piece === 'jES' && at(2, 1).piece === 'jESW' && at(2, 3).piece === 'jN' && at(1, 2).piece === 'jNE', 'corners, edges and ends');
+  check(ad.PIECES.length === 16 && new Set(ad.PIECES).size === 16 && ad.INNER.length === 4, '16 pieces and 4 inner corners');
+  check(ad.turnPiece('jN') === 'jE' && ad.turnPiece('jNE') === 'jES' && ad.turnPiece('jW') === 'jN' && ad.turnPiece('iNW') === 'iNE' && ad.turnPiece('jNS') === 'jEW', 'pieces turn clockwise');
+  const px = Array.from({ length: 256 }, (_, i) => (i < 16 ? 2 : 0));   // a red top edge
+  const t1 = ad.turnPixels(px, 16);
+  check(t1[15] === 2 && t1[15 * 16 + 15] === 2 && t1[0] === 0, 'turning a picture puts its top edge on the right');
+  const art = ad.emptyArt(); art.tiles['ground:ROAD'] = { w: 1, h: 1, connect: true, variants: { jNESW: [ad.encode(px)] } };
+  check(ad.parseArt(ad.serializeArt(art)).tiles['ground:ROAD'].connect === true, 'joining up survives copy and paste');
+}
+
 // Zombies only chase what they see, so a random walker isn't always found; most are.
 check(reached >= SEEDS * 0.7, `the zombie reaches the random walker in most runs (${reached}/${SEEDS})`);
 

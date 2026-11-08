@@ -40,6 +40,10 @@
     #kindForm input[type=number] { width: 56px; height: 34px; font: inherit; }
     #kindForm { position: fixed; z-index: 6; }
     #kindRow { display: none; }
+    #try { position: fixed; inset: 0; background: #0a0a0a; z-index: 7; display: none; flex-direction: column; }
+    #tryStage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #tryCanvas { touch-action: none; image-rendering: pixelated; }
+    #tryHint { padding: 6px 8px; color: #aab; font-size: 12px; background: #181818; }
     #menu textarea { width: 100%; height: 120px; font: 11px monospace; box-sizing: border-box; }
   </style>
 </head>
@@ -50,11 +54,13 @@
     </div>
     <div id="info"></div>
     <div class="row" id="kindRow"><button id="editKind">Edit this kind</button><span id="kindNote" style="color:#aab;font-size:12px"></span></div>
+    <div class="row" id="connRow" style="display:none"></div>
     <div class="row" id="variants"></div>
     <div class="row" id="versions"></div>
     <div id="stage"><canvas id="edit"></canvas><div id="status"></div>
       <div id="list"></div>
       <div id="kindForm"></div>
+      <div id="try"><div class="row" id="tryBar"></div><div id="tryStage"><canvas id="tryCanvas"></canvas></div><div id="tryHint"></div></div>
       <div id="menu">
         <h2>Tile art</h2>
         <div class="grp"><p>This tile:</p>
@@ -67,6 +73,13 @@
         <div class="grp"><p>New kinds: <b>+ New</b> makes a new ground, structure, object or roof, with its own rules (does it block
           walking? sight? loud underfoot?). It goes in the map editor's lists and works in the game. They travel inside the art text.</p>
           <button id="newKind2">+ New tile or object</button></div>
+        <div class="grp"><p>Joins up (ground, structures, roofs): a road, path, fence or field that changes with its neighbours.
+          Instead of one picture it has 16 pieces (on its own, ends, straights, corners, Ts, a crossing, the edges and middle of a
+          wide area) and 4 inner corners drawn over the inside of a bend. Draw the middle first; Turn copies makes the
+          other three of an end or a corner by turning it; Fill empty pieces copies this one into the rest to change.</p>
+          <p>Try it: paint a whole screen with your tiles (mix them: paint with one, go to another, paint again) and see them
+          the way the game draws them. Edit a piece: tap a square to draw the exact piece it uses.</p>
+          <button id="tryOpen">Try it</button></div>
         <div class="grp"><p>All the art, as text (to put in the game: art/tiles.json):</p>
           <button id="copy">Copy art</button> <button id="paste">Paste art</button> <button id="download">Download file</button>
           <textarea id="text" spellcheck="false" placeholder="Paste art here, then tap Paste art."></textarea></div>
