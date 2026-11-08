@@ -40,11 +40,7 @@ const isRail = t => t === TILE.RAIL || t === TILE.CROSSING;
 export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
   const info = TILE_INFO[tile];
   if (!info) { rect(ctx, '#ff00ff', px, py, t, t); return; }
-  if (info.custom) {   // a new kind (Joe's); its neighbours, for pieces that join up (the map's edge counts as joined)
-    const at = world && (world.tileAt || (world.tiles && ((xx, yy) => world.tiles[yy * world.w + xx])));
-    const same = at ? (dx, dy) => { const nx = x + dx, ny = y + dy; return nx < 0 || ny < 0 || nx >= world.w || ny >= world.h || at(nx, ny) === tile; } : () => false;
-    return drawKind(ctx, info.custom, 'main', x, y, px, py, t, t, mem, same);
-  }
+  if (info.custom) return drawKind(ctx, info.custom, 'main', x, y, px, py, t, t, mem);   // a new kind (Joe's)
   if (info.part === 'roof') return drawRoof(ctx, info, px, py, t, mem);
   if (info.part) return drawWall(ctx, info, px, py, t, mem);
   const key = info.key;

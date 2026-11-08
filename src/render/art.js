@@ -5,12 +5,10 @@
 // a new kind is drawn from its pixels, or as a labelled placeholder until it has some.
 import { CONFIG } from '../config.js';
 import { registerKind, forgetKind, kinds } from '../sim/map.js';
-import { parseArt, emptyArt, decode, versionAt, PALETTE, PX, piecesFor, PIECES } from '../artdata.js';
+import { parseArt, emptyArt, decode, versionAt, PALETTE, PX } from '../artdata.js';
 
 let ART = emptyArt();
 export const currentArt = () => ART;
-// The pictures are cached: call this after changing the art's pixels.
-export const artChanged = () => cache.clear();
 
 // Merges art b over art a (b's tiles and kinds win).
 export function mergeArt(a, b) {
@@ -106,28 +104,7 @@ export function drawPlaceholder(ctx, d, px, py, tw, th, mem) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(d.name[0].toUpperCase(), px + tw / 2, py + th / 2 + 1);
 }
-// Pieces that join up: which piece (and version) a spot uses, given same(dx, dy) for its
-// neighbours. A piece not drawn yet falls back to the middle, then to any piece drawn.
-export const isConnected = id => !!(ART.tiles[id] && ART.tiles[id].connect);
-export function pieceAt(id, x, y, same) {
-  const { piece, inner } = piecesFor(same);
-  let v = piece;
-  if (!versionsOf(id, v)) v = versionsOf(id, 'jNESW') ? 'jNESW' : PIECES.find(q => versionsOf(id, q)) || piece;
-  return { piece: v, wanted: piece, version: versionAt(versionsOf(id, v), x, y), inner: inner.filter(q => versionsOf(id, q)) };
-}
-export function drawConnected(ctx, id, x, y, px, py, t, mem, same) {
-  const p = pieceAt(id, x, y, same);
-  if (!drawArt(ctx, id, p.piece, x, y, px, py, t, t, mem)) return false;
-  for (const q of p.inner) drawArt(ctx, id, q, x, y, px, py, t, t, mem);
-  return true;
-}
-// Any tile's art: joined-up pieces if it connects (same says which neighbours match), else its
-// variant. False if it has no art.
-export function drawTileArt(ctx, id, variant, x, y, px, py, tw, th, mem, same) {
-  if (same && isConnected(id)) return drawConnected(ctx, id, x, y, px, py, tw, mem, same);
-  return drawArt(ctx, id, variant, x, y, px, py, tw, th, mem);
-}
 // A new kind: its art, else the placeholder.
-export function drawKind(ctx, d, variant, x, y, px, py, tw, th, mem, same) {
-  if (!drawTileArt(ctx, `${d.layer}:${d.key}`, variant, x, y, px, py, tw, th, mem, same)) drawPlaceholder(ctx, d, px, py, tw, th, mem);
+export function drawKind(ctx, d, variant, x, y, px, py, tw, th, mem) {
+  if (!drawArt(ctx, `${d.layer}:${d.key}`, variant, x, y, px, py, tw, th, mem)) drawPlaceholder(ctx, d, px, py, tw, th, mem);
 }

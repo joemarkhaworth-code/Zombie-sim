@@ -58,13 +58,7 @@ export function drawHeightAndStruct(ctx, src, x, y, px, py, t, mem) {
   const lineVert = test => (near(0, -1, test) || near(0, 1, test)) && !(near(-1, 0, test) || near(1, 0, test));
   const wallish = v => v > 0 && (STRUCT[v][3].wall || STRUCT[v][3].opening);
   switch (info.look) {
-    case 'custom': {
-      // Pieces that join up: walls join walls, doors and windows; fences join fences and gates.
-      const joins = v => v === st || (info.wall && wallish(v)) || (info.fence && v > 0 && (STRUCT[v][3].fence || v === S.GATE));
-      const sameAt = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx < 0 || ny < 0 || nx >= w || ny >= h || joins(src.struct[ny * w + nx]); };
-      drawKind(ctx, info.custom, info.fence && lineVert(same) ? 'north-south' : info.fence ? 'east-west' : 'main', x, y, px, py, t, t, mem, sameAt);
-      break;
-    }
+    case 'custom': drawKind(ctx, info.custom, info.fence && lineVert(same) ? 'north-south' : info.fence ? 'east-west' : 'main', x, y, px, py, t, t, mem); break;
     case 'wall': {
       const [b, m] = C.walls[info.colour];
       rect(ctx, col(b, mem), px, py, t, t);
@@ -330,11 +324,7 @@ export function drawRoofTile(ctx, src, x, y, px, py, t, mem) {
   const r = src.roof[i];
   if (!r) return;
   const kd = ROOF[r] && ROOF[r][3] && ROOF[r][3].custom;   // a new kind (Joe's)
-  if (kd) {
-    const south = y + 1 < h && src.roof[i + w];
-    const sameAt = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < w && ny < h && src.roof[ny * w + nx] === r; };
-    drawKind(ctx, kd, south ? 'middle' : 'edge (eaves)', x, y, px, py, t, t, mem, sameAt); return;
-  }
+  if (kd) { const south = y + 1 < h && src.roof[i + w]; drawKind(ctx, kd, south ? 'middle' : 'edge (eaves)', x, y, px, py, t, t, mem); return; }
   const pal = C.roofs[r] || C.roofs[1];
   rect(ctx, col(pal[0], mem), px, py, t, t);
   for (let k = 1; k < 3; k++) rect(ctx, col(pal[1], mem), px, py + (k * t) / 3, t, 1);

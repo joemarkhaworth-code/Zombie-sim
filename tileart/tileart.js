@@ -5,9 +5,7 @@
 import { CONFIG } from '../src/config.js';
 import { TILE } from '../src/sim/tiles.js';
 import { createMap, S, O, G, ROOF, kinds, registerKind, forgetKind, freeChar, freeKey, cleanKind, KIND_LAYERS } from '../src/sim/map.js';
-import { loadArt, useArt, artChanged, drawTileArt, pieceAt } from '../src/render/art.js';
-import { PIECES, INNER, pieceMask, turnPiece, turnPixels } from '../src/artdata.js';
-import { GROUND, STRUCT, OBJECT, groundTile, parseMap, serializeMap, placeObject, removeObject, objectAt } from '../src/sim/map.js';
+import { loadArt, useArt } from '../src/render/art.js';
 import { drawTile } from '../src/render/tiles.js';
 import { drawHeightAndStruct, drawObject, drawRoofTile } from '../src/render/layers.js';
 import { PX, catalogue, emptyArt, encode, decode, serializeArt, parseArt, nearestColour, versionAt } from './catalogue.js';
@@ -24,17 +22,18 @@ let zoom = 1, pan = { x: 0, y: 0 };
 const undo = [], redo = [];
 
 let saveTimer = 0;
-function save() { artChanged(); clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, serializeArt(art)); } catch (e) { say('Not saved: storage full or blocked.'); } }, 250); }
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, serializeArt(art)); } catch (e) { say('Not saved: storage full or blocked.'); } }, 250); }
 let sayTimer = 0;
 function say(t) { const el = $('status'); el.textContent = t; el.style.display = t ? 'block' : 'none'; clearTimeout(sayTimer); if (t) sayTimer = setTimeout(() => { el.style.display = 'none'; }, 2400); }
 
 // --- The current tile's pixels ---------------------------------------------------------------------
 const item = () => items[index];
-// A ground, structure or roof tile can be set to join up: then its variants are the 16 pieces and
-// 4 inner corners (artdata.js), picked by its neighbours.
-const canConnect = it => /^(ground|struct|roof):/.test(it.id) && it.w === 1 && it.h === 1;
-const connected = (it = item()) => canConnect(it) && !!(art.tiles[it.id] && art.tiles[it.id].connect);
-const vlist = (it = item()) => (connected(it) ? [...PIECES, ...INNER] : it.variants);
+// A tile's variants: the ones the game needs, then any Joe adds (+ Variant: a road corner, a
+// fence end...). Each is a picture (older art may hold a few versions of one: shown as their own).
+const vlist = (it = item()) => {
+  const t = art.tiles[it.id], extra = t ? Object.keys(t.variants).filter(v => !it.variants.includes(v)) : [];
+  return [...it.variants, ...extra];
+};
 const vname = () => vlist()[variant];
 // The turned variant of an object is h x w.
 const dimsOf = v => { const it = item(); const turned = v === 'turned'; return { w: (turned ? it.h : it.w) * PX, h: (turned ? it.w : it.h) * PX }; };
@@ -54,7 +53,7 @@ function store(px) {
   // An empty picture isn't kept (its version goes, unless it's the only one).
   if (px.every(p => p < 0)) { list.splice(version, 1); version = Math.max(0, Math.min(version, list.length - 1)); }
   if (!list.length) delete art.tiles[it.id].variants[vname()];
-  if (!Object.keys(art.tiles[it.id].variants).length && !art.tiles[it.id].connect) delete art.tiles[it.id];
+  if (!Object.keys(art.tiles[it.id].variants).length) delete art.tiles[it.id];
   save();
 }
 const isDone = it => !!(art.tiles[it.id] && Object.keys(art.tiles[it.id].variants).length);
@@ -68,7 +67,7 @@ function restore(from, to) {
   const it = item();
   if (!art.tiles[it.id]) art.tiles[it.id] = { w: it.w, h: it.h, variants: {} };
   if (e.list.length) art.tiles[it.id].variants[e.v] = e.list.slice(); else delete art.tiles[it.id].variants[e.v];
-  if (!Object.keys(art.tiles[it.id].variants).length && !art.tiles[it.id].connect) delete art.tiles[it.id];
+  if (!Object.keys(art.tiles[it.id].variants).length) delete art.tiles[it.id];
   version = Math.min(e.k, Math.max(0, versions().length - 1));
   save(); refresh();
 }
@@ -202,7 +201,6 @@ function grassUnder(c2, w, h, scale) {
     else { c2.fillStyle = CONFIG.colours.tiles.GRASS[0]; c2.fillRect(tx * PX * scale, ty * PX * scale, PX * scale, PX * scale); }
   }
 }
-const it0 = () => item();
 function drawPreviews() {
   const el = $('previews'); el.innerHTML = '';
   const { w, h } = dims(), px = pixels();
@@ -211,27 +209,10 @@ function drawPreviews() {
     c2.width = cw; c2.height = ch; const g = c2.getContext('2d'); g.imageSmoothingEnabled = false; fn(g);
     f.append(c2); f.append(label); el.append(f);
   };
-  const tryB = document.createElement('button'); tryB.textContent = 'Try it ▶'; tryB.style.cssText = 'height:56px;align-self:center';
-  tryB.title = 'Paint a screen with your tiles and see how they work together'; tryB.onclick = openTry; el.append(tryB);
   const s = w > PX * 2 ? 1 : 2;
   fig('size', w * s, h * s, g => paint(g, px, w, h, s));
-  if (connected()) {
-    // A little plan with every way of joining: a wide area, a straight, corners, a T, a crossing, ends.
-    const plan = ['.........', '.####....', '.#######.', '.####..#.', '...#...#.', '.#####.#.', '...#..##.', '.........'];
-    const on = (x, y) => y >= 0 && y < plan.length && x >= 0 && x < plan[0].length && plan[y][x] === '#';
-    fig('joined up', 9 * PX, 8 * PX, g => {
-      grassUnder(g, 9 * PX, 8 * PX, 1);
-      for (let y = 0; y < plan.length; y++) for (let x = 0; x < plan[0].length; x++) {
-        if (on(x, y)) drawTileArt(g, it0().id, 'main', x, y, x * PX, y * PX, PX, PX, false, (dx, dy) => on(x + dx, y + dy));
-      }
-    });
-  } else if (w === PX && h === PX) {
-    const vs = versions().map(t => decode(t, w * h));
-    if (!vs.length) vs.push(px);
-    vs[version] = px;
-    fig(vs.length > 1 ? `tiled, ${vs.length} versions mixed` : 'tiled', w * 4, h * 4, g => {
-      for (let k = 0; k < 16; k++) { const tx = k % 4, ty = (k / 4) | 0; paint(g, vs[versionAt(vs.length, tx, ty)], w, h, 1, tx * w, ty * h); }
-    });
+  if (w === PX && h === PX) {
+    fig('tiled', w * 4, h * 4, g => { for (let k = 0; k < 16; k++) paint(g, px, w, h, 1, (k % 4) * w, ((k / 4) | 0) * h); });
   }
   fig('remembered', w * s, h * s, g => { g.fillStyle = '#000'; g.fillRect(0, 0, w * s, h * s); paint(g, px, w, h, s, 0, 0, true); });
   if (!item().id.startsWith('ground:')) fig('on grass', w * s, h * s, g => { grassUnder(g, w, h, s); paint(g, px, w, h, s); });
@@ -281,53 +262,42 @@ function refresh() {
   const it = item(), { w, h } = dims();
   $('title').textContent = `${isDone(it) ? '● ' : '○ '}${it.name}  (${it.group})`;
   const done = items.filter(isDone).length;
-  const nv = versions().length;
-  $('info').textContent = `${it.char ? `'${it.char}'  ` : ''}${w} x ${h} px${nv > 1 ? `, ${nv} versions` : ''}. ${it.notes}.   ${done} of ${items.length} drawn.`;
+  $('info').textContent = `${it.char ? `'${it.char}'  ` : ''}${w} x ${h} px. ${it.notes}.   ${done} of ${items.length} drawn.`;
   $('kindRow').style.display = it.custom ? 'flex' : 'none';
   if (it.custom) $('kindNote').textContent = 'Your kind: in the map editor\'s lists.';
+  // One row: every picture of this tile (its variants), + Variant to add one, Delete for the extras.
+  if (variant >= vlist().length) { variant = Math.max(0, vlist().length - 1); version = 0; }
   const vr = $('variants'); vr.innerHTML = '';
-  const vl = vlist();
-  if (vl.length > 1) vl.forEach((v, k) => {
-    const b = document.createElement('button');
-    const has = versions(v).length;
-    if (connected()) { b.append(pieceIcon(v)); b.title = pieceLabel(v); b.style.padding = '0 4px'; }
-    else b.textContent = (has ? '● ' : '○ ') + v;
-    if (k === variant) b.className = 'on';
-    b.onclick = () => { variant = k; version = 0; refresh(); }; vr.append(b);
-  });
-  vr.style.display = vl.length > 1 ? 'flex' : 'none';
-  // Joining up: a switch, and helpers to fill the pieces.
-  const cr = $('connRow'); cr.innerHTML = '';
-  cr.style.display = canConnect(it) ? 'flex' : 'none';
-  if (canConnect(it)) {
-    const on = connected();
-    const b = document.createElement('button'); b.textContent = on ? 'Joins up: on' : 'Joins up: off'; if (on) b.className = 'on';
-    b.onclick = () => toggleConnect(); cr.append(b);
-    if (on) {
-      const t1 = document.createElement('button'); t1.textContent = 'Turn copies'; t1.onclick = turnCopies; cr.append(t1);
-      const t2 = document.createElement('button'); t2.textContent = 'Fill empty pieces'; t2.onclick = fillEmpty; cr.append(t2);
-      const n = document.createElement('span'); n.style.cssText = 'color:#aab;font-size:12px;white-space:nowrap';
-      n.textContent = `${pieceLabel(vname())}. ${vl.filter(v => versions(v).length).length} of 20 drawn.`; cr.append(n);
+  vlist().forEach((v, k) => {
+    const n = Math.max(1, versions(v).length);
+    for (let q = 0; q < n; q++) {
+      const b = document.createElement('button');
+      b.textContent = (versions(v)[q] ? '● ' : '○ ') + v + (q ? ` ${q + 1}` : '');
+      if (k === variant && q === version) b.className = 'on';
+      b.onclick = () => { variant = k; version = q; refresh(); }; vr.append(b);
     }
-  }
-  // Versions: duplicates to change a little, so the map doesn't repeat.
-  const vs = $('versions'); vs.innerHTML = '';
-  const n = Math.max(1, versions().length);
-  for (let k = 0; k < n; k++) {
-    const b = document.createElement('button'); b.textContent = `#${k + 1}`; if (k === version) b.className = 'on';
-    b.onclick = () => { version = k; refresh(); }; vs.append(b);
-  }
-  const dup = document.createElement('button'); dup.textContent = '+ Duplicate';
-  dup.onclick = () => {
-    const px = pixels(); if (px.every(p => p < 0)) return say('Draw this one first, then duplicate it.');
-    snapshot(); const list = art.tiles[it.id].variants[vname()]; list.splice(version + 1, 0, encode(px)); version++; save(); refresh();
-    say(`Version #${version + 1}: change it a little.`);
+  });
+  const add = document.createElement('button'); add.textContent = '+ Variant';
+  add.onclick = () => {
+    const px = pixels(); if (px.every(p => p < 0)) return say('Draw this one first: a new variant starts as a copy of it.');
+    let name = prompt('Name the new variant (e.g. corner, end, edge north):', `variant ${vlist().length + 1}`);
+    if (name === null) return;
+    name = name.trim().slice(0, 24) || `variant ${vlist().length + 1}`;
+    if (vlist().includes(name)) return say('That name is taken.');
+    snapshot(); art.tiles[it.id].variants[name] = [encode(px)];
+    variant = vlist().indexOf(name); version = 0; save(); refresh(); say(`New variant: ${name}. Change it.`);
   };
-  vs.append(dup);
-  if (versions().length > 1) {
-    const del = document.createElement('button'); del.textContent = 'Delete #' + (version + 1);
-    del.onclick = () => { if (!confirm(`Delete version #${version + 1}?`)) return; snapshot(); versions().splice(version, 1); version = Math.max(0, version - 1); save(); refresh(); };
-    vs.append(del);
+  vr.append(add);
+  const extra = !it.variants.includes(vname()) || versions().length > 1;
+  if (extra && versions().length) {
+    const del = document.createElement('button'); del.textContent = 'Delete';
+    del.onclick = () => {
+      if (!confirm(`Delete ${vname()}${version ? ' ' + (version + 1) : ''}?`)) return;
+      snapshot(); const t = art.tiles[it.id], v = vname();
+      t.variants[v].splice(version, 1); if (!t.variants[v].length) delete t.variants[v];
+      version = 0; variant = Math.min(variant, vlist().length - 1); save(); refresh();
+    };
+    vr.append(del);
   }
   layoutCanvas(); drawEditor(); drawPreviews();
 }
@@ -362,12 +332,18 @@ function buildTools() {
 function go(i) { index = (i + items.length) % items.length; variant = 0; version = 0; zoom = 1; pan = { x: 0, y: 0 }; refresh(); }
 $('prev').onclick = () => go(index - 1);
 $('next').onclick = () => go(index + 1);
-$('nextTodo').onclick = () => {
+function nextTodo() {
   for (let k = 1; k <= items.length; k++) { const i = (index + k) % items.length; if (!isDone(items[i])) return go(i); }
   say('Every tile has art. Well done.');
-};
-$('title').onclick = () => {
+}
+// The list of every tile to make, by group, ticked off as they're drawn.
+function openList() {
   const el = $('list'); el.innerHTML = '';
+  const top = document.createElement('div');
+  const h2 = document.createElement('h3'); h2.textContent = `Tiles to make: ${items.filter(isDone).length} of ${items.length} drawn`; top.append(h2);
+  const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { el.style.display = 'none'; fn(); }; top.append(b); };
+  mk('Next to do', nextTodo); mk('+ New tile or object', () => kindForm(null)); mk('Close', () => {});
+  el.append(top);
   let group = null;
   items.forEach((it, i) => {
     if (it.group !== group) { group = it.group; const h3 = document.createElement('h3'); h3.textContent = `${group} (${items.filter(q => q.group === group && isDone(q)).length} / ${items.filter(q => q.group === group).length})`; el.append(h3); }
@@ -378,8 +354,11 @@ $('title').onclick = () => {
   });
   const close = document.createElement('button'); close.textContent = 'Close'; close.className = 'on'; close.style.display = 'block'; close.style.marginTop = '12px';
   close.onclick = () => { el.style.display = 'none'; }; el.append(close);
+  el.scrollTop = 0;
   el.style.display = 'block';
-};
+}
+$('title').onclick = openList;
+$('listBtn').onclick = openList;
 
 // --- The menu ------------------------------------------------------------------------------------------------------
 $('close').onclick = () => { $('menu').style.display = 'none'; refresh(); };
@@ -526,214 +505,101 @@ function kindForm(existing) {
   draw();
   el.style.display = 'block';
 }
-$('newKind').onclick = () => kindForm(null);
 $('newKind2').onclick = () => { $('menu').style.display = 'none'; kindForm(null); };
 $('editKind').onclick = () => { const [l, k] = item().id.split(':'); const d = kinds.get(`${l}:${k}`); if (d) kindForm(d); };
 void KIND_LAYERS; void emptyArt;
 
-// --- Joining up ------------------------------------------------------------------------------------------------
-const SIDE_WORD = { N: 'north', E: 'east', S: 'south', W: 'west' };
-function pieceLabel(v) {
-  if (!v) return '';
-  if (v.startsWith('i')) return `inner corner, ${v.slice(1)} (drawn over the piece)`;
-  const sides = v.slice(1) === '-' ? [] : [...v.slice(1)];
-  const k = sides.length;
-  if (k === 0) return 'on its own';
-  if (k === 4) return 'the middle: joins all four sides';
-  const w = sides.map(c => SIDE_WORD[c]);
-  if (k === 1) return `an end: joins ${w[0]}`;
-  if (k === 2) return (v === 'jNS' || v === 'jEW') ? `a straight: ${w.join('-')}` : `a corner: joins ${w.join(' and ')}`;
-  const open = Object.keys(SIDE_WORD).find(c => !sides.includes(c));
-  return `a T, or the ${SIDE_WORD[open]} edge of a wide area`;
+// --- The board: put tiles down one by one, to see how they build up ----------------------------------------------
+// An 11 x 15 screen. Each square takes a ground picture and one on top (a fence, a wall, an
+// object, a roof: its transparent pixels show the ground). Place puts down exactly the tile and
+// variant you're on; Edit jumps to the picture on a square. Kept on the phone.
+const BOARD_KEY = 'zombie-tile-board', BW = CONFIG.screen.w, BH = CONFIG.screen.h;
+let board = null, boardTool = 'place', boardT = 32;
+function loadBoard() {
+  try { const b = JSON.parse(localStorage.getItem(BOARD_KEY)); if (b && Array.isArray(b.cells) && b.cells.length === BW * BH) return b; } catch (e) { /* a new one */ }
+  return { cells: Array.from({ length: BW * BH }, () => ({ g: null, t: null })) };
 }
-// A small picture of a piece: its art if drawn, else which sides join.
-function pieceIcon(v) {
-  const c = document.createElement('canvas'); c.width = 24; c.height = 24; c.style.cssText = 'width:24px;height:24px;image-rendering:pixelated;display:block';
+const saveBoard = () => { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); } catch (e) { /* not kept */ } };
+// A stamp is [tile id, variant, version]. Undrawn pictures show the tile's name on grey.
+function drawStamp(g, st, x, y, t) {
+  const [id, v, k] = st, it = items.find(q => q.id === id);
+  if (!it) return;
+  const turned = v === 'turned', tw = (turned ? it.h : it.w), th = (turned ? it.w : it.h);
+  const text = art.tiles[id] && art.tiles[id].variants[v] && art.tiles[id].variants[v][k];
+  if (text) {
+    const w = tw * PX, h = th * PX, px = decode(text, w * h), sc = t / PX;
+    for (let i = 0; i < w * h; i++) { if (px[i] < 0) continue; g.fillStyle = art.palette[px[i]]; g.fillRect(x * t + (i % w) * sc, y * t + ((i / w) | 0) * sc, Math.ceil(sc), Math.ceil(sc)); }
+  } else {
+    g.fillStyle = '#555'; g.fillRect(x * t + 2, y * t + 2, tw * t - 4, th * t - 4);
+    g.fillStyle = '#ddd'; g.font = `bold ${Math.floor(t * 0.28)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(it.name.slice(0, 8), x * t + (tw * t) / 2, y * t + (th * t) / 2);
+  }
+}
+function drawBoard() {
+  const c = $('boardCanvas'), box = $('boardStage').getBoundingClientRect();
+  boardT = Math.max(8, Math.floor(Math.min(box.width / BW, box.height / BH)));
+  const t = boardT; c.width = BW * t; c.height = BH * t; c.style.width = c.width + 'px'; c.style.height = c.height + 'px';
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  const list = versions(v);
-  if (list.length) { const px = decode(list[0], PX * PX); g.fillStyle = '#2a2a2a'; g.fillRect(0, 0, 24, 24); paint(g, px, PX, PX, 1.5); return c; }
-  g.fillStyle = '#333'; g.fillRect(0, 0, 24, 24);
-  g.fillStyle = '#777';
-  if (v.startsWith('i')) {
-    g.fillRect(0, 0, 24, 24); g.fillStyle = '#333';
-    const cx = v.includes('E') ? 18 : 0, cy = v.includes('S') ? 18 : 0; g.fillRect(cx, cy, 6, 6);
-    return c;
-  }
-  const m = pieceMask(v);
-  g.fillRect(8, 8, 8, 8);
-  if (m & 1) g.fillRect(8, 0, 8, 8);
-  if (m & 2) g.fillRect(16, 8, 8, 8);
-  if (m & 4) g.fillRect(8, 16, 8, 8);
-  if (m & 8) g.fillRect(0, 8, 8, 8);
-  return c;
+  g.fillStyle = '#161616'; g.fillRect(0, 0, c.width, c.height);
+  board.cells.forEach((cell, i) => { if (cell.g) drawStamp(g, cell.g, i % BW, (i / BW) | 0, t); });
+  board.cells.forEach((cell, i) => { if (cell.t) drawStamp(g, cell.t, i % BW, (i / BW) | 0, t); });
+  g.fillStyle = 'rgba(255,255,255,0.07)';
+  for (let x = 1; x < BW; x++) g.fillRect(x * t, 0, 1, BH * t);
+  for (let y = 1; y < BH; y++) g.fillRect(0, y * t, BW * t, 1);
 }
-function toggleConnect() {
-  const it = item();
-  if (!art.tiles[it.id]) art.tiles[it.id] = { w: 1, h: 1, variants: {} };
-  const t = art.tiles[it.id];
-  snapshot();
-  if (t.connect) { delete t.connect; if (!Object.keys(t.variants).length) delete art.tiles[it.id]; variant = 0; say('Joins up: off. One picture again.'); }
-  else {
-    t.connect = true;
-    // Start the middle piece from the plain picture, if there is one.
-    const plain = t.variants[it.variants[0]];
-    if (plain && plain.length && !(t.variants.jNESW && t.variants.jNESW.length)) t.variants.jNESW = plain.slice();
-    variant = 0; say('Joins up: draw the middle first, then the edges and ends.');
-  }
-  version = 0; save(); refresh();
-}
-// Fills the empty pieces you get by turning this one (an end north makes the ends east, south
-// and west; a corner makes the other corners).
-function turnCopies() {
-  const v = vname(), list = versions(v);
-  if (!list.length) return say('Draw this piece first.');
-  snapshot();
-  const t = art.tiles[item().id];
-  const turns = [];
-  let px = list.map(x => decode(x, PX * PX)), name = v;
-  for (let k = 0; k < 3; k++) { name = turnPiece(name); px = px.map(p => turnPixels(p, PX)); if (name !== v && !turns.some(q => q[0] === name)) turns.push([name, px]); }
-  const empty = turns.filter(([n]) => !(t.variants[n] && t.variants[n].length));
-  const todo = empty.length ? empty : turns.length && confirm('The turned pieces are drawn already. Replace them with this one turned?') ? turns : [];
-  for (const [n, p2] of todo) t.variants[n] = p2.map(encode);
-  const made = todo.length;
-  save(); refresh();
-  say(made ? `Made ${made} turned piece${made > 1 ? 's' : ''}. Check them: light from the top won't turn.` : 'Nothing turned.');
-}
-function fillEmpty() {
-  const list = versions();
-  if (!list.length) return say('Draw this piece first.');
-  snapshot();
-  const t = art.tiles[item().id];
-  let made = 0;
-  for (const v of PIECES) if (!(t.variants[v] && t.variants[v].length)) { t.variants[v] = list.slice(); made++; }
-  save(); refresh(); say(made ? `Copied into ${made} empty pieces: now change their edges.` : 'Every piece is drawn.');
-}
-
-// --- Try it: a screen to paint with your tiles, to see how they work together ---------------------------------
-// Drawn the way the game will draw them: art where there is some (pieces that join up picked by
-// their neighbours), else the game's current look.
-const TRY_KEY = 'zombie-tile-try';
-let tryMap = null, tryTool = 'paint';
-function loadTry() {
-  try { const t = localStorage.getItem(TRY_KEY); if (t) return parseMap(t); } catch (e) { /* a fresh one */ }
-  return createMap(1, 1);
-}
-const saveTry = () => { try { localStorage.setItem(TRY_KEY, serializeMap(tryMap)); } catch (e) { /* not kept */ } };
-const tryCv = () => $('tryCanvas');
-let tryT = 32;
-function tryJoins(layer, m, i, j) {
-  const a = m[layer][i], b = m[layer][j];
-  if (layer !== 'struct') return a === b;
-  const ia = STRUCT[a][3], ib = STRUCT[b][3];
-  return a === b || (ia.wall && (ib.wall || ib.opening)) || (ia.fence && (ib.fence || STRUCT[b][1] === 'GATE'));
-}
-const sameFn = (layer, x, y) => (dx, dy) => {
-  const nx = x + dx, ny = y + dy, m = tryMap;
-  if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) return layer !== 'roof';
-  return tryJoins(layer, m, y * m.w + x, ny * m.w + nx);
-};
-function variantFor(id, layer, x, y) {
-  const it = items.find(q => q.id === id); if (!it) return 'main';
-  if (layer === 'roof') return y + 1 < tryMap.h && tryMap.roof[(y + 1) * tryMap.w + x] ? 'middle' : 'edge (eaves)';
-  if (it.variants.includes('north-south')) { const s = sameFn(layer, x, y); return (s(0, -1) || s(0, 1)) && !(s(-1, 0) || s(1, 0)) ? 'north-south' : 'east-west'; }
-  if (it.variants.length > 1 && /wall/.test(it.variants[1])) { const s = sameFn(layer, x, y); return (s(0, -1) && s(0, 1)) ? it.variants[1] : it.variants[0]; }
-  return it.variants[0];
-}
-function drawTry() {
-  const c = tryCv(), m = tryMap, box = $('tryStage').getBoundingClientRect();
-  tryT = Math.max(8, Math.floor(Math.min(box.width / m.w, box.height / m.h)));
-  c.width = m.w * tryT; c.height = m.h * tryT; c.style.width = c.width + 'px'; c.style.height = c.height + 'px';
-  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  const t = tryT;
-  const src = { w: m.w, h: m.h, height: null, struct: m.struct, roof: m.roof, tileAt: (x, y) => groundTile(m.ground[y * m.w + x]) };
-  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
-    const i = y * m.w + x, px = x * t, py = y * t;
-    const gid = `ground:${GROUND[m.ground[i]][1]}`;
-    if (!drawTileArt(g, gid, 'main', x, y, px, py, t, t, false, sameFn('ground', x, y))) drawTile(g, src, groundTile(m.ground[i]), x, y, px, py, t, false);
-    const st = m.struct[i];
-    if (st) {
-      const sid = `struct:${STRUCT[st][1]}`;
-      if (!drawTileArt(g, sid, variantFor(sid, 'struct', x, y), x, y, px, py, t, t, false, sameFn('struct', x, y))) drawHeightAndStruct(g, src, x, y, px, py, t, false);
-    }
-  }
-  for (const o of m.objects) {
-    const oid = `object:${OBJECT[o.kind][1]}`, turned = o.w !== OBJECT[o.kind][3].w || o.h !== OBJECT[o.kind][3].h;
-    if (!drawTileArt(g, oid, turned ? 'turned' : 'main', o.x, o.y, o.x * t, o.y * t, o.w * t, o.h * t, false, null)) drawObject(g, o, o.x * t, o.y * t, t, false);
-  }
-  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
-    const r = m.roof[y * m.w + x];
-    if (!r) continue;
-    const rid = `roof:${ROOF[r][1]}`;
-    if (!drawTileArt(g, rid, variantFor(rid, 'roof', x, y), x, y, x * t, y * t, t, t, false, sameFn('roof', x, y))) drawRoofTile(g, src, x, y, x * t, y * t, t, false);
-  }
-  g.fillStyle = 'rgba(255,255,255,0.06)';
-  for (let x = 1; x < m.w; x++) g.fillRect(x * t, 0, 1, m.h * t);
-  for (let y = 1; y < m.h; y++) g.fillRect(0, y * t, m.w * t, 1);
-}
-function tryBar() {
-  const el = $('tryBar'); el.innerHTML = '';
+function boardBar() {
+  const el = $('boardBar'); el.innerHTML = '';
   const add = (label, on, fn) => { const b = document.createElement('button'); b.textContent = label; if (on) b.className = 'on'; b.onclick = fn; el.append(b); };
-  add(`Paint: ${item().name}`, tryTool === 'paint', () => { tryTool = 'paint'; tryBar(); });
-  add('Erase', tryTool === 'erase', () => { tryTool = 'erase'; tryBar(); });
-  add('Edit a piece', tryTool === 'pick', () => { tryTool = 'pick'; tryBar(); });
-  add('Clear', false, () => { if (confirm('Clear the board?')) { tryMap = createMap(1, 1); saveTry(); drawTry(); } });
-  add('Done', true, () => { $('try').style.display = 'none'; refresh(); });
+  add(`Place: ${item().name}${vlist().length > 1 || version ? ` (${vname()}${version ? ' ' + (version + 1) : ''})` : ''}`, boardTool === 'place', () => { boardTool = 'place'; boardBar(); });
+  add('Erase', boardTool === 'erase', () => { boardTool = 'erase'; boardBar(); });
+  add('Edit', boardTool === 'edit', () => { boardTool = 'edit'; boardBar(); });
+  add('Clear', false, () => { if (confirm('Clear the board?')) { board = loadBoard(); board.cells.forEach(c => { c.g = null; c.t = null; }); saveBoard(); drawBoard(); } });
+  add('Done', true, () => { $('board').style.display = 'none'; refresh(); });
 }
-function openTry() {
-  if (!tryMap) tryMap = loadTry();
-  tryTool = 'paint';
-  $('try').style.display = 'flex';
-  tryBar(); drawTry();
-  $('tryHint').textContent = 'Paint with the tile you were on (go back and pick another to mix them). Edit a piece: tap a square to draw the piece it uses.';
+function openBoard() {
+  if (!board) board = loadBoard();
+  boardTool = 'place';
+  $('board').style.display = 'flex';
+  boardBar(); drawBoard();
 }
-function tryCell(ev) { const r = tryCv().getBoundingClientRect(); return { x: Math.floor((ev.clientX - r.left) / tryT), y: Math.floor((ev.clientY - r.top) / tryT) }; }
-function tryAt(p, first) {
-  const m = tryMap, it = item();
-  if (p.x < 0 || p.y < 0 || p.x >= m.w || p.y >= m.h) return;
-  const i = p.y * m.w + p.x;
-  const [layer, key] = it.id.split(':');
-  if (tryTool === 'erase') {
-    const o = objectAt(m, p.x, p.y);
-    if (o) removeObject(m, o); else if (m.roof[i]) m.roof[i] = 0; else if (m.struct[i]) m.struct[i] = 0; else m.ground[i] = 0;
-  } else if (tryTool === 'pick') {
+function boardAt(ev, first) {
+  const r = $('boardCanvas').getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / boardT), y = Math.floor((ev.clientY - r.top) / boardT);
+  if (x < 0 || y < 0 || x >= BW || y >= BH) return;
+  const cell = board.cells[y * BW + x], it = item();
+  if (boardTool === 'edit') {
     if (!first) return;
-    const o = objectAt(m, p.x, p.y);
-    let id, v, k = 0;
-    const pickOf = (lay, name) => {
-      id = `${lay}:${name}`;
-      if (art.tiles[id] && art.tiles[id].connect) { const pc = pieceAt(id, p.x, p.y, sameFn(lay, p.x, p.y)); v = pc.wanted; k = pc.piece === pc.wanted ? pc.version : 0; }
-      else { v = variantFor(id, lay, p.x, p.y); const n = (art.tiles[id] && art.tiles[id].variants[v] || []).length; k = versionAt(n, p.x, p.y); }
-    };
-    if (m.roof[i]) pickOf('roof', ROOF[m.roof[i]][1]);
-    else if (o) { id = `object:${OBJECT[o.kind][1]}`; v = o.w !== OBJECT[o.kind][3].w ? 'turned' : 'main'; const n = (art.tiles[id] && art.tiles[id].variants[v] || []).length; k = versionAt(n, o.x, o.y); }
-    else if (m.struct[i]) pickOf('struct', STRUCT[m.struct[i]][1]);
-    else pickOf('ground', GROUND[m.ground[i]][1]);
-    const n = items.findIndex(q => q.id === id);
-    if (n < 0) return;
-    $('try').style.display = 'none';
+    // The stamp on top, or one reaching over this square from up and left (a big object).
+    let st = cell.t || cell.g;
+    for (let i = 0; i < board.cells.length && !cell.t; i++) {
+      const s2 = board.cells[i].t; if (!s2) continue;
+      const o = items.find(q => q.id === s2[0]); if (!o) continue;
+      const ox = i % BW, oy = (i / BW) | 0, turned = s2[1] === 'turned', w = turned ? o.h : o.w, h = turned ? o.w : o.h;
+      if (x >= ox && x < ox + w && y >= oy && y < oy + h) st = s2;
+    }
+    if (!st) return say('Nothing there.');
+    const n = items.findIndex(q => q.id === st[0]); if (n < 0) return;
+    $('board').style.display = 'none';
     index = n; zoom = 1; pan = { x: 0, y: 0 };
-    variant = Math.max(0, vlist().indexOf(v)); version = k;
-    refresh(); say(`${item().name}: ${connected() ? pieceLabel(vname()) : vname()}${versions().length > 1 ? `, version #${version + 1}` : ''}.`);
+    variant = Math.max(0, vlist().indexOf(st[1])); version = st[2] || 0; refresh();
     return;
-  } else if (layer === 'ground') m.ground[i] = G[key];
-  else if (layer === 'struct') m.struct[i] = S[key];
-  else if (layer === 'roof') m.roof[i] = ROOF.findIndex(e => e[1] === key);
-  else if (layer === 'object') {
-    if (!first) return;
-    const info = OBJECT[O[key]][3];
-    const w = info.w, h = info.h, x = Math.min(p.x, m.w - w), y = Math.min(p.y, m.h - h);
-    for (const o of m.objects.slice()) if (o.x < x + w && x < o.x + o.w && o.y < y + h && y < o.y + o.h) removeObject(m, o);
-    placeObject(m, { kind: O[key], x, y, w, h, ...(info.text ? { text: 'DINER' } : {}) });
-  } else { if (first) say('Only ground, structures, objects and roofs go on the board.'); return; }
-  drawTry();
+  }
+  if (boardTool === 'erase') { if (cell.t) cell.t = null; else cell.g = null; }
+  else {
+    if (!first && (it.w > 1 || it.h > 1)) return;   // big things: one per tap
+    if (!/^(ground|struct|object|roof|creature|item):/.test(it.id) || it.id === 'height:cliff') { if (first) say("The cliff goes on the map's height, not the board."); return; }
+    const st = [it.id, vname(), version];
+    if (it.id.startsWith('ground:')) cell.g = st; else cell.t = st;
+  }
+  drawBoard();
 }
-let tryDown = false;
-$('tryCanvas').addEventListener('pointerdown', ev => { $('tryCanvas').setPointerCapture(ev.pointerId); tryDown = true; tryAt(tryCell(ev), true); });
-$('tryCanvas').addEventListener('pointermove', ev => { if (tryDown) tryAt(tryCell(ev), false); });
-const tryUp = () => { if (tryDown) { tryDown = false; saveTry(); } };
-$('tryCanvas').addEventListener('pointerup', tryUp);
-$('tryCanvas').addEventListener('pointercancel', tryUp);
-$('tryOpen').onclick = () => { $('menu').style.display = 'none'; openTry(); };
+let boardDown = false;
+$('boardCanvas').addEventListener('pointerdown', ev => { $('boardCanvas').setPointerCapture(ev.pointerId); boardDown = true; boardAt(ev, true); });
+$('boardCanvas').addEventListener('pointermove', ev => { if (boardDown) boardAt(ev, false); });
+const boardUp = () => { if (boardDown) { boardDown = false; saveBoard(); } };
+$('boardCanvas').addEventListener('pointerup', boardUp);
+$('boardCanvas').addEventListener('pointercancel', boardUp);
+$('boardBtn').onclick = openBoard;
 
-window.addEventListener('resize', () => { refresh(); if ($('try').style.display === 'flex') drawTry(); });
+window.addEventListener('resize', () => { refresh(); if ($('board').style.display === 'flex') drawBoard(); });
 buildPalette(); buildTools(); refresh();

@@ -40,27 +40,26 @@
     #kindForm input[type=number] { width: 56px; height: 34px; font: inherit; }
     #kindForm { position: fixed; z-index: 6; }
     #kindRow { display: none; }
-    #try { position: fixed; inset: 0; background: #0a0a0a; z-index: 7; display: none; flex-direction: column; }
-    #tryStage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    #tryCanvas { touch-action: none; image-rendering: pixelated; }
-    #tryHint { padding: 6px 8px; color: #aab; font-size: 12px; background: #181818; }
+    #board { position: fixed; inset: 0; background: #0a0a0a; z-index: 7; display: none; flex-direction: column; }
+    #boardStage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #boardCanvas { touch-action: none; image-rendering: pixelated; }
+    #boardHint { padding: 6px 8px; color: #aab; font-size: 12px; background: #181818; }
     #menu textarea { width: 100%; height: 120px; font: 11px monospace; box-sizing: border-box; }
   </style>
 </head>
 <body>
   <div id="app">
     <div class="row">
-      <button id="prev">◀</button><button id="title">Pick a tile</button><button id="next">▶</button><button id="nextTodo">Next to do</button><button id="newKind">+ New</button>
+      <button id="prev">◀</button><button id="title">Pick a tile</button><button id="next">▶</button><button id="listBtn">List</button><button id="boardBtn">Board</button>
     </div>
     <div id="info"></div>
     <div class="row" id="kindRow"><button id="editKind">Edit this kind</button><span id="kindNote" style="color:#aab;font-size:12px"></span></div>
-    <div class="row" id="connRow" style="display:none"></div>
     <div class="row" id="variants"></div>
-    <div class="row" id="versions"></div>
     <div id="stage"><canvas id="edit"></canvas><div id="status"></div>
       <div id="list"></div>
       <div id="kindForm"></div>
-      <div id="try"><div class="row" id="tryBar"></div><div id="tryStage"><canvas id="tryCanvas"></canvas></div><div id="tryHint"></div></div>
+      <div id="board"><div class="row" id="boardBar"></div><div id="boardStage"><canvas id="boardCanvas"></canvas></div>
+        <div id="boardHint">Place puts down the tile and variant you were on: go back, pick another, and place again to build up a scene. Ground goes under; anything else goes on top.</div></div>
       <div id="menu">
         <h2>Tile art</h2>
         <div class="grp"><p>This tile:</p>
@@ -70,24 +69,16 @@
           <button id="flipH">Flip ↔</button><button id="flipV">Flip ↕</button></div>
         <div class="grp"><p>Colours: bright red, black and white only (and transparent).</p>
           <button id="grid">Grid on/off</button></div>
-        <div class="grp"><p>New kinds: <b>+ New</b> makes a new ground, structure, object or roof, with its own rules (does it block
+        <div class="grp"><p>New kinds: <b>+ New tile or object</b> (also in the List) makes a new ground, structure, object or roof, with its own rules (does it block
           walking? sight? loud underfoot?). It goes in the map editor's lists and works in the game. They travel inside the art text.</p>
           <button id="newKind2">+ New tile or object</button></div>
-        <div class="grp"><p>Joins up (ground, structures, roofs): a road, path, fence or field that changes with its neighbours.
-          Instead of one picture it has 16 pieces (on its own, ends, straights, corners, Ts, a crossing, the edges and middle of a
-          wide area) and 4 inner corners drawn over the inside of a bend. Draw the middle first; Turn copies makes the
-          other three of an end or a corner by turning it; Fill empty pieces copies this one into the rest to change.</p>
-          <p>Try it: paint a whole screen with your tiles (mix them: paint with one, go to another, paint again) and see them
-          the way the game draws them. Edit a piece: tap a square to draw the exact piece it uses.</p>
-          <button id="tryOpen">Try it</button></div>
         <div class="grp"><p>All the art, as text (to put in the game: art/tiles.json):</p>
           <button id="copy">Copy art</button> <button id="paste">Paste art</button> <button id="download">Download file</button>
           <textarea id="text" spellcheck="false" placeholder="Paste art here, then tap Paste art."></textarea></div>
         <div class="grp"><p>Pencil draws, Fill floods, Line and Rect drag out shapes, Pick copies a colour, Mirror draws both
           halves at once. The previews show the tile at size, tiled 3 x 3 (do the edges meet?), in grey (how it looks
           remembered, out of sight) and on grass. One finger draws; + and − zoom; two fingers move the picture.</p>
-          <p>Versions: Duplicate makes another version of the tile (#2, #3...) to change a little, so a field of grass or a
-          row of fences doesn't repeat. The game picks one for each spot, the same one every time. The tiled preview mixes them.</p></div>
+          <p><b>List</b>: every tile to make, ticked off as you draw them (and + New tile or object). <b>+ Variant</b> adds another picture of the tile you're on (a corner, an end, a worn patch), starting as a copy. <b>Board</b>: put tiles down one by one, exactly the variant you choose, to see how they build up.</p></div>
         <button id="close" class="on">Done</button>
       </div>
     </div>

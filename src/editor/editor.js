@@ -275,12 +275,11 @@ function draw() {
   const px = x => x * t - view.ox, py = y => y * t - view.oy;
   const src = { w: map.w, h: map.h, height: shown.height ? map.height : null, struct: shown.struct ? map.struct : null, roof: map.roof };
   const detail = t >= 7;
-  const groundSrc = { w: map.w, h: map.h, tileAt: (x, y) => groundTile(map.ground[y * map.w + x]) };   // neighbours, for pieces that join up
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const i = y * map.w + x;
       if (shown.ground) {
-        if (detail) drawTile(ctx, groundSrc, groundTile(map.ground[i]), x, y, px(x), py(y), t, false);
+        if (detail) drawTile(ctx, null, groundTile(map.ground[i]), x, y, px(x), py(y), t, false);
         else { ctx.fillStyle = simpleColour(map.ground[i]); ctx.fillRect(px(x), py(y), t, t); }
       } else { ctx.fillStyle = '#1a1a1a'; ctx.fillRect(px(x), py(y), t, t); }
       if (detail) drawHeightAndStruct(ctx, src, x, y, px(x), py(y), t, false);
