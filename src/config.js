@@ -120,6 +120,10 @@ export const CONFIG = {
     radiusByLevel: [0, 4, 8, 12],
     wallCost: 3,
     minStrengthToHear: [Infinity, 3, 2, 1], // by hearing 0-3: the faintest strength still heard
+    // Footsteps on a loud surface (gravel, dead leaves, a stream, a dock) carry further; on a quiet
+    // one (moss, pine needles, carpet) less far. Added to the footstep's starting strength; it's
+    // still a footstep (level 1), so it never distracts.
+    surfaceStep: { loud: 3, quiet: -2 },
   },
 
   vision: {
@@ -178,15 +182,23 @@ export const CONFIG = {
       METAL: ['#9aa2a8', '#7e868c'],
       window: ['#9ccbe8', '#ece8e0'], door: ['#6a3a1a', '#d9c060'], ridge: ['#2a2e33', '#6a5a50'],
       sign: ['#1e3a2a', '#f0e8c0'],
-      GRAVEL: ['#9a948a', '#b4aea2'],
+      GRAVEL: ['#9a948a', '#b4aea2'], MEADOW: ['#7a9a4a', '#a0b860'], CRACKED: ['#3a3b40', '#5a5b60'],
+      NEEDLES: ['#7a5a3a', '#94704a'], LEAVES: ['#a8642a', '#d08a30'], MOSS: ['#4a7a3a', '#5e9448'],
+      GRANITE: ['#a09a94', '#86807a'], MUD: ['#5e4a34', '#4a3a28'], CORN: ['#c8b048', '#5a8a2a'],
+      PUMPKINS: ['#5d7a3c', '#e07a20'], BLUEBERRY: ['#6a5a6a', '#3a4a9a'], STREAM: ['#4a7ab8', '#9a948a'],
+      LINO: ['#c8c0a0', '#a8a080'], CARPET: ['#7a3a3a', '#8a4a44'], CHECKER: ['#e8e8e0', '#2a2a2a'],
+      CONCRETE: ['#a8a8a2', '#94948e'], FLOORWOOD: ['#8a6a44', '#6e5234'],
     },
     // Editor-map layers (render/layers.js).
     layers: {
-      cliff: ['#7a6a58', '#4a3e32'], wall: ['#c9b48e', '#9a8a6a'], door: ['#7a4a22', '#d9c060'], fence: '#e4e4dc',
+      cliff: ['#7a6a58', '#4a3e32'], wall: ['#c9b48e', '#9a8a6a'],
+      walls: { plaster: ['#d8ccb0', '#b0a488'], clapboard: ['#ece8dc', '#b8b4a8'], log: ['#8a5e34', '#5e3e20'],
+        brick: ['#a8463a', '#7a2e24'], cinder: ['#a8a8a2', '#7e7e78'], barn: ['#a83a2a', '#7a2618'] }, door: ['#7a4a22', '#d9c060'], fence: '#e4e4dc',
       hedge: ['#2a4d22', '#376330'], bridge: ['#a8845a', '#7a5a3a'], steps: ['#b0a898', '#7a7266'], ledge: '#8a7a62',
       car: '#b8312f', van: '#e2e2dc', glass: '#7ab0d0', tree: ['#1e4418', '#4e7a32'], bench: '#8a5a30',
       crate: ['#b08850', '#6a4a22'], fishing: '#e8f0ff',
-      roofs: [null, ['#a84a3a', '#7a3428'], ['#5c636b', '#3e444b'], ['#7a5a3a', '#54402a'], ['#4a7a4a', '#2e5a2e']],
+      roofs: [null, ['#a84a3a', '#7a3428'], ['#5c636b', '#3e444b'], ['#7a5a3a', '#54402a'], ['#4a7a4a', '#2e5a2e'],
+        ['#9aa2a8', '#6e767c'], ['#e8e8e0', '#b0b0a8']],
     },
     noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
     heart: '#e0303a',

@@ -21,7 +21,11 @@
     canvas { display: block; touch-action: none; width: 100%; height: 100%; }
     #status { position: absolute; left: 6px; right: 6px; top: 6px; padding: 6px 8px; border-radius: 6px; background: #000c;
       color: #ffdd33; font-weight: 600; pointer-events: none; display: none; }
-    #info { position: absolute; right: 6px; bottom: 6px; padding: 3px 6px; border-radius: 4px; background: #000a; color: #999; pointer-events: none; font-size: 11px; }
+    #info { position: absolute; right: 6px; bottom: 30px; padding: 3px 6px; border-radius: 4px; background: #000a; color: #999; pointer-events: none; font-size: 11px; }
+    #hint { position: absolute; left: 0; right: 0; bottom: 0; padding: 5px 8px; background: #000c; color: #ddd; pointer-events: none; font-size: 12px; }
+    #float { position: absolute; right: 6px; top: 6px; display: flex; flex-direction: column; gap: 5px; z-index: 1; }
+    #float button { min-width: 42px; height: 42px; padding: 0; font-size: 18px; background: #222d; }
+    #status { right: 56px !important; }
     #menu { position: absolute; inset: 0; background: #0a1a66f2; padding: 12px; overflow-y: auto; display: none; z-index: 2; }
     #menu h2 { margin: 4px 0 10px; color: #ffdd33; font-size: 17px; }
     #menu .grp { margin: 0 0 14px; }
@@ -39,6 +43,12 @@
       <canvas id="map"></canvas>
       <div id="status"></div>
       <div id="info"></div>
+      <div id="hint"></div>
+      <div id="float">
+        <button id="undo" title="Undo">↶</button><button id="redo" title="Redo">↷</button>
+        <button id="zoomIn" title="Zoom in">+</button><button id="zoomOut" title="Zoom out">−</button>
+        <button id="fit" title="Fit the map">⤢</button><button id="menuBtn" title="Map menu">☰</button>
+      </div>
       <div id="menu">
         <h2>Map</h2>
         <div class="grp"><p>Size in screens (each 11 x 15, overlapping):</p>
@@ -50,11 +60,15 @@
           <textarea id="text" placeholder="Paste a map here, then tap Paste map." spellcheck="false"></textarea></div>
         <div class="grp"><p>Open a map from the game's maps folder:</p>
           maps/<input id="mapName" type="text" value="sample">.txt <button id="open">Open</button></div>
-        <div class="grp"><p><b>Painting:</b> tap or drag with one finger. Two fingers: pinch to zoom, drag to pan.
-          Pick a layer at the top (tap the eye to hide it), a brush and a tool at the bottom.
-          Rect fills a rectangle; Bldg draws a building's walls, floor and roof in one go (add a door after).
-          Height: raise and lower land; a cliff face is drawn wherever it changes. Steps join levels;
-          a ledge lets you hop down but not climb up.</p></div>
+        <div class="grp"><p><b>How it works.</b> Pick a layer at the top (the eye hides it), a brush and a tool at the bottom.
+          One finger paints; two fingers pinch to zoom and drag to look around (or use Hand).</p>
+          <p><b>Paint</b> tap or drag (size 1-3). <b>Line</b> a straight run: walls, fences, roads. <b>Rect</b> a filled rectangle.
+          <b>Box</b> just its outline. <b>Fill</b> floods the area you tap. <b>Bldg</b> drag a rectangle for a whole building:
+          walls, floor, roof, a front door facing south and windows; pick House, Cabin, Store, Diner, Barn, Garage, Mill,
+          Church or Shed, or Demolish to clear one. <b>Pick</b> copies what's on a tile. <b>Erase</b> clears the layer.</p>
+          <p>Objects: tap to place; drag one to move it; tap a sign or a label to change its words. Turn rotates them.</p>
+          <p>Height: a cliff face is drawn wherever the ground changes level. Steps join levels; a ledge lets you hop down
+          but not climb back up. Roofs go see-through while you work on what's under them.</p></div>
         <button id="close" class="on">Done</button>
       </div>
     </div>

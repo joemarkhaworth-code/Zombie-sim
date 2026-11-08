@@ -107,10 +107,13 @@ function populateTown(world, start) {
   }
 }
 
-// An editor map: a zombie on each zombie-spawn marker; items scattered by the run seed, none on
-// the screen you start on.
+// An editor map: a zombie on each zombie-spawn marker, an item on each loot spot; more items
+// scattered by the run seed, none on the screen you start on. (Key-item, blocked-road and NPC
+// spots wait for their steps.)
 function populateFileMap(world, fileMap) {
   for (const m of fileMap.markers) if (m.kind === M.ZOMBIE && !tileBlocks(world, m.x, m.y)) makeZombie(world, m.x, m.y);
+  // A loot spot always has something on it (what, the run seed decides).
+  for (const m of fileMap.markers) if (m.kind === M.LOOT && !tileBlocks(world, m.x, m.y)) makeItem(world, CONFIG.world.itemTypes[world.rng.int(CONFIG.world.itemTypes.length)], m.x, m.y);
   const cfg = CONFIG.world, rng = world.rng, homeRect = cameraRect(world);
   for (let sy = 0; sy < world.screensY; sy++) {
     for (let sx = 0; sx < world.screensX; sx++) {

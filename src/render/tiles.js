@@ -47,8 +47,59 @@ export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
   const u = t / 8;
   switch (key) {
     case 'FLOOR': {
-      const c = mem ? [grey(CONFIG.colours.floor), grey(CONFIG.colours.floorMark)] : [CONFIG.colours.floor, CONFIG.colours.floorMark];
-      rect(ctx, c[0], px, py, t, t); rect(ctx, c[1], px + t / 2, py + t / 2, 2, 2); return;
+      // Wood floor: planks.
+      const [fb, fm] = pal('FLOORWOOD', mem);
+      rect(ctx, fb, px, py, t, t);
+      for (let k = 1; k < 4; k++) rect(ctx, fm, px, py + (k * t) / 4, t, 1);
+      rect(ctx, fm, px + ((x + y) & 1 ? t * 0.3 : t * 0.7), py, 1, t);
+      return;
+    }
+    case 'MEADOW': {
+      rect(ctx, base, px, py, t, t);
+      for (let k = 0; k < 4; k++) rect(ctx, mark, px + ((h >> (k * 3)) & 7) * u + 1, py + ((h >> (k * 3 + 9)) & 3) * u * 2 + u, 1, u * 2);
+      return;
+    }
+    case 'CRACKED': {
+      rect(ctx, base, px, py, t, t);
+      ctx.strokeStyle = mark; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(px + ((h & 7) + 1) * u * 0.8, py); ctx.lineTo(px + t * 0.5, py + t * 0.5); ctx.lineTo(px + (((h >> 3) & 7) + 1) * u * 0.8, py + t);
+      ctx.stroke();
+      return;
+    }
+    case 'NEEDLES': case 'LEAVES': case 'MOSS': case 'PUMPKINS': case 'BLUEBERRY': case 'CARPET': {
+      rect(ctx, base, px, py, t, t);
+      const n = key === 'PUMPKINS' ? 2 : key === 'CARPET' ? 3 : 5;
+      const sz = key === 'PUMPKINS' ? t * 0.28 : key === 'MOSS' ? t * 0.22 : key === 'CARPET' ? 1 : 3;
+      for (let k = 0; k < n; k++) {
+        const ox2 = ((h >> (k * 4)) & 15) / 16, oy2 = ((h >> (k * 4 + 2)) & 15) / 16;
+        if (key === 'NEEDLES') rect(ctx, mark, px + ox2 * t, py + oy2 * t, u * 1.5, 1);
+        else rect(ctx, mark, px + ox2 * (t - sz), py + oy2 * (t - sz), sz, sz);
+      }
+      return;
+    }
+    case 'GRANITE': case 'MUD': case 'CONCRETE': case 'LINO': {
+      rect(ctx, base, px, py, t, t);
+      if (key === 'GRANITE') { rect(ctx, mark, px + ((h & 7) + 1) * u * 0.7, py + (((h >> 3) & 7) + 1) * u * 0.7, 2, 2); rect(ctx, mark, px + t * 0.2, py + t * 0.6, t * 0.5, 1); }
+      if (key === 'MUD') { ctx.fillStyle = mark; ctx.beginPath(); ctx.ellipse(px + t * 0.5, py + t * 0.55, t * 0.28, t * 0.14, 0, 0, Math.PI * 2); ctx.fill(); }
+      if (key === 'CONCRETE') { rect(ctx, mark, px, py, t, 1); rect(ctx, mark, px, py, 1, t); }
+      if (key === 'LINO') { rect(ctx, mark, px + t / 2, py, 1, t); rect(ctx, mark, px, py + t / 2, t, 1); }
+      return;
+    }
+    case 'CORN': {
+      rect(ctx, base, px, py, t, t);
+      for (let k = 0; k < 3; k++) rect(ctx, mark, px + (k + 0.5) * t / 3 - 1, py + 2, 2, t - 4);
+      return;
+    }
+    case 'CHECKER': {
+      rect(ctx, base, px, py, t, t);
+      rect(ctx, mark, px, py, t / 2, t / 2); rect(ctx, mark, px + t / 2, py + t / 2, t / 2, t / 2);
+      return;
+    }
+    case 'STREAM': {
+      rect(ctx, base, px, py, t, t);
+      ctx.fillStyle = mark;
+      for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.ellipse(px + (((h >> (k * 4)) & 15) / 16) * t, py + (((h >> (k * 4 + 2)) & 15) / 16) * t, t * 0.12, t * 0.09, 0, 0, Math.PI * 2); ctx.fill(); }
+      return;
     }
     case 'WALL': case 'RUIN': case 'LOWWALL': case 'PARAPET': {
       const c = key === 'WALL' && !COL.WALL ? (mem ? [grey(CONFIG.colours.wall), grey(CONFIG.colours.wallMark)] : [CONFIG.colours.wall, CONFIG.colours.wallMark]) : [base, mark];

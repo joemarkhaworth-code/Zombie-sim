@@ -13,42 +13,117 @@ import { CONFIG } from '../config.js';
 import { TILE } from './tiles.js';
 
 // [char, key, label]. Ground keys are tile keys (tiles.js), so the game's tile rules and
-// drawing work on them unchanged.
+// drawing work on them unchanged. Characters are what the map text uses: never change one.
 export const GROUND = [
-  ['.', 'GRASS', 'grass'], ['=', 'ROAD', 'road'], ['-', 'PAVEMENT', 'sidewalk'], [':', 'PATH', 'path'],
-  [',', 'GRAVEL', 'gravel'], ['"', 'FIELD', 'field'], ['~', 'WATER', 'water'], ['_', 'FLOOR', 'floor'],
+  ['.', 'GRASS', 'grass'], ['L', 'GREEN', 'lawn'], ['M', 'MEADOW', 'meadow'],
+  ['=', 'ROAD', 'road'], ['c', 'CRACKED', 'cracked road'], ['d', 'TRACK', 'dirt road'], ['p', 'CARPARK', 'parking lot'],
+  ['r', 'DRIVE', 'driveway'], ['-', 'PAVEMENT', 'sidewalk'], [':', 'PATH', 'path'], [',', 'GRAVEL', 'gravel'],
+  ['n', 'NEEDLES', 'pine needles'], ['l', 'LEAVES', 'dead leaves'], ['o', 'MOSS', 'moss'], ['k', 'GRANITE', 'granite ledge'],
+  ['s', 'SAND', 'sand'], ['u', 'MUD', 'mud'], ['b', 'MARSH', 'bog'],
+  ['"', 'FIELD', 'hayfield'], ['C', 'CORN', 'cornfield'], ['P', 'PUMPKINS', 'pumpkins'], ['B', 'BLUEBERRY', 'blueberry barrens'],
+  ['#', 'BEDS', 'ploughed earth'],
+  ['R', 'STREAM', 'rocky stream'], ['w', 'SHALLOWS', 'shallow water'], ['~', 'WATER', 'deep water'],
+  ['_', 'FLOOR', 'wood floor'], ['i', 'LINO', 'linoleum'], ['a', 'CARPET', 'carpet'], ['t', 'CHECKER', 'diner tiles'],
+  ['x', 'CONCRETE', 'concrete'],
 ];
 // Structures: blocks movement, blocks sight (opaque), muffles noise, pass: walkable whatever
-// the ground (a bridge over water).
+// the ground (a bridge over water). wall: part of a building's wall (doors and windows go in
+// these); opening: a door, window or garage door (also counts as wall for its neighbours);
+// fence: a fence-like line a gate can go in. look: how it's drawn (render/layers.js).
+const WALL = { blocks: true, opaque: true, muffles: true, wall: true };
 export const STRUCT = [
   ['.', 'NONE', 'none', {}],
-  ['#', 'WALL', 'wall', { blocks: true, opaque: true, muffles: true }],
-  ['+', 'DOOR', 'door', { muffles: true, pass: true }],
-  ['|', 'FENCE', 'fence', { blocks: true }],
-  ['%', 'HEDGE', 'hedge', { blocks: true, opaque: true, muffles: true }],
-  ['H', 'BRIDGE', 'bridge', { pass: true }],
-  ['^', 'STEPS', 'steps', { pass: true }],
-  ['v', 'LEDGE', 'ledge', {}],
+  ['#', 'WALL', 'plaster wall', { ...WALL, look: 'wall', colour: 'plaster' }],
+  ['C', 'CLAPBOARD', 'clapboard wall', { ...WALL, look: 'wall', colour: 'clapboard' }],
+  ['L', 'LOG', 'log wall', { ...WALL, look: 'wall', colour: 'log' }],
+  ['K', 'BRICK', 'brick wall', { ...WALL, look: 'wall', colour: 'brick' }],
+  ['Y', 'CINDER', 'cinder block', { ...WALL, look: 'wall', colour: 'cinder' }],
+  ['A', 'BARN', 'barn boards', { ...WALL, look: 'wall', colour: 'barn' }],
+  ['W', 'WINDOW', 'window', { blocks: true, muffles: true, opening: true, look: 'window' }],
+  ['+', 'DOOR', 'door', { muffles: true, pass: true, opening: true, look: 'door' }],
+  ['G', 'GARAGEDOOR', 'garage door', { blocks: true, opaque: true, muffles: true, opening: true, look: 'garage' }],
+  ['S', 'STONEWALL', 'fieldstone wall', { blocks: true, fence: true, look: 'stonewall' }],
+  ['|', 'FENCE', 'split-rail fence', { blocks: true, fence: true, look: 'rail' }],
+  ['p', 'PICKET', 'picket fence', { blocks: true, fence: true, look: 'picket' }],
+  ['c', 'CHAINLINK', 'chain-link fence', { blocks: true, fence: true, look: 'chain' }],
+  ['b', 'BARBED', 'barbed wire', { blocks: true, fence: true, look: 'barbed' }],
+  ['f', 'BOARDFENCE', 'board fence', { blocks: true, opaque: true, fence: true, look: 'board' }],
+  ['g', 'GATE', 'gate', { pass: true, look: 'gate' }],
+  ['%', 'HEDGE', 'hedge', { blocks: true, opaque: true, muffles: true, fence: true, look: 'hedge' }],
+  ['u', 'GUARDRAIL', 'guardrail', { blocks: true, look: 'guard' }],
+  ['H', 'BRIDGE', 'bridge', { pass: true, look: 'bridge' }],
+  ['D', 'DOCK', 'dock', { pass: true, step: 'loud', look: 'dock' }],
+  ['T', 'TRACKS', 'railroad track', { step: 'loud', look: 'tracks' }],
+  ['^', 'STEPS', 'steps', { pass: true, look: 'steps' }],
+  ['v', 'LEDGE', 'ledge', { look: 'ledge' }],
 ];
-// Objects: footprint (w x h, turned by rot), blocks movement, blocks sight. A sign has text.
+// Objects: footprint (w x h, turned by rot), blocks movement, blocks sight, muffles noise; text
+// (a sign); look and colour for drawing (render/layers.js).
 export const OBJECT = [
   ['.', 'NONE', 'none', { w: 1, h: 1 }],
-  ['c', 'CAR', 'car', { w: 3, h: 2, blocks: true }],
-  ['v', 'VAN', 'van', { w: 4, h: 2, blocks: true, opaque: true }],
-  ['T', 'TREE', 'tree', { w: 1, h: 1, blocks: true, opaque: true, muffles: true }],
-  ['b', 'BENCH', 'bench', { w: 2, h: 1, blocks: true }],
-  ['x', 'CRATE', 'shelf/crate', { w: 1, h: 1, blocks: true }],
-  ['s', 'SIGN', 'sign', { w: 1, h: 1, blocks: true, text: true }],
-  ['f', 'FISHING', 'fishing spot', { w: 1, h: 1 }],
+  // Vehicles.
+  ['c', 'CAR', 'car', { w: 3, h: 2, blocks: true, look: 'vehicle', colour: '#b8312f' }],
+  ['p', 'PICKUP', 'pickup', { w: 3, h: 2, blocks: true, look: 'vehicle', colour: '#3a6a9a', bed: true }],
+  ['w', 'WAGON', 'station wagon', { w: 3, h: 2, blocks: true, look: 'vehicle', colour: '#8a6a3a', wood: true }],
+  ['v', 'VAN', 'van', { w: 4, h: 2, blocks: true, opaque: true, look: 'vehicle', colour: '#e2e2dc' }],
+  ['R', 'CAMPER', 'camper', { w: 4, h: 2, blocks: true, opaque: true, look: 'vehicle', colour: '#e8dcc0' }],
+  ['B', 'BUS', 'school bus', { w: 6, h: 2, blocks: true, opaque: true, look: 'vehicle', colour: '#e8b820' }],
+  ['L', 'LOGTRUCK', 'logging truck', { w: 5, h: 2, blocks: true, opaque: true, look: 'vehicle', colour: '#6a4a2a', logs: true }],
+  ['t', 'TRACTOR', 'tractor', { w: 3, h: 2, blocks: true, look: 'vehicle', colour: '#3a8a3a' }],
+  ['X', 'WRECK', 'wrecked car', { w: 3, h: 2, blocks: true, look: 'vehicle', colour: '#5a4a44', wreck: true }],
+  ['k', 'CANOE', 'canoe', { w: 2, h: 1, blocks: true, look: 'canoe', colour: '#c05030' }],
+  // Trees and the woods.
+  ['T', 'TREE', 'maple', { w: 1, h: 1, blocks: true, opaque: true, muffles: true, look: 'tree', colour: '#c05a28' }],
+  ['N', 'PINE', 'pine', { w: 1, h: 1, blocks: true, opaque: true, muffles: true, look: 'pine', colour: '#1e4a24' }],
+  ['j', 'BIRCH', 'birch', { w: 1, h: 1, blocks: true, opaque: true, muffles: true, look: 'tree', colour: '#d8c040', trunk: '#e8e8e0' }],
+  ['a', 'APPLE', 'apple tree', { w: 1, h: 1, blocks: true, opaque: true, muffles: true, look: 'tree', colour: '#3a7a2a', fruit: '#d02020' }],
+  ['y', 'SHRUB', 'shrub', { w: 1, h: 1, blocks: true, look: 'shrub', colour: '#3a6a2a' }],
+  ['q', 'BERRY', 'berry bush', { w: 1, h: 1, blocks: true, look: 'shrub', colour: '#2e5a24', fruit: '#3a3aa8' }],
+  ['u', 'STUMP', 'stump', { w: 1, h: 1, blocks: true, look: 'round', colour: '#8a6a44' }],
+  ['Y', 'BOULDER', 'boulder', { w: 1, h: 1, blocks: true, look: 'round', colour: '#8a847c' }],
+  ['h', 'HAY', 'hay bale', { w: 1, h: 1, blocks: true, look: 'round', colour: '#d8b860' }],
+  ['W', 'WOODPILE', 'woodpile', { w: 2, h: 1, blocks: true, look: 'logs', colour: '#8a5a30' }],
+  ['O', 'OUTHOUSE', 'outhouse', { w: 1, h: 1, blocks: true, opaque: true, look: 'box', colour: '#8a6a44', mark: 'moon' }],
+  ['e', 'TENT', 'tent', { w: 2, h: 2, blocks: true, opaque: true, look: 'tent', colour: '#c08030' }],
+  ['r', 'FIRERING', 'campfire ring', { w: 1, h: 1, look: 'fire' }],
+  ['f', 'FISHING', 'fishing spot', { w: 1, h: 1, look: 'fishing' }],
+  // Roadside.
+  ['s', 'SIGN', 'sign', { w: 1, h: 1, blocks: true, text: true, look: 'sign' }],
+  ['g', 'PUMP', 'gas pump', { w: 1, h: 1, blocks: true, look: 'box', colour: '#c03030', mark: 'pump' }],
+  ['P', 'PHONE', 'payphone', { w: 1, h: 1, blocks: true, look: 'box', colour: '#c0c8d0', mark: 'phone' }],
+  ['m', 'MAILBOX', 'mailbox', { w: 1, h: 1, blocks: true, look: 'post', colour: '#5a5a60' }],
+  ['o', 'DRUM', 'oil drum', { w: 1, h: 1, blocks: true, look: 'round', colour: '#3a5a8a' }],
+  ['d', 'DUMPSTER', 'dumpster', { w: 2, h: 1, blocks: true, opaque: true, look: 'box', colour: '#3a6a3a' }],
+  ['n', 'TRASH', 'trash can', { w: 1, h: 1, blocks: true, look: 'round', colour: '#8a8a8a' }],
+  ['l', 'LAMP', 'lamppost', { w: 1, h: 1, blocks: true, look: 'post', colour: '#2a2a2a', light: true }],
+  ['A', 'BILLBOARD', 'billboard', { w: 3, h: 1, blocks: true, opaque: true, look: 'billboard', colour: '#e8e0c0' }],
+  ['F', 'FLAG', 'flagpole', { w: 1, h: 1, blocks: true, look: 'flag', colour: '#c03030' }],
+  // Indoors.
+  ['x', 'CRATE', 'shelves', { w: 1, h: 1, blocks: true, look: 'crate', colour: '#b08850' }],
+  ['b', 'BENCH', 'bench', { w: 2, h: 1, blocks: true, look: 'bench', colour: '#8a5a30' }],
+  ['E', 'BED', 'bed', { w: 1, h: 2, blocks: true, look: 'bed', colour: '#4a6aa8' }],
+  ['Q', 'TABLE', 'table', { w: 2, h: 1, blocks: true, look: 'furniture', colour: '#9a7040' }],
+  ['z', 'CHAIR', 'chair', { w: 1, h: 1, blocks: true, look: 'furniture', colour: '#7a5430' }],
+  ['V', 'SOFA', 'sofa', { w: 2, h: 1, blocks: true, look: 'furniture', colour: '#6a7a4a' }],
+  ['K', 'COUNTER', 'counter', { w: 1, h: 1, blocks: true, look: 'furniture', colour: '#c8c0b0' }],
+  ['H', 'STOVE', 'wood stove', { w: 1, h: 1, blocks: true, look: 'box', colour: '#2a2a2a', mark: 'stove' }],
+  ['G', 'FRIDGE', 'fridge', { w: 1, h: 1, blocks: true, opaque: true, look: 'box', colour: '#e8e8e0' }],
+  ['U', 'BATH', 'bathtub', { w: 2, h: 1, blocks: true, look: 'bath', colour: '#f0f0f0' }],
+  ['J', 'DESK', 'desk', { w: 2, h: 1, blocks: true, look: 'furniture', colour: '#7a5430' }],
 ];
 export const MARKER = [
   ['.', 'NONE', 'none', {}],
   ['@', 'START', 'player start', {}],
   ['Z', 'ZOMBIE', 'zombie spawn', {}],
   ['L', 'LABEL', 'landmark label', { text: true }],
+  ['I', 'LOOT', 'loot spot', {}],
+  ['K', 'KEYITEM', 'key-item spot', {}],
+  ['W', 'WRECKSPOT', 'blocked-road spot', {}],
+  ['N', 'NPC', 'NPC spot', {}],
 ];
 export const ROOF = [
   ['.', 'NONE', 'none'], ['R', 'RED', 'red roof'], ['S', 'SLATE', 'slate roof'], ['B', 'BROWN', 'brown roof'], ['G', 'GREEN', 'green roof'],
+  ['T', 'TIN', 'tin roof'], ['W', 'WHITE', 'white roof'],
 ];
 export const LAYERS = ['height', 'ground', 'struct', 'object', 'marker', 'roof'];
 const TABLES = { ground: GROUND, struct: STRUCT, object: OBJECT, marker: MARKER, roof: ROOF };
@@ -136,11 +211,74 @@ export function removeMarker(map, m) {
 
 // --- What a tile does ------------------------------------------------------------------------------
 const WATER = G.WATER;
+const WET = new Set([G.WATER, G.SHALLOWS]);   // can't build in it (a stream you can: it's shallow and stony)
 export function cellBlocks(map, i) {
   const s = structInfo(map.struct[i]);
   if (objectInfo(map.object[i]).blocks) return true;
   if (s.pass) return false;
-  return !!s.blocks || map.ground[i] === WATER;
+  return !!s.blocks || WET.has(map.ground[i]);
+}
+
+// --- Buildings: a rectangle becomes a whole building -------------------------------------------
+// Each preset: wall, floor, roof, the front door (middle of the south wall: the side the camera
+// sees) and windows. set(layer, i, v) does the painting (so the editor can undo it).
+export const BUILDINGS = [
+  { key: 'house', label: 'House', wall: 'CLAPBOARD', floor: 'FLOOR', roof: 'RED', door: 'DOOR', windows: 1 },
+  { key: 'cabin', label: 'Cabin', wall: 'LOG', floor: 'FLOOR', roof: 'BROWN', door: 'DOOR', windows: 3 },
+  { key: 'store', label: 'Store', wall: 'CLAPBOARD', floor: 'LINO', roof: 'SLATE', door: 'DOOR', windows: 1 },
+  { key: 'diner', label: 'Diner', wall: 'CINDER', floor: 'CHECKER', roof: 'TIN', door: 'DOOR', windows: 1 },
+  { key: 'barn', label: 'Barn', wall: 'BARN', floor: 'CONCRETE', roof: 'TIN', door: 'GARAGEDOOR', windows: 0 },
+  { key: 'garage', label: 'Garage', wall: 'CINDER', floor: 'CONCRETE', roof: 'SLATE', door: 'GARAGEDOOR', windows: 0, side: 'DOOR' },
+  { key: 'mill', label: 'Mill', wall: 'BRICK', floor: 'CONCRETE', roof: 'SLATE', door: 'DOOR', windows: 2 },
+  { key: 'church', label: 'Church', wall: 'CLAPBOARD', floor: 'FLOOR', roof: 'WHITE', door: 'DOOR', windows: 3 },
+  { key: 'shed', label: 'Shed', wall: 'BARN', floor: 'CONCRETE', roof: 'TIN', door: 'DOOR', windows: 0 },
+];
+// Returns null when built, else a message. r: { x0, y0, x1, y1 } inclusive.
+export function buildBuilding(map, r, preset, set) {
+  const { w } = map;
+  if (r.x1 - r.x0 < 2 || r.y1 - r.y0 < 2) return 'A building needs at least 3 x 3.';
+  const h0 = map.height[r.y0 * w + r.x0];
+  for (let y = r.y0; y <= r.y1; y++) {
+    for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * w + x;
+      if (WET.has(map.ground[i])) return "Can't build on the water.";
+      if (map.object[i]) return 'Something is in the way.';
+      if (map.height[i] !== h0) return 'A building needs flat ground.';
+    }
+  }
+  const wall = S[preset.wall], floor = G[preset.floor], roof = ROOF.findIndex(([, k]) => k === preset.roof);
+  const doorX = (r.x0 + r.x1) >> 1;
+  for (let y = r.y0; y <= r.y1; y++) {
+    for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * w + x;
+      const edge = x === r.x0 || x === r.x1 || y === r.y0 || y === r.y1;
+      const corner = (x === r.x0 || x === r.x1) && (y === r.y0 || y === r.y1);
+      let st = edge ? wall : 0;
+      if (edge && !corner) {
+        const along = y === r.y0 || y === r.y1 ? x - r.x0 : y - r.y0;
+        if (y === r.y1 && x === doorX) st = S[preset.door];
+        else if (preset.side && x === r.x1 && y === r.y1 - 1) st = S[preset.side];
+        else if (preset.windows && along % (preset.windows + 1) === 0 && !(y === r.y1 && Math.abs(x - doorX) < 1)) st = S.WINDOW;
+      }
+      set('ground', i, floor);
+      set('struct', i, st);
+      set('roof', i, roof);
+    }
+  }
+  return null;
+}
+// Knock a rectangle back to grass: walls, floor and roof gone (objects too, separately).
+export function demolish(map, r, set) {
+  for (let y = r.y0; y <= r.y1; y++) {
+    for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * map.w + x;
+      if (map.roof[i] || (map.struct[i] && structInfo(map.struct[i]).wall) || map.struct[i] === S.WINDOW || map.struct[i] === S.DOOR || map.struct[i] === S.GARAGEDOOR) {
+        if (!WET.has(map.ground[i])) set('ground', i, G.GRASS);
+        set('struct', i, 0);
+        set('roof', i, 0);
+      }
+    }
+  }
 }
 
 // Can you step from one tile to its neighbour, as far as height goes? Level ground: yes. A
@@ -182,21 +320,26 @@ export function checkPlace(map, layer, kind, x, y, rot = 0) {
   const height = (xx, yy) => (inb(xx, yy) ? map.height[yy * w + xx] : -1);
   const n4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   if (layer === 'struct') {
-    if (kind === S.DOOR) {
-      const solid = (xx, yy) => struct(xx, yy) === S.WALL;
-      if (!((solid(x - 1, y) && solid(x + 1, y)) || (solid(x, y - 1) && solid(x, y + 1)))) return 'A door needs a wall either side.';
+    const info = structInfo(kind);
+    if (info.opening) {
+      const solid = (xx, yy) => { const v = struct(xx, yy); return v > 0 && (structInfo(v).wall || structInfo(v).opening); };
+      if (!((solid(x - 1, y) && solid(x + 1, y)) || (solid(x, y - 1) && solid(x, y + 1)))) return `A ${STRUCT[kind][2]} needs a wall either side.`;
     }
-    if (kind === S.BRIDGE && map.ground[i] !== WATER) return 'Bridges go over water.';
-    if ((kind === S.WALL || kind === S.FENCE || kind === S.HEDGE || kind === S.DOOR) && map.ground[i] === WATER) return "Can't build that in the water.";
+    if (kind === S.GATE) {
+      const line = (xx, yy) => { const v = struct(xx, yy); return v > 0 && (structInfo(v).fence || v === S.GATE); };
+      if (!((line(x - 1, y) && line(x + 1, y)) || (line(x, y - 1) && line(x, y + 1)))) return 'A gate needs a fence or wall either side.';
+    }
+    if ((kind === S.BRIDGE || kind === S.DOCK) && !WET.has(map.ground[i])) return `A ${STRUCT[kind][2]} goes over water.`;
+    if ((info.blocks || info.opening || kind === S.TRACKS) && WET.has(map.ground[i])) return "Can't build that in the water.";
     if (kind === S.STEPS && !n4.some(([dx, dy]) => height(x + dx, y + dy) >= 0 && height(x + dx, y + dy) !== map.height[i])) return 'Steps need a height change beside them.';
     if (kind === S.LEDGE && !n4.some(([dx, dy]) => height(x + dx, y + dy) >= 0 && height(x + dx, y + dy) < map.height[i])) return 'A ledge needs a drop beside it.';
     if (kind && map.object[i]) return 'Something is in the way.';
   }
-  if (layer === 'ground' && map.ground[i] !== kind && kind === WATER) {
+  if (layer === 'ground' && map.ground[i] !== kind && WET.has(kind)) {
     const o = map.object[i];
     if (o && o !== O.FISHING && o !== O.TREE) return `Can't flood a ${OBJECT[o][2]}.`;
     const s = map.struct[i];
-    if (s && s !== S.BRIDGE && s !== S.STEPS && s !== S.LEDGE) return "Can't flood that.";
+    if (s && s !== S.BRIDGE && s !== S.DOCK && s !== S.STEPS && s !== S.LEDGE) return "Can't flood that.";
   }
   if (layer === 'object' && kind) {
     const fp = footprint(kind, rot);
@@ -207,14 +350,14 @@ export function checkPlace(map, layer, kind, x, y, rot = 0) {
         const j = yy * w + xx;
         if (map.object[j]) return 'Something is already there.';
         const s = map.struct[j];
-        if (s === S.WALL || s === S.FENCE || s === S.HEDGE || s === S.DOOR) return `A ${name} can't go on a ${STRUCT[s][2]}.`;
-        if (kind !== O.FISHING && map.ground[j] === WATER && s !== S.BRIDGE) return `A ${name} would sink.`;
+        if (s && (structInfo(s).blocks || structInfo(s).opening || s === S.GATE)) return `A ${name} can't go on a ${STRUCT[s][2]}.`;
+        if (kind !== O.FISHING && kind !== O.CANOE && WET.has(map.ground[j]) && s !== S.BRIDGE && s !== S.DOCK) return `A ${name} would sink.`;
         if (map.height[j] !== map.height[y * w + x]) return `The ${name} needs flat ground.`;
       }
     }
     if (kind === O.FISHING) {
-      if (map.ground[i] === WATER) return 'Fishing spots go on the bank.';
-      if (!n4.some(([dx, dy]) => ground(x + dx, y + dy) === WATER)) return 'Fishing spots go by the water.';
+      if (WET.has(map.ground[i]) && map.struct[i] !== S.DOCK) return 'Fishing spots go on the bank.';
+      if (!n4.some(([dx, dy]) => WET.has(ground(x + dx, y + dy)))) return 'Fishing spots go by the water.';
     }
   }
   if (layer === 'marker' && kind) {

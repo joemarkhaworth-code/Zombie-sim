@@ -60,7 +60,23 @@ const GROUND = [
   ['PARAPET',    true,  false, { muffles: false }], // a bridge's or the trestle's parapet (never a gate)
   ['PADLOCK',    true,  false, { muffles: false }], // a padlocked gate (bolt cutters, step 20)
   ['MARSH',      false, false],                     // the swamp: reeds and mud
-  ['GRAVEL',     false, false],                     // gravel (editor maps)
+  ['GRAVEL',     false, false, { step: 'loud' }],   // gravel (editor maps): crunchy underfoot
+  // Maine (editor maps). step: footsteps are 'loud' or 'quiet' here (noise.surfaceStep).
+  ['MEADOW',     false, false],                     // rough meadow
+  ['CRACKED',    false, false],                     // cracked asphalt
+  ['NEEDLES',    false, false, { step: 'quiet' }],  // the pine forest floor
+  ['LEAVES',     false, false, { step: 'loud' }],   // dead leaves: the fall
+  ['MOSS',       false, false, { step: 'quiet' }],
+  ['GRANITE',    false, false],                     // bare granite ledge
+  ['MUD',        false, false],
+  ['CORN',       false, false],                     // cornfield: you can see over it
+  ['PUMPKINS',   false, false],
+  ['BLUEBERRY',  false, false],                     // blueberry barrens
+  ['STREAM',     false, false, { step: 'loud', muffles: false }], // a rocky stream you can wade
+  ['LINO',       false, false],                     // linoleum
+  ['CARPET',     false, false, { step: 'quiet' }],
+  ['CHECKER',    false, false],                     // diner tiles
+  ['CONCRETE',   false, false],
 ];
 
 const ROOF_MATS = ['SLATE', 'TILES', 'METAL'];

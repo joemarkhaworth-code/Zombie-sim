@@ -1,7 +1,8 @@
 // Turns sim events into the one-line status bar, and tiles into inspect text.
 // All player-facing wording lives here. The sim only emits data.
 import { TILE, TILE_INFO } from '../sim/tiles.js';
-import { S, O, roofRegion } from '../sim/map.js';
+import { S, O, STRUCT, OBJECT, roofRegion } from '../sim/map.js';
+const OBJECT_LABEL = o => OBJECT[o][2];
 import { canNotice } from '../sim/systems/vision.js';
 
 // Priorities: if several things happen in one turn, the most important message wins.
@@ -120,7 +121,7 @@ const PLACE_TEXT = {
 const TILE_TEXT = {
   FLOOR: 'Bare floor. Seen better days.', WALL: 'A stone wall. Solid, at least.',
   GRASS: 'Grass. Wants cutting.', FIELD: 'Corn. Nobody to harvest it.', MOOR: 'Scree. Loose underfoot.',
-  GREEN: 'Mown grass. Someone cared.', SAND: "A bunker. Golfers' bane.", ROAD: 'The road. No traffic now.',
+  GREEN: 'Mown grass. Someone cared.', SAND: 'Sand. Gets everywhere.', ROAD: 'The road. No traffic now.',
   ROAD_LINE_H: 'The road. No traffic now.', ROAD_LINE_V: 'The road. No traffic now.', PAVEMENT: 'Sidewalk. Mind the cracks.',
   SETTS: 'Setts. Murder on the ankles.', TRACK: 'A dirt road. Rutted.', PATH: 'A trail.', YARD: 'Flagstones. A yard.',
   DOORSTEP: 'A doorstep. No milk today.', GATE: 'A gate. Shut it behind you.', STEPS: 'Stone steps. Steep ones.',
@@ -129,9 +130,15 @@ const TILE_TEXT = {
   HEDGE: 'A hedge. Thick, thorny.', FENCE: 'A fence.', TREE: "A tree. Climbing's for kids.", RAIL: 'Railroad track. No trains.',
   PLATFORM: 'The platform. Mind the gap.', CROSSING: 'A railroad crossing.', TUNNEL: 'The old mine. Pitch black.',
   GRAVE: 'A headstone. Rest in peace.', RUIN: "Castle ruins. Cromwell's work.", BARRIER: 'A police roadblock. Abandoned.',
-  ARCH: 'An archway.', BEDS: 'Allotment beds. Leeks.', CARPARK: 'A parking lot. Plenty of room.', DRIVE: 'A garden path.',
+  ARCH: 'An archway.', BEDS: 'Turned earth. Ready to plant.', CARPARK: 'A parking lot. Plenty of room.', DRIVE: 'A driveway.',
   MARKET_CROSS: 'The market cross.', PARAPET: "A parapet. Don't look down.",
   MARSH: 'Swamp. Smells like it, too.', PADLOCK: 'A padlocked gate. Private.',
+  GRAVEL: 'Gravel. Crunchy underfoot.', MEADOW: 'Meadow. Ticks, probably.', CRACKED: 'Cracked asphalt. Frost heave.',
+  NEEDLES: 'Pine needles. Soft, quiet.', LEAVES: 'Dead leaves. Crunchy.', MOSS: 'Moss. Soft underfoot.',
+  GRANITE: 'Granite ledge. Very Maine.', MUD: 'Mud. Early for mud season.', CORN: 'Corn. Nobody to pick it.',
+  PUMPKINS: "Pumpkins. Halloween's off.", BLUEBERRY: 'Blueberry barrens. Picked.', STREAM: 'A rocky stream. Cold.',
+  LINO: 'Linoleum. Peeling.', CARPET: 'Shag carpet. Brown, of course.', CHECKER: 'Diner tiles. Black and white.',
+  CONCRETE: 'Concrete. Oil stains.',
 };
 // Walking into something.
 const BLOCKED_TEXT = {
@@ -185,19 +192,37 @@ function buildingAt(world, x, y) {
 }
 // Editor maps: the top layer you can see on the tile.
 const STRUCT_TEXT = {
-  [S.WALL]: 'A wall. Solid, at least.', [S.DOOR]: 'A door. Unlocked, for now.', [S.FENCE]: 'A fence.',
-  [S.HEDGE]: 'A hedge. Thick, thorny.', [S.BRIDGE]: 'A bridge. Solid enough.', [S.STEPS]: 'Steps. Mind your footing.',
-  [S.LEDGE]: 'A ledge. You could hop down.',
+  [S.WALL]: 'A wall. Solid, at least.', [S.CLAPBOARD]: 'Clapboard. Needs paint.', [S.LOG]: 'A log wall. Chinked tight.',
+  [S.BRICK]: 'Brick. Mill-town red.', [S.CINDER]: 'Cinder block. Ugly, sturdy.', [S.BARN]: 'Barn boards. Red, faded.',
+  [S.WINDOW]: 'A window. Grimy.', [S.DOOR]: 'A door. Unlocked, for now.', [S.GARAGEDOOR]: 'A garage door. Shut.',
+  [S.STONEWALL]: 'A stone wall. Old as the farm.', [S.FENCE]: 'A split-rail fence.', [S.PICKET]: 'A picket fence. Peeling.',
+  [S.CHAINLINK]: 'Chain-link. Rusty.', [S.BARBED]: 'Barbed wire. Mind yourself.', [S.BOARDFENCE]: 'A board fence.',
+  [S.GATE]: 'A gate. Shut it after you.', [S.HEDGE]: 'A hedge. Thick, thorny.', [S.GUARDRAIL]: 'A guardrail. Dented.',
+  [S.BRIDGE]: 'A bridge. Solid enough.', [S.DOCK]: 'A dock. Creaky.', [S.TRACKS]: 'Railroad track. No trains.',
+  [S.STEPS]: 'Steps. Mind your footing.', [S.LEDGE]: 'A ledge. You could hop down.',
 };
 const OBJECT_TEXT = {
-  [O.CAR]: 'A car. Keys? Doubtful.', [O.VAN]: 'A van. Rust holding it up.', [O.TREE]: "A tree. Climbing's for kids.",
-  [O.BENCH]: 'A bench. In loving memory.', [O.CRATE]: 'Shelves. Mostly empty.', [O.FISHING]: 'A fishing spot. Bites here.',
+  [O.CAR]: 'A car. Keys? Doubtful.', [O.PICKUP]: 'A pickup. Gun rack, empty.', [O.WAGON]: 'A station wagon. Wood panels.',
+  [O.VAN]: 'A van. Rust holding it up.', [O.CAMPER]: 'A camper. Smells of sardines.', [O.BUS]: 'A school bus. Field trip over.',
+  [O.LOGTRUCK]: 'A logging truck. Loaded.', [O.TRACTOR]: 'A tractor. Out of diesel.', [O.WRECK]: 'A wreck. Nobody walked away.',
+  [O.CANOE]: 'A canoe. Paddle missing.', [O.TREE]: 'A maple. Leaves turning.', [O.PINE]: 'A white pine. Tall.',
+  [O.BIRCH]: 'A birch. Peeling bark.', [O.APPLE]: 'An apple tree. Windfalls.', [O.SHRUB]: 'A shrub.',
+  [O.BERRY]: 'A berry bush. Picked over.', [O.STUMP]: 'A stump.', [O.BOULDER]: 'A boulder. Glacier left it.',
+  [O.HAY]: 'A hay bale.', [O.WOODPILE]: "A woodpile. Winter's coming.", [O.OUTHOUSE]: 'An outhouse. Vacant.',
+  [O.TENT]: 'A tent. Zipped shut.', [O.FIRERING]: 'A campfire ring. Cold ashes.', [O.FISHING]: 'A fishing spot. Bites here.',
+  [O.PUMP]: 'A gas pump. 1.29 a gallon.', [O.PHONE]: 'A payphone. No dial tone.', [O.MAILBOX]: 'A mailbox. Flag up.',
+  [O.DRUM]: 'An oil drum.', [O.DUMPSTER]: 'A dumpster. Ripe.', [O.TRASH]: 'A trash can.', [O.LAMP]: 'A lamppost. Out.',
+  [O.BILLBOARD]: 'A billboard. Faded.', [O.FLAG]: 'A flagpole.', [O.CRATE]: 'Shelves. Mostly empty.',
+  [O.BENCH]: 'A bench. In loving memory.', [O.BED]: 'A bed. Unmade.', [O.TABLE]: 'A table.', [O.CHAIR]: 'A chair.',
+  [O.SOFA]: 'A sofa. Plaid.', [O.COUNTER]: 'A counter.', [O.STOVE]: 'A wood stove. Cold.', [O.FRIDGE]: "A fridge. Don't open it.",
+  [O.BATH]: 'A bathtub. Ring round it.', [O.DESK]: 'A desk.',
 };
-const OBJECT_BLOCKED = {
-  [O.CAR]: "A car's in the way.", [O.VAN]: "A van's in the way.", [O.TREE]: "A tree's in the way.",
-  [O.BENCH]: "A bench is in the way.", [O.CRATE]: 'Shelves in the way.', [O.SIGN]: 'A sign is in the way.',
+const objectBlocked = o => { const n = OBJECT_LABEL(o); const t2 = `A ${n} is in the way.`; return t2.length <= 30 ? t2 : "Something's in the way."; };
+const STRUCT_BLOCKED = {
+  [S.WINDOW]: "A window. It's not a door.", [S.GARAGEDOOR]: "The garage door's down.", [S.HEDGE]: 'The hedge is too thick.',
+  [S.BARBED]: 'Barbed wire. Not that way.', [S.STONEWALL]: 'A stone wall blocks the way.', [S.GUARDRAIL]: 'A guardrail blocks the way.',
 };
-const STRUCT_BLOCKED = { [S.WALL]: 'A wall blocks the way.', [S.FENCE]: 'A fence blocks the way.', [S.HEDGE]: 'The hedge is too thick.' };
+const structBlocked = st => STRUCT_BLOCKED[st] || (STRUCT[st][3].wall ? 'A wall blocks the way.' : STRUCT[st][3].fence ? 'A fence blocks the way.' : null);
 function layeredText(world, x, y) {
   const i = y * world.w + x, p = world.entities.get(world.playerId);
   if (world.roof[i] && !roofRegion(world.roof, world.w, world.h, p.Position.y * world.w + p.Position.x).has(i)) return 'A roof. Shingles missing.';
@@ -224,8 +249,9 @@ export function blockedText(world, x, y) {
   const tile = world.tiles[y * world.w + x], info = TILE_INFO[tile];
   if (world.struct) {
     const i = y * world.w + x;
-    if (world.obj[i]) return OBJECT_BLOCKED[world.obj[i]] || "Something's in the way.";
-    if (STRUCT_BLOCKED[world.struct[i]]) return STRUCT_BLOCKED[world.struct[i]];
+    if (world.obj[i]) return objectBlocked(world.obj[i]);
+    const sb = world.struct[i] && STRUCT[world.struct[i]][3].blocks && structBlocked(world.struct[i]);
+    if (sb) return sb;
   }
   if (info.part === 'door') return "The door's locked. For now.";
   if (info.part) return "A building's in the way.";

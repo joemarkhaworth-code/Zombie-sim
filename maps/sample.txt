@@ -1,11 +1,11 @@
 # Zombie Survival map v1
 size 25 37
 legend height 0:0 1:1 2:2 3:3
-legend ground .:grass =:road -:sidewalk ::path ,:gravel ":field ~:water _:floor
-legend struct .:none #:wall +:door |:fence %:hedge H:bridge ^:steps v:ledge
-legend object .:none c:car v:van T:tree b:bench x:shelf/crate s:sign f:fishing_spot
-legend marker .:none @:player_start Z:zombie_spawn L:landmark_label
-legend roof .:none R:red_roof S:slate_roof B:brown_roof G:green_roof
+legend ground .:grass L:lawn M:meadow =:road c:cracked_road d:dirt_road p:parking_lot r:driveway -:sidewalk ::path ,:gravel n:pine_needles l:dead_leaves o:moss k:granite_ledge s:sand u:mud b:bog ":hayfield C:cornfield P:pumpkins B:blueberry_barrens #:ploughed_earth R:rocky_stream w:shallow_water ~:deep_water _:wood_floor i:linoleum a:carpet t:diner_tiles x:concrete
+legend struct .:none #:plaster_wall C:clapboard_wall L:log_wall K:brick_wall Y:cinder_block A:barn_boards W:window +:door G:garage_door S:fieldstone_wall |:split-rail_fence p:picket_fence c:chain-link_fence b:barbed_wire f:board_fence g:gate %:hedge u:guardrail H:bridge D:dock T:railroad_track ^:steps v:ledge
+legend object .:none c:car p:pickup w:station_wagon v:van R:camper B:school_bus L:logging_truck t:tractor X:wrecked_car k:canoe T:maple N:pine j:birch a:apple_tree y:shrub q:berry_bush u:stump Y:boulder h:hay_bale W:woodpile O:outhouse e:tent r:campfire_ring f:fishing_spot s:sign g:gas_pump P:payphone m:mailbox o:oil_drum d:dumpster n:trash_can l:lamppost A:billboard F:flagpole x:shelves b:bench E:bed Q:table z:chair V:sofa K:counter H:wood_stove G:fridge U:bathtub J:desk
+legend marker .:none @:player_start Z:zombie_spawn L:landmark_label I:loot_spot K:key-item_spot W:blocked-road_spot N:NPC_spot
+legend roof .:none R:red_roof S:slate_roof B:brown_roof G:green_roof T:tin_roof W:white_roof
 layer height
 0000000000000000000000000
 0000000000000000000000000

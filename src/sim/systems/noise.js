@@ -15,11 +15,12 @@ import { structInfo, objectInfo } from '../map.js';
 
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
-// Strength per tile for a noise of `level` at (x, y).
-export function spreadNoise(world, x, y, level) {
+// Strength per tile for a noise of `level` at (x, y); extra adds to its starting strength (a
+// footstep on gravel carries further, on moss less far).
+export function spreadNoise(world, x, y, level, extra = 0) {
   const { w, h } = world, cfg = CONFIG.noise;
   const strength = new Int16Array(w * h);
-  const start = cfg.radiusByLevel[level] || 0;
+  const start = (cfg.radiusByLevel[level] || 0) + extra;
   if (start <= 0 || !inBounds(world, x, y)) return strength;
   strength[y * w + x] = start;
   const queue = [y * w + x];
@@ -41,14 +42,22 @@ export function spreadNoise(world, x, y, level) {
   return strength;
 }
 
+// How much a surface adds to a footstep there: the structure (a dock, the tracks) over the ground.
+export function surfaceStep(world, x, y) {
+  const i = y * world.w + x;
+  const st = world.struct && world.struct[i] ? structInfo(world.struct[i]).step : null;
+  const step = st || TILE_INFO[world.tiles[i]].step;
+  return step ? CONFIG.noise.surfaceStep[step] || 0 : 0;
+}
+
 export function canHear(e, s) {
   if (!e.Hearing || s <= 0) return false;
   return s >= CONFIG.noise.minStrengthToHear[e.Hearing.level];
 }
 
-export function makeNoise(world, x, y, level, byId = 0) {
+export function makeNoise(world, x, y, level, byId = 0, extra = 0) {
   if (level <= 0) return;
-  const strength = spreadNoise(world, x, y, level);
+  const strength = spreadNoise(world, x, y, level, extra);
   if (!world.noise) world.noise = new Int16Array(world.w * world.h);
   for (let i = 0; i < strength.length; i++) if (strength[i] > world.noise[i]) world.noise[i] = strength[i];
   world.events.emit('noise_made', { x, y, level, by: byId });

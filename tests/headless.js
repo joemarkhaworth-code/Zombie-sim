@@ -1166,9 +1166,93 @@ function townLayoutChecks(a) {
   check(checkPlace(vm, 'struct', Sx.DOOR, 6, 6) === 'A door needs a wall either side.', 'no door outside a wall');
   vm.struct[6 * vm.w + 5] = Sx.WALL; vm.struct[6 * vm.w + 7] = Sx.WALL;
   check(checkPlace(vm, 'struct', Sx.DOOR, 6, 6) === null, 'a door in a wall is fine');
-  check(checkPlace(vm, 'struct', Sx.BRIDGE, 6, 9) === 'Bridges go over water.' && checkPlace(vm, 'struct', Sx.BRIDGE, 3, 3) === null, 'bridges only over water');
+  check(checkPlace(vm, 'struct', Sx.BRIDGE, 6, 9) === 'A bridge goes over water.' && checkPlace(vm, 'struct', Sx.BRIDGE, 3, 3) === null, 'bridges only over water');
   check(checkPlace(vm, 'object', Ox.FISHING, 8, 10) === 'Fishing spots go by the water.' && checkPlace(vm, 'object', Ox.FISHING, 4, 3) === null, 'fishing spots by the water');
   check(checkPlace(vm, 'struct', Sx.LEDGE, 8, 8) === 'A ledge needs a drop beside it.', 'no ledge without a drop');
+  // Every layer's characters are unique (the map text depends on it).
+  for (const [nm, table] of Object.entries({ ground: mapLib.GROUND, struct: mapLib.STRUCT, object: mapLib.OBJECT, marker: mapLib.MARKER, roof: mapLib.ROOF })) {
+    const cs = table.map(r2 => r2[0]);
+    check(new Set(cs).size === cs.length, `${nm}: every kind has its own character`);
+  }
+  // A building from a rectangle: walls, floor, roof, a door in the middle of the south wall, windows.
+  const bm = createMap(1, 1), cells = [];
+  const bset = (l, i, v) => { cells.push(l); bm[l][i] = v; };
+  const housePreset = mapLib.BUILDINGS.find(b2 => b2.key === 'house');
+  check(mapLib.buildBuilding(bm, { x0: 1, y0: 1, x1: 2, y1: 2 }, housePreset, bset) === 'A building needs at least 3 x 3.', 'a building needs 3 x 3');
+  check(mapLib.buildBuilding(bm, { x0: 2, y0: 3, x1: 8, y1: 9 }, housePreset, bset) === null, 'a house from a rectangle');
+  const at2 = (l, x, y) => bm[l][y * bm.w + x];
+  check(at2('struct', 5, 9) === Sx.DOOR && at2('struct', 2, 3) === Sx.CLAPBOARD && at2('ground', 5, 6) === Gx.FLOOR && at2('roof', 5, 6) && !at2('struct', 5, 6),
+    'walls round the edge, floor inside, a roof over it, the door in the middle of the south wall');
+  let wins = 0;
+  for (let i = 0; i < bm.struct.length; i++) if (bm.struct[i] === Sx.WINDOW) wins++;
+  check(wins >= 4, `windows in the walls (${wins})`);
+  mapLib.demolish(bm, { x0: 0, y0: 0, x1: bm.w - 1, y1: bm.h - 1 }, (l, i, v) => { bm[l][i] = v; });
+  check(bm.struct.every(v => !v) && bm.roof.every(v => !v), 'demolish clears it');
+  // Structures and objects block what they should.
+  const fm = createMap(1, 1);
+  fm.struct[2 * fm.w + 2] = Sx.WINDOW; fm.struct[2 * fm.w + 4] = Sx.STONEWALL; fm.struct[2 * fm.w + 6] = Sx.CHAINLINK; fm.struct[2 * fm.w + 8] = Sx.BOARDFENCE;
+  fm.ground[5 * fm.w + 3] = Gx.WATER; fm.struct[5 * fm.w + 3] = Sx.DOCK;
+  placeObject(fm, { kind: Ox.PICKUP, x: 1, y: 7, w: 3, h: 2 }); placeObject(fm, { kind: Ox.BUS, x: 1, y: 10, w: 6, h: 2 });
+  placeObject(fm, { kind: Ox.PINE, x: 8, y: 7, w: 1, h: 1 }); placeObject(fm, { kind: Ox.SHRUB, x: 8, y: 9, w: 1, h: 1 });
+  const fw2 = fileWorld(1, fm);
+  check(tileBlocks(fw2, 2, 2) && !opaqueAt(fw2, 2, 2), 'a window: you see through it, not walk through it');
+  check(tileBlocks(fw2, 4, 2) && !opaqueAt(fw2, 4, 2) && tileBlocks(fw2, 6, 2) && !opaqueAt(fw2, 6, 2), 'a stone wall and chain-link: see over or through');
+  check(tileBlocks(fw2, 8, 2) && opaqueAt(fw2, 8, 2), 'a board fence blocks both');
+  check(!tileBlocks(fw2, 3, 5), 'a dock over water is walkable');
+  check(tileBlocks(fw2, 2, 7) && !opaqueAt(fw2, 2, 7) && tileBlocks(fw2, 3, 10) && opaqueAt(fw2, 3, 10), 'a pickup blocks movement not sight; a school bus both');
+  check(opaqueAt(fw2, 8, 7) && !opaqueAt(fw2, 8, 9) && tileBlocks(fw2, 8, 9), 'a pine blocks sight, a shrub only movement');
+  // Footsteps: louder on gravel or dead leaves, quieter on moss.
+  const nm = createMap(1, 1);
+  for (let x = 0; x < nm.w; x++) { nm.ground[3 * nm.w + x] = Gx.GRAVEL; nm.ground[11 * nm.w + x] = Gx.MOSS; }
+  placeMarker(nm, { kind: Mx.START, x: 5, y: 7 });
+  const nw = fileWorld(1, nm);
+  const reach = (y) => {
+    const st2 = spreadNoise(nw, 5, y, 1, mapLib.G && (y === 3 ? CONFIG.noise.surfaceStep.loud : y === 11 ? CONFIG.noise.surfaceStep.quiet : 0));
+    let far = 0; for (let x = 0; x < nw.w; x++) if (st2[y * nw.w + x] >= 1) far = Math.max(far, Math.abs(x - 5)); return far;
+  };
+  check(reach(3) > reach(7) && reach(7) > reach(11), `footsteps carry further on gravel than grass, less far on moss (${reach(3)}, ${reach(7)}, ${reach(11)})`);
+  const { surfaceStep } = await import('../src/sim/systems/noise.js');
+  check(surfaceStep(nw, 2, 3) > 0 && surfaceStep(nw, 2, 11) < 0 && surfaceStep(nw, 2, 7) === 0, 'surfaces: gravel loud, moss quiet, grass plain');
+  // Gates need a fence or wall either side; windows need a wall.
+  const gm = createMap(1, 1);
+  check(checkPlace(gm, 'struct', Sx.GATE, 4, 4) === 'A gate needs a fence or wall either side.' && checkPlace(gm, 'struct', Sx.WINDOW, 4, 4) === 'A window needs a wall either side.', 'gates and windows need something either side');
+  gm.struct[4 * gm.w + 3] = Sx.PICKET; gm.struct[4 * gm.w + 5] = Sx.PICKET;
+  check(checkPlace(gm, 'struct', Sx.GATE, 4, 4) === null, 'a gate in a fence is fine');
+  // A loot spot always has something on it.
+  const lm = createMap(1, 1);
+  placeMarker(lm, { kind: Mx.START, x: 5, y: 7 }); placeMarker(lm, { kind: Mx.LOOT, x: 2, y: 2 });
+  const lw = fileWorld(4, lm);
+  check([...lw.entities.values()].some(e => e.Item && e.Position && e.Position.x === 2 && e.Position.y === 2), 'a loot spot has an item on it');
+  // Every kind of everything: drawn without throwing, and a short inspect line.
+  const all = createMap(4, 3);
+  let gx = 0;
+  for (let g2 = 0; g2 < mapLib.GROUND.length; g2++) all.ground[1 * all.w + gx++] = g2;
+  let sx2 = 0;
+  for (let s2 = 1; s2 < mapLib.STRUCT.length; s2++) { all.struct[3 * all.w + sx2] = s2; sx2 += 2; }
+  let ox2 = 0, oy2 = 5;
+  for (let o2 = 1; o2 < mapLib.OBJECT.length; o2++) {
+    const fp = mapLib.footprint(o2, 0);
+    if (ox2 + fp.w >= all.w) { ox2 = 0; oy2 += 3; }
+    placeObject(all, { kind: o2, x: ox2, y: oy2, w: fp.w, h: fp.h, ...(mapLib.OBJECT[o2][3].text ? { text: 'GAS' } : {}) });
+    ox2 += fp.w + 1;
+  }
+  for (let r2 = 1; r2 < mapLib.ROOF.length; r2++) all.roof[30 * all.w + r2 * 2] = r2;
+  placeMarker(all, { kind: Mx.START, x: 1, y: 33 });
+  const aw = fileWorld(1, all);
+  aw.view.fill(3);
+  const bad = [];
+  for (let y = 0; y < aw.h; y++) for (let x = 0; x < aw.w; x++) {
+    const d = describeTile(aw, x, y);
+    if (d === 'Nothing much.' || !d || d.length > 30) bad.push(`${x},${y}: ${d}`);
+  }
+  check(!bad.length, `every surface, structure and object has a short inspect line (${bad.slice(0, 3).join('; ')})`);
+  let crashedAll = null;
+  try {
+    const { drawMap: dm } = await import('../src/render/greybox.js');
+    const fk = new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => ({ width: 10 })), set: (o, k, v) => { o[k] = v; return true; } });
+    for (let sy2 = 0; sy2 < aw.screensY; sy2++) for (let sx3 = 0; sx3 < aw.screensX; sx3++) { aw.cam = { sx: sx3, sy: sy2 }; aw.view.fill(3); dm(fk, aw, computeLayout(390, 844), null, false, null); }
+  } catch (e) { crashedAll = e; }
+  check(!crashedAll, `every kind draws (${crashedAll && crashedAll.stack})`);
   // Saves on an editor map load back.
   for (let i = 0; i < 20; i++) applyInput(sw, { type: 'move', dx: i % 4 < 2 ? 1 : -1, dy: 0 });
   const back = loadWorld((sd, o) => createWorld(sd, { ...o, mapData: sample }), saveWorld(sw));
