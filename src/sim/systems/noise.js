@@ -11,6 +11,7 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt } from '../world.js';
 import { TILE_INFO } from '../tiles.js';
+import { structInfo, objectInfo } from '../map.js';
 
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
@@ -27,7 +28,9 @@ export function spreadNoise(world, x, y, level) {
     for (const [dx, dy] of DIRS8) {
       const nx = cx + dx, ny = cy + dy;
       if (!inBounds(world, nx, ny)) continue;
-      const solid = TILE_INFO[tileAt(world, nx, ny)].muffles;
+      const ni = ny * w + nx;
+      const solid = TILE_INFO[tileAt(world, nx, ny)].muffles
+        || (world.struct && (structInfo(world.struct[ni]).muffles || objectInfo(world.obj[ni]).muffles));
       const ns = s - 1 - (solid ? cfg.wallCost : 0);
       const j = ny * w + nx;
       if (ns <= 0 || ns <= strength[j]) continue;

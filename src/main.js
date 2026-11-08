@@ -12,6 +12,7 @@ import { itemsAt } from './sim/systems/items.js';
 import { validThrowTargets } from './sim/systems/throwing.js';
 import { saveWorld, loadWorld } from './sim/save.js';
 import { createMessageLog, describeTile } from './render/messages.js';
+import { parseMap } from './sim/map.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -20,25 +21,42 @@ const ctx = canvas.getContext('2d');
 // On start, the save is loaded; ?seed=N always starts that seed fresh. A save that can't be read
 // (an older version, broken) starts a new game with a note. Dying deletes the save. If storage
 // is blocked or full, the game plays on unsaved.
+// Which map: ?map=NAME loads maps/NAME.txt (made in the map editor, editor.html), with its own
+// save; ?map=editor plays the map the editor just sent ("Play from here"), never saved;
+// otherwise CONFIG.world.mapFile if set, else the built-in region.
+const params = new URLSearchParams(location.search);
+let mapName = params.get('map') || CONFIG.world.mapFile || null;
+let mapData = null, mapNote = '';
+if (mapName) {
+  try {
+    const text = mapName === 'editor' ? localStorage.getItem(CONFIG.editor.playKey)
+      : await (await fetch(`maps/${encodeURIComponent(mapName)}.txt`, { cache: 'no-store' })).text();
+    if (!text) throw new Error('no map');
+    mapData = parseMap(text);
+  } catch (e) { mapNote = "Couldn't load that map."; mapName = null; }
+}
+const saveKey = mapName ? `${CONFIG.save.key}:${mapName}` : CONFIG.save.key;
+const saving = mapName !== 'editor';
+const make = (seed, opts = {}) => createWorld(seed, mapData ? { ...opts, map: `file:${mapName}`, mapData } : opts);
 const store = {
-  get() { try { return localStorage.getItem(CONFIG.save.key); } catch (e) { return null; } },
-  set(v) { try { localStorage.setItem(CONFIG.save.key, v); } catch (e) { /* plays on unsaved */ } },
-  clear() { try { localStorage.removeItem(CONFIG.save.key); } catch (e) { /* nothing to clear */ } },
+  get() { try { return saving ? localStorage.getItem(saveKey) : null; } catch (e) { return null; } },
+  set(v) { try { if (saving) localStorage.setItem(saveKey, v); } catch (e) { /* plays on unsaved */ } },
+  clear() { try { localStorage.removeItem(saveKey); } catch (e) { /* nothing to clear */ } },
 };
 const randomSeed = () => (Math.random() * 2 ** 32) >>> 0;
 const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
 let world, startNote = '';
 if (Number.isFinite(urlSeed)) {
-  world = createWorld(urlSeed >>> 0);
+  world = make(urlSeed >>> 0);
 } else {
   const saved = store.get();
   if (saved) {
-    try { world = loadWorld(createWorld, saved); } catch (e) { startNote = 'Old save lost. New game.'; store.clear(); }
+    try { world = loadWorld(make, saved); } catch (e) { startNote = 'Old save lost. New game.'; store.clear(); }
   }
-  if (!world) world = createWorld(randomSeed());
+  if (!world) world = make(randomSeed());
 }
 let log = createMessageLog(world);
-if (startNote) log.show(startNote);
+if (startNote || mapNote) log.show(mapNote || startNote);
 let layout;
 let inspect = null; // { x, y } of the long-pressed tile, cleared by the next action
 let debug = false;  // tap the top bar: noise heatmap and world time (takes no turn)
@@ -50,7 +68,7 @@ let diedAt = 0;     // when the player died (ms), so a fast tapper sees the deat
 
 function newGame(newSeed) {
   store.clear();
-  world = createWorld(newSeed);
+  world = make(newSeed);
   log = createMessageLog(world);
   inspect = null; shoveArmed = false; bagOpen = false; aiming = 0; diedAt = 0;
   draw();

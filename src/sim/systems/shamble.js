@@ -11,7 +11,7 @@
 // Steps follow the shortest 4-way route round walls (stepToward), with a small random stagger. Next to its
 // prey (8 ways, like yours) a zombie bites, but never on the action it first spots you.
 import { CONFIG } from '../../config.js';
-import { tileBlocks, blockerAt } from '../world.js';
+import { tileBlocks, blockerAt, heightAllows } from '../world.js';
 import { tryStep } from './movement.js';
 import { canNotice } from './vision.js';
 import { attack, inReach } from './combat.js';
@@ -19,8 +19,9 @@ import { attack, inReach } from './combat.js';
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-function open(world, x, y) {
-  return !tileBlocks(world, x, y) && !blockerAt(world, x, y);
+// Can it step from (fx, fy) onto (x, y)? The same rules as everything that moves.
+function open(world, fx, fy, x, y) {
+  return heightAllows(world, fx, fy, x, y) && !tileBlocks(world, x, y) && !blockerAt(world, x, y);
 }
 
 // The nearest prey this zombie can see (ties: lowest id), or null.
@@ -37,7 +38,7 @@ export function visiblePrey(world, e) {
 
 function randomStep(world, e, keep) {
   const { x, y } = e.Position;
-  const options = DIRS.filter(([dx, dy]) => open(world, x + dx, y + dy) && (!keep || keep(x + dx, y + dy)));
+  const options = DIRS.filter(([dx, dy]) => open(world, x, y, x + dx, y + dy) && (!keep || keep(x + dx, y + dy)));
   if (!options.length) return false;
   const [dx, dy] = options[world.rng.int(options.length)];
   return tryStep(world, e, dx, dy) === 'moved';
@@ -70,7 +71,7 @@ function firstStep(world, e, tx, ty) {
     const cx = i % w, cy = (i / w) | 0;
     for (const [dx, dy] of dirs) {
       const nx = cx + dx, ny = cy + dy, j = ny * w + nx;
-      if (from.has(j) || tileBlocks(world, nx, ny)) continue;
+      if (from.has(j) || tileBlocks(world, nx, ny) || !heightAllows(world, cx, cy, nx, ny)) continue;
       if (j !== goal && i === start && blockerAt(world, nx, ny)) continue; // someone right next to it
       from.set(j, i);
       queue.push(j);
@@ -97,7 +98,7 @@ function greedyStep(world, e, tx, ty) {
   else if (Math.abs(oy) > Math.abs(ox)) order = [vert, horiz];
   else order = world.rng.chance(0.5) ? [horiz, vert] : [vert, horiz];
   for (const [dx, dy] of order) {
-    if (open(world, x + dx, y + dy)) return tryStep(world, e, dx, dy) === 'moved';
+    if (open(world, x, y, x + dx, y + dy)) return tryStep(world, e, dx, dy) === 'moved';
   }
   return false;
 }

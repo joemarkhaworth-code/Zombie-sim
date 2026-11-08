@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <title>Map editor</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #ddd; font: 13px system-ui, sans-serif; overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: 100%; }
+    .row { display: flex; gap: 4px; padding: 4px; overflow-x: auto; background: #111; flex: none; }
+    .row::-webkit-scrollbar { display: none; }
+    button { flex: none; min-width: 44px; height: 40px; padding: 0 8px; border: 1px solid #333; border-radius: 6px;
+      background: #222; color: #ddd; font: inherit; font-weight: 600; touch-action: manipulation; }
+    button.on { background: #ffdd33; color: #000; border-color: #ffdd33; }
+    button.off { opacity: 0.4; text-decoration: line-through; }
+    button .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; border: 1px solid #0006; }
+    .layer { display: flex; gap: 1px; }
+    .layer button.eye { min-width: 30px; padding: 0 4px; font-size: 15px; }
+    #view { flex: 1; position: relative; min-height: 0; }
+    canvas { display: block; touch-action: none; width: 100%; height: 100%; }
+    #status { position: absolute; left: 6px; right: 6px; top: 6px; padding: 6px 8px; border-radius: 6px; background: #000c;
+      color: #ffdd33; font-weight: 600; pointer-events: none; display: none; }
+    #info { position: absolute; right: 6px; bottom: 6px; padding: 3px 6px; border-radius: 4px; background: #000a; color: #999; pointer-events: none; font-size: 11px; }
+    #menu { position: absolute; inset: 0; background: #0a1a66f2; padding: 12px; overflow-y: auto; display: none; z-index: 2; }
+    #menu h2 { margin: 4px 0 10px; color: #ffdd33; font-size: 17px; }
+    #menu .grp { margin: 0 0 14px; }
+    #menu .grp button { margin: 0 6px 6px 0; }
+    #menu input[type=number] { width: 52px; height: 32px; font: inherit; }
+    #menu input[type=text] { width: 120px; height: 32px; font: inherit; }
+    #menu textarea { width: 100%; height: 130px; font: 11px monospace; box-sizing: border-box; }
+    #menu p { margin: 4px 0; color: #ccd; line-height: 1.35; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="row" id="layers"></div>
+    <div id="view">
+      <canvas id="map"></canvas>
+      <div id="status"></div>
+      <div id="info"></div>
+      <div id="menu">
+        <h2>Map</h2>
+        <div class="grp"><p>Size in screens (each 11 x 15, overlapping):</p>
+          <input id="sx" type="number" min="1" max="25"> x <input id="sy" type="number" min="1" max="25">
+          <button id="resize">Set size</button> <button id="new">New map</button></div>
+        <div class="grp"><button id="hideRoofs">Hide roofs</button> <button id="play">Play from here</button></div>
+        <div class="grp"><p>Copy the map as text, or paste one back in:</p>
+          <button id="copy">Copy map</button> <button id="paste">Paste map</button>
+          <textarea id="text" placeholder="Paste a map here, then tap Paste map." spellcheck="false"></textarea></div>
+        <div class="grp"><p>Open a map from the game's maps folder:</p>
+          maps/<input id="mapName" type="text" value="sample">.txt <button id="open">Open</button></div>
+        <div class="grp"><p><b>Painting:</b> tap or drag with one finger. Two fingers: pinch to zoom, drag to pan.
+          Pick a layer at the top (tap the eye to hide it), a brush and a tool at the bottom.
+          Rect fills a rectangle; Bldg draws a building's walls, floor and roof in one go (add a door after).
+          Height: raise and lower land; a cliff face is drawn wherever it changes. Steps join levels;
+          a ledge lets you hop down but not climb up.</p></div>
+        <button id="close" class="on">Done</button>
+      </div>
+    </div>
+    <div class="row" id="palette"></div>
+    <div class="row" id="tools"></div>
+  </div>
+  <script type="module">
+    let v = '';
+    try { const r = await fetch('version.json', { cache: 'no-store' }); if (r.ok) v = (await r.json()).v; } catch (e) { /* local */ }
+    await import(v ? `./src/editor/editor.js?v=${v}` : './src/editor/editor.js');
+  </script>
+</body>
+</html>

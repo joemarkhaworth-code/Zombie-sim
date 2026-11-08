@@ -1,6 +1,8 @@
 // Greybox map: plain coloured squares and letters. Only reads world state.
 import { CONFIG } from '../config.js';
 import { drawTile, drawSign } from './tiles.js';
+import { drawHeightAndStruct, drawObject, drawRoofTile } from './layers.js';
+import { roofRegion } from '../sim/map.js';
 import { canNotice } from '../sim/systems/vision.js';
 import { cameraRect } from '../sim/world.js';
 
@@ -21,12 +23,28 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
     for (let x = ox; x < ox + world.screenW; x++) {
       const px = sx(x), py = sy(y);
       const i = y * world.w + x;
-      if (world.view[i]) { drawTile(ctx, world, world.tiles[i], x, y, px, py, t, false); continue; }
-      // Out of sight: draw what you remember, greyed; never seen stays black.
+      if (world.view[i]) {
+        drawTile(ctx, world, world.tiles[i], x, y, px, py, t, false);
+        if (world.struct) drawHeightAndStruct(ctx, world, x, y, px, py, t, false);
+        continue;
+      }
+      // Out of sight: draw what you remember, greyed; never seen stays black. (An editor map's
+      // height and structures don't change, so they're drawn from the map.)
       const snap = p.Memory && p.Memory.tiles[i];
       if (!snap) continue;
       drawTile(ctx, world, snap.t, x, y, px, py, t, true);
+      if (world.struct) drawHeightAndStruct(ctx, world, x, y, px, py, t, true);
       for (const th of snap.things) drawGlyph(ctx, th.ch, px, py, t, m.thing);
+    }
+  }
+  // Objects (editor maps), drawn whole where any of their tiles is seen (or remembered: grey).
+  const seenOrRemembered = i => (world.view[i] ? 2 : p.Memory && p.Memory.tiles[i] ? 1 : 0);
+  if (world.layout && world.layout.objects) {
+    for (const o of world.layout.objects) {
+      if (o.x + o.w <= ox || o.x >= ox + world.screenW || o.y + o.h <= oy || o.y >= oy + world.screenH) continue;
+      let best = 0;
+      for (let yy = o.y; yy < o.y + o.h; yy++) for (let xx = o.x; xx < o.x + o.w; xx++) best = Math.max(best, seenOrRemembered(yy * world.w + xx));
+      if (best) drawObject(ctx, o, sx(o.x), sy(o.y), t, best === 1);
     }
   }
   // Hanging signs (layout data: they never change), over tiles you can see or remember.
@@ -55,6 +73,20 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
       drawGlyph(ctx, e.Glyph.ch, px, py, t, e.Glyph.colour);
     }
   }
+  // Roofs (editor maps) over everything under them, except the roof you're standing under:
+  // inside a building you see its rooms.
+  const hidden = world.roof ? roofRegion(world.roof, world.w, world.h, p.Position.y * world.w + p.Position.x) : null;
+  const roofed = (x, y) => !!(world.roof && world.roof[y * world.w + x] && !hidden.has(y * world.w + x));
+  if (world.roof) {
+    for (let y = oy; y < oy + world.screenH; y++) {
+      for (let x = ox; x < ox + world.screenW; x++) {
+        const i = y * world.w + x;
+        if (!world.roof[i] || hidden.has(i)) continue;
+        const v = seenOrRemembered(i);
+        if (v) drawRoofTile(ctx, world, x, y, sx(x), sy(y), t, v === 1);
+      }
+    }
+  }
   // Dim tiles in view by visibility: 3 full colour, 2 and 1 darker.
   const alpha = CONFIG.render.dimAlpha;
   for (let y = oy; y < oy + world.screenH; y++) {
@@ -70,7 +102,7 @@ export function drawMap(ctx, world, L, inspect, debug, aim) {
   // Badges over zombies you can see: ! it's after you, ? it's lost you and is looking.
   for (const e of ents) {
     const b = e.Brain;
-    if (!b) continue;
+    if (!b || roofed(e.Position.x, e.Position.y)) continue;
     const mark = b.tracking ? '!' : (b.goal || b.search) ? '?' : null;
     if (mark) drawBadge(ctx, mark, sx(e.Position.x), sy(e.Position.y), t,
       mark === '!' ? c.alert : c.puzzled);

@@ -9,7 +9,7 @@ import { TILE_INFO } from '../src/sim/tiles.js';
 import { RIVER } from '../src/sim/gen/region.js';
 import { createMessageLog, describeTile, LEVEL, deathText } from '../src/render/messages.js';
 const deathTextOf = w => deathText(w.gameOver);
-import { lineClear, canNotice, tileVisibility, updatePlayerView } from '../src/sim/systems/vision.js';
+import { lineClear, canNotice, tileVisibility, updatePlayerView, opaqueAt } from '../src/sim/systems/vision.js';
 import { spreadNoise, makeNoise } from '../src/sim/systems/noise.js';
 import { makeItem, meleeStats, itemsAt, carried } from '../src/sim/systems/items.js';
 import { validThrowTargets, canThrowTo } from '../src/sim/systems/throwing.js';
@@ -1088,6 +1088,104 @@ function townLayoutChecks(a) {
   applyInput(w2, { type: 'wait' }); log.clear();
   applyInput(w2, { type: 'move', dx: 1, dy: 0 });
   check(log.text.startsWith('Haverly.'), `walking into Haverly says so ("${log.text}")`);
+}
+
+// Editor maps (layers, elevation, roofs; src/sim/map.js): designed by Joe in editor.html.
+{
+  const { readFileSync } = await import('fs');
+  const mapLib = await import('../src/sim/map.js');
+  const { parseMap, serializeMap, createMap, checkPlace, placeObject, placeMarker, S: Sx, O: Ox, M: Mx, G: Gx } = mapLib;
+  const { heightAllows } = await import('../src/sim/world.js');
+  const text = readFileSync(new URL('../maps/sample.txt', import.meta.url), 'utf8');
+  const sample = parseMap(text);
+  check(serializeMap(sample) === text, 'a map survives text and back exactly (maps/sample.txt)');
+  const fileWorld = (seed, m) => createWorld(seed, { map: 'file:test', mapData: m });
+  const sw = fileWorld(5, sample);
+  const st = sample.markers.find(m => m.kind === Mx.START);
+  check(player(sw).Position.x === st.x && player(sw).Position.y === st.y, 'you start on the start marker');
+  check(zombies(sw).length === 3 && zombies(sw).every(z => sample.markers.some(m => m.kind === Mx.ZOMBIE && m.x === z.Position.x && m.y === z.Position.y)), 'a zombie on each zombie spawn');
+  // Elevation on a small map: a raised strip (rows 0-6 at height 1), steps at (2,6), a ledge at (8,6).
+  const em = createMap(1, 1);
+  for (let y = 0; y <= 6; y++) for (let x = 0; x < em.w; x++) em.height[y * em.w + x] = 1;
+  em.struct[6 * em.w + 2] = Sx.STEPS; em.struct[6 * em.w + 8] = Sx.LEDGE;
+  placeMarker(em, { kind: Mx.START, x: 5, y: 8 });
+  const ew = fileWorld(1, em), me = player(ew), elog = createMessageLog(ew);
+  const go = (dx, dy) => { const t0 = ew.turn; elog.clear(); applyInput(ew, { type: 'move', dx, dy }); return ew.turn > t0; };
+  go(0, -1);
+  check(!go(0, -1) && me.Position.y === 7 && elog.text === 'A cliff. Find some steps.', `a cliff blocks like a wall, no turn ("${elog.text}")`);
+  for (let i = 0; i < 3; i++) go(-1, 0);
+  check(go(0, -1) && me.Position.y === 6 && go(0, -1) && me.Position.y === 5, 'steps take you up');
+  check(go(0, 1) && go(0, 1) && me.Position.y === 7, 'and back down');
+  me.Position.x = 8; me.Position.y = 5;
+  check(go(0, 1) && go(0, 1) && me.Position.y === 7, 'a ledge: you can hop down');
+  check(!go(0, -1) && me.Position.y === 7, "but you can't climb back up it");
+  check(heightAllows(ew, 5, 7, 5, 6) === false && heightAllows(ew, 2, 7, 2, 6) && heightAllows(ew, 8, 6, 8, 7) && !heightAllows(ew, 8, 7, 8, 6), 'the same rules for everything that moves');
+  // A zombie up on the strip comes down the only way it can: the steps or the ledge.
+  for (const z of zombies(ew)) ew.entities.delete(z.id);
+  me.Position.x = 5; me.Position.y = 8; updatePlayerView(ew);
+  const zz = makeZombie(ew, 5, 4);   // it can see you from up there
+  let illegal = 0, reachedMe = false, last = { ...zz.Position };
+  for (let i = 0; i < 80 && !reachedMe; i++) {
+    applyInput(ew, { type: 'wait' });
+    if (!ew.entities.has(zz.id)) break;
+    const p2 = zz.Position;
+    if ((p2.x !== last.x || p2.y !== last.y) && !heightAllows(ew, last.x, last.y, p2.x, p2.y)) illegal++;
+    last = { ...p2 };
+    reachedMe = Math.max(Math.abs(p2.x - me.Position.x), Math.abs(p2.y - me.Position.y)) <= 1;
+  }
+  check(!illegal && reachedMe, `zombies keep to the same rules: down the steps or ledge, never a cliff (${illegal})`);
+  // What blocks: a car stops you but not your sight; a van, a tree, a hedge and a wall stop both;
+  // a bridge makes water walkable; a door lets you through.
+  const om = createMap(1, 1);
+  placeObject(om, { kind: Ox.CAR, x: 1, y: 2, w: 3, h: 2 });
+  placeObject(om, { kind: Ox.VAN, x: 5, y: 2, w: 4, h: 2 });
+  om.ground[8 * om.w + 4] = Gx.WATER; om.ground[8 * om.w + 5] = Gx.WATER; om.struct[8 * om.w + 5] = Sx.BRIDGE;
+  om.struct[10 * om.w + 4] = Sx.WALL; om.struct[10 * om.w + 5] = Sx.DOOR; om.struct[10 * om.w + 6] = Sx.WALL;
+  om.struct[12 * om.w + 2] = Sx.HEDGE;
+  const ow = fileWorld(1, om);
+  check(tileBlocks(ow, 2, 2) && !opaqueAt(ow, 2, 2), 'a car blocks movement, not sight');
+  check(tileBlocks(ow, 6, 3) && opaqueAt(ow, 6, 3), 'a van blocks both');
+  check(tileBlocks(ow, 4, 8) && !tileBlocks(ow, 5, 8), 'water blocks; a bridge over it is walkable');
+  check(tileBlocks(ow, 4, 10) && opaqueAt(ow, 4, 10) && !tileBlocks(ow, 5, 10), 'a wall blocks both; a door lets you through');
+  check(tileBlocks(ow, 2, 12) && opaqueAt(ow, 2, 12), 'a hedge blocks both');
+  // Roofs: seen from outside, a building's whole roof shows; inside it, the roof is off and
+  // you see the rooms by line of sight.
+  const house = sample.markers.find(m => m.kind === Mx.START); // outside the sample's house door
+  const rw = fileWorld(2, sample), rp = player(rw);
+  for (const z of zombies(rw)) rw.entities.delete(z.id);
+  updatePlayerView(rw);
+  const roofI = 13 * rw.w + 4; // inside the house, under the roof, behind its walls
+  check(rw.view[roofI] > 0 && describeTile(rw, 4, 13).startsWith('A roof'), 'from outside, the whole roof shows');
+  rp.Position.x = 6; rp.Position.y = 14; updatePlayerView(rw); // inside, by the door
+  check(rw.view[13 * rw.w + 4] > 0 && !describeTile(rw, 4, 13).startsWith('A roof') && !rw.view[11 * rw.w + 4], 'inside, the roof is off and the partition hides the back room');
+  void house;
+  // Placement rules (the editor refuses nonsense).
+  const vm = createMap(1, 1);
+  vm.ground[3 * vm.w + 3] = Gx.WATER;
+  check(checkPlace(vm, 'object', Ox.CAR, 2, 2) === 'A car would sink.', 'no car on water');
+  check(checkPlace(vm, 'struct', Sx.DOOR, 6, 6) === 'A door needs a wall either side.', 'no door outside a wall');
+  vm.struct[6 * vm.w + 5] = Sx.WALL; vm.struct[6 * vm.w + 7] = Sx.WALL;
+  check(checkPlace(vm, 'struct', Sx.DOOR, 6, 6) === null, 'a door in a wall is fine');
+  check(checkPlace(vm, 'struct', Sx.BRIDGE, 6, 9) === 'Bridges go over water.' && checkPlace(vm, 'struct', Sx.BRIDGE, 3, 3) === null, 'bridges only over water');
+  check(checkPlace(vm, 'object', Ox.FISHING, 8, 10) === 'Fishing spots go by the water.' && checkPlace(vm, 'object', Ox.FISHING, 4, 3) === null, 'fishing spots by the water');
+  check(checkPlace(vm, 'struct', Sx.LEDGE, 8, 8) === 'A ledge needs a drop beside it.', 'no ledge without a drop');
+  // Saves on an editor map load back.
+  for (let i = 0; i < 20; i++) applyInput(sw, { type: 'move', dx: i % 4 < 2 ? 1 : -1, dy: 0 });
+  const back = loadWorld((sd, o) => createWorld(sd, { ...o, mapData: sample }), saveWorld(sw));
+  check(back.map === 'file:test' && player(back).Position.x === player(sw).Position.x && back.tiles.every((t, i) => t === sw.tiles[i]), 'an editor map game saves and loads');
+  // Drawing an editor map: every screen, in view and remembered, roofs on and off.
+  const { drawMap } = await import('../src/render/greybox.js');
+  const L2 = computeLayout(390, 844);
+  const fake = new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => ({ width: 10 })), set: (o, k, v) => { o[k] = v; return true; } });
+  let crashed = null;
+  try {
+    for (const [px, py] of [[6, 17], [6, 13], [19, 6]]) {
+      rp.Position.x = px; rp.Position.y = py; updateCamera(rw); updatePlayerView(rw);
+      drawMap(fake, rw, L2, { x: px, y: py }, true, null);
+      rw.view.fill(0); drawMap(fake, rw, L2, null, false, null);
+    }
+  } catch (e) { crashed = e; }
+  check(!crashed, `drawing an editor map never throws (${crashed && crashed.stack})`);
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.

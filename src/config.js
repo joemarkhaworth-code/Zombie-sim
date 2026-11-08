@@ -19,6 +19,15 @@ export const CONFIG = {
     zombiesPerScreen: [1, 2],  // zombies on each screen but your first (by district from 13d)
     itemsPerScreen: [0, 2],
     itemTypes: ['beans', 'beans', 'bandage', 'cricketBat'],
+    mapFile: null,             // a map from maps/ (made in the editor) to play by default, e.g. 'main'
+  },
+
+  // The map editor (editor.html).
+  editor: {
+    saveKey: 'zombie-map-editor',   // its autosave
+    playKey: 'zombie-map-play',     // the map "Play from here" sends to the game (index.html?map=editor)
+    screens: [3, 3],                // a new map's size, in screens
+    undoLevels: 100,
   },
 
   // Layout on the phone, in CSS pixels.
@@ -169,6 +178,15 @@ export const CONFIG = {
       METAL: ['#9aa2a8', '#7e868c'],
       window: ['#9ccbe8', '#ece8e0'], door: ['#6a3a1a', '#d9c060'], ridge: ['#2a2e33', '#6a5a50'],
       sign: ['#1e3a2a', '#f0e8c0'],
+      GRAVEL: ['#9a948a', '#b4aea2'],
+    },
+    // Editor-map layers (render/layers.js).
+    layers: {
+      cliff: ['#7a6a58', '#4a3e32'], wall: ['#c9b48e', '#9a8a6a'], door: ['#7a4a22', '#d9c060'], fence: '#e4e4dc',
+      hedge: ['#2a4d22', '#376330'], bridge: ['#a8845a', '#7a5a3a'], steps: ['#b0a898', '#7a7266'], ledge: '#8a7a62',
+      car: '#b8312f', van: '#e2e2dc', glass: '#7ab0d0', tree: ['#1e4418', '#4e7a32'], bench: '#8a5a30',
+      crate: ['#b08850', '#6a4a22'], fishing: '#e8f0ff',
+      roofs: [null, ['#a84a3a', '#7a3428'], ['#5c636b', '#3e444b'], ['#7a5a3a', '#54402a'], ['#4a7a4a', '#2e5a2e']],
     },
     noise: '255,140,0',   // debug heatmap (rgb, alpha by strength)
     heart: '#e0303a',

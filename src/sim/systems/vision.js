@@ -7,10 +7,16 @@
 import { CONFIG } from '../../config.js';
 import { inBounds, tileAt, cameraRect, screenOf, sameScreen } from '../world.js';
 import { TILE_INFO } from '../tiles.js';
+import { structInfo, objectInfo } from '../map.js';
 import { updateMemory } from './memory.js';
 
 export function opaqueAt(world, x, y) {
-  return !inBounds(world, x, y) || !!TILE_INFO[tileAt(world, x, y)].opaque;
+  if (!inBounds(world, x, y)) return true;
+  if (world.struct) {
+    const i = y * world.w + x;
+    if (structInfo(world.struct[i]).opaque || objectInfo(world.obj[i]).opaque) return true;
+  }
+  return !!TILE_INFO[tileAt(world, x, y)].opaque;
 }
 
 // True if nothing opaque lies strictly between the two tiles (the end tiles themselves don't count).
@@ -74,11 +80,13 @@ export function computeView(world, e) {
   // roof and walls), though it still hides what's behind it.
   const L = world.layout;
   if (e.Player && L) {
+    // ...except the roof you're standing under: inside, you only see what the walls let you.
+    const mine = L.buildingAt[e.Position.y * w + e.Position.x];
     const seen = new Map();
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const i = y * w + x, b = L.buildingAt[i];
-        if (b && view[i] > (seen.get(b) || 0)) seen.set(b, view[i]);
+        if (b && b !== mine && view[i] > (seen.get(b) || 0)) seen.set(b, view[i]);
       }
     }
     for (const [b, v] of seen) {

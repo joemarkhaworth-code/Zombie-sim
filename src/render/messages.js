@@ -1,6 +1,7 @@
 // Turns sim events into the one-line status bar, and tiles into inspect text.
 // All player-facing wording lives here. The sim only emits data.
 import { TILE, TILE_INFO } from '../sim/tiles.js';
+import { S, O, roofRegion } from '../sim/map.js';
 import { canNotice } from '../sim/systems/vision.js';
 
 // Priorities: if several things happen in one turn, the most important message wins.
@@ -21,13 +22,18 @@ export function createMessageLog(world) {
   const isPlayer = id => id === world.playerId;
   const ev = world.events;
   ev.on('entity_waited', ({ id }) => { if (isPlayer(id)) log.say('You wait.', LEVEL.info); });
-  ev.on('move_blocked', ({ id, x, y, blockerId }) => {
+  ev.on('move_blocked', ({ id, x, y, blockerId, cliff }) => {
     if (!isPlayer(id)) return;
     if (blockerId) {
       const b = world.entities.get(blockerId);
       log.say(`The ${b && b.Name ? b.Name.name : 'thing'} is in the way.`, LEVEL.bump);
     } else {
-      log.say(blockedText(world, x, y), LEVEL.blocked);
+      if (cliff) {
+        // You're still on the tile you tried to leave: higher there is a drop, lower a cliff.
+        const me = world.entities.get(id).Position;
+        const down = world.height[y * world.w + x] < world.height[me.y * world.w + me.x];
+        log.say(down ? 'A drop. Find a way down.' : 'A cliff. Find some steps.', LEVEL.blocked);
+      } else log.say(blockedText(world, x, y), LEVEL.blocked);
     }
   });
   // Fighting.
@@ -89,11 +95,17 @@ export function createMessageLog(world) {
   return log;
 }
 
-// The place you're in (layout.places), or null in the wilds.
+// The place you're in (layout.places), or the landmark label you're near on an editor map
+// (within 2 tiles), or null in the wilds.
 function placeAt(world) {
   const p = world.entities.get(world.playerId), L = world.layout;
-  if (!p || !p.Position || !L || !L.places) return null;
+  if (!p || !p.Position || !L) return null;
   const { x, y } = p.Position;
+  if (L.labels && L.labels.length) {
+    const near = L.labels.find(lb => Math.abs(lb.x - x) <= 2 && Math.abs(lb.y - y) <= 2);
+    if (near) return near.text;
+  }
+  if (!L.places) return null;
   const pl = L.places.find(q => x >= q.x0 && x <= q.x1 && y >= q.y0 && y <= q.y1);
   return pl ? pl.name : null;
 }
@@ -171,7 +183,36 @@ function buildingAt(world, x, y) {
   const n = L && L.buildingAt[y * world.w + x];
   return n ? L.buildings[n - 1] : null;
 }
+// Editor maps: the top layer you can see on the tile.
+const STRUCT_TEXT = {
+  [S.WALL]: 'A wall. Solid, at least.', [S.DOOR]: 'A door. Unlocked, for now.', [S.FENCE]: 'A fence.',
+  [S.HEDGE]: 'A hedge. Thick, thorny.', [S.BRIDGE]: 'A bridge. Solid enough.', [S.STEPS]: 'Steps. Mind your footing.',
+  [S.LEDGE]: 'A ledge. You could hop down.',
+};
+const OBJECT_TEXT = {
+  [O.CAR]: 'A car. Keys? Doubtful.', [O.VAN]: 'A van. Rust holding it up.', [O.TREE]: "A tree. Climbing's for kids.",
+  [O.BENCH]: 'A bench. In loving memory.', [O.CRATE]: 'Shelves. Mostly empty.', [O.FISHING]: 'A fishing spot. Bites here.',
+};
+const OBJECT_BLOCKED = {
+  [O.CAR]: "A car's in the way.", [O.VAN]: "A van's in the way.", [O.TREE]: "A tree's in the way.",
+  [O.BENCH]: "A bench is in the way.", [O.CRATE]: 'Shelves in the way.', [O.SIGN]: 'A sign is in the way.',
+};
+const STRUCT_BLOCKED = { [S.WALL]: 'A wall blocks the way.', [S.FENCE]: 'A fence blocks the way.', [S.HEDGE]: 'The hedge is too thick.' };
+function layeredText(world, x, y) {
+  const i = y * world.w + x, p = world.entities.get(world.playerId);
+  if (world.roof[i] && !roofRegion(world.roof, world.w, world.h, p.Position.y * world.w + p.Position.x).has(i)) return 'A roof. Shingles missing.';
+  const o = world.obj[i];
+  if (o === O.SIGN) {
+    const sg = world.layout.objects.find(q => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+    return `A sign: ${(sg && sg.text) || 'blank'}.`.slice(0, 30);
+  }
+  if (o) return OBJECT_TEXT[o];
+  if (world.struct[i]) return STRUCT_TEXT[world.struct[i]];
+  return null;
+}
+
 function tileText(world, x, y, tile) {
+  if (world.struct) { const tx = layeredText(world, x, y); if (tx) return tx; }
   const b = buildingAt(world, x, y);
   if (b) return buildingText(b);
   const sign = world.layout && world.layout.signs.find(s => s.x === x && s.y === y);
@@ -181,6 +222,11 @@ function tileText(world, x, y, tile) {
 export function blockedText(world, x, y) {
   if (x < 0 || y < 0 || x >= world.w || y >= world.h) return 'A wall blocks the way.';
   const tile = world.tiles[y * world.w + x], info = TILE_INFO[tile];
+  if (world.struct) {
+    const i = y * world.w + x;
+    if (world.obj[i]) return OBJECT_BLOCKED[world.obj[i]] || "Something's in the way.";
+    if (STRUCT_BLOCKED[world.struct[i]]) return STRUCT_BLOCKED[world.struct[i]];
+  }
   if (info.part === 'door') return "The door's locked. For now.";
   if (info.part) return "A building's in the way.";
   return BLOCKED_TEXT[info.key] || 'A wall blocks the way.';

@@ -125,9 +125,9 @@ export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
       if (key === 'CROSSING') drawRails(ctx, world, x, y, px, py, t, mark, mark);
       return;
     }
-    case 'PAVEMENT': case 'YARD': case 'BRIDGE': case 'DRIVE': case 'PLATFORM': case 'DOORSTEP': case 'PATH': case 'TRACK': {
+    case 'PAVEMENT': case 'YARD': case 'BRIDGE': case 'DRIVE': case 'PLATFORM': case 'DOORSTEP': case 'PATH': case 'TRACK': case 'GRAVEL': {
       rect(ctx, base, px, py, t, t);
-      if (key === 'PATH' || key === 'TRACK') {
+      if (key === 'PATH' || key === 'TRACK' || key === 'GRAVEL') {
         rect(ctx, mark, px + ((h & 7) + 1) * u * 0.8, py + (((h >> 3) & 7) + 1) * u * 0.8, 2, 2);
         rect(ctx, mark, px + (((h >> 6) & 7) + 1) * u * 0.8, py + (((h >> 9) & 7) + 1) * u * 0.8, 2, 2);
         return;

@@ -142,6 +142,7 @@ export function loadWorld(createWorld, json) {
 // The tiles as first generated for this world's seed and map (worked out once per world).
 const freshCache = new WeakMap();
 function freshTiles(world) {
+  if (world.pristine) return world.pristine;   // an editor map: its tiles as loaded
   if (!freshCache.has(world)) freshCache.set(world, makeWorld(world.seed, { map: world.map }).tiles);
   return freshCache.get(world);
 }

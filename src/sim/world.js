@@ -5,14 +5,18 @@ import { createEvents } from './events.js';
 import { generateTestScreen } from './gen/testscreen.js';
 import { generateTown } from './gen/region.js';
 import { TILE_INFO } from './tiles.js';
+import { loadMapIntoWorld, screensForSize, structInfo, objectInfo, heightStep, M } from './map.js';
 import { initLight } from './systems/light.js';
 import { updatePlayerView } from './systems/vision.js';
 import { makeItem, makeInventory } from './systems/items.js';
 
-// map: 'town' (a grid of CONFIG.world.screens screens) or 'testscreen' (one walled room).
+// map: 'town' (the region, CONFIG.world.screens screens), 'testscreen' (one walled room), or a
+// layered map from the editor ('file:<name>', with opts.mapData: a parsed map, src/sim/map.js).
 export function createWorld(seed, opts = {}) {
-  const map = opts.map || CONFIG.world.map;
-  const [screensX, screensY] = map === 'town' ? CONFIG.world.screens : [1, 1];
+  const map = opts.mapData ? (opts.map || 'file:map') : (opts.map || CONFIG.world.map);
+  const fileMap = opts.mapData || null;
+  const fs = fileMap && screensForSize(fileMap.w, fileMap.h);
+  const [screensX, screensY] = fileMap ? [fs.sx, fs.sy] : map === 'town' ? CONFIG.world.screens : [1, 1];
   // Neighbouring screens overlap: step onto the second-to-last tile of a screen (world.flipAt)
   // and the view flips to the next screen, where you're landIn (2) tiles in, with the tiles you
   // just crossed still behind you, so there's always a tile to tap either way.
@@ -38,10 +42,10 @@ export function createWorld(seed, opts = {}) {
     inputs: [],           // every player input, in order, for replay
   };
   // The layout: the test room from the run seed, or the town from the fixed world seed.
-  const start = map === 'town'
-    ? generateTown(world, createRng(CONFIG.world.seed))
-    : generateTestScreen(world, CONFIG.testScreen);
-  if (map === 'town') { const home = screenOf(world, start.x, start.y); world.cam = { sx: home.sx, sy: home.sy }; }
+  const start = fileMap ? loadMapIntoWorld(world, fileMap)
+    : map === 'town' ? generateTown(world, createRng(CONFIG.world.seed))
+      : generateTestScreen(world, CONFIG.testScreen);
+  if (map !== 'testscreen') { const home = screenOf(world, start.x, start.y); world.cam = { sx: home.sx, sy: home.sy }; }
   initLight(world);
   const player = addEntity(world, {
     Position: { x: start.x, y: start.y },
@@ -61,7 +65,9 @@ export function createWorld(seed, opts = {}) {
   });
   world.playerId = player.id;
   if (CONFIG.player.startHolding) player.Inventory.hand = makeItem(world, CONFIG.player.startHolding).id;
-  if (map === 'town') {
+  if (fileMap) {
+    populateFileMap(world, fileMap);
+  } else if (map === 'town') {
     populateTown(world, start);
   } else {
     const zpos = placeTestZombie(world, start, CONFIG.testScreen.zombieDist);
@@ -97,6 +103,31 @@ function populateTown(world, start) {
       if (sx === home.sx && sy === home.sy) continue;
       const zs = between(cfg.zombiesPerScreen);
       for (let i = 0; i < zs && spots.length; i++) { const { x, y } = take(); makeZombie(world, x, y); }
+    }
+  }
+}
+
+// An editor map: a zombie on each zombie-spawn marker; items scattered by the run seed, none on
+// the screen you start on.
+function populateFileMap(world, fileMap) {
+  for (const m of fileMap.markers) if (m.kind === M.ZOMBIE && !tileBlocks(world, m.x, m.y)) makeZombie(world, m.x, m.y);
+  const cfg = CONFIG.world, rng = world.rng, homeRect = cameraRect(world);
+  for (let sy = 0; sy < world.screensY; sy++) {
+    for (let sx = 0; sx < world.screensX; sx++) {
+      const spots = [];
+      const r = screenRect(world, sx, sy);
+      for (let y = r.oy; y < r.oy + world.screenH; y++) {
+        for (let x = r.ox; x < r.ox + world.screenW; x++) {
+          const hs = screenOf(world, x, y);
+          if (hs.sx !== sx || hs.sy !== sy || tileBlocks(world, x, y) || blockerAt(world, x, y) || inRect(world, homeRect, x, y)) continue;
+          spots.push({ x, y });
+        }
+      }
+      const n = cfg.itemsPerScreen[0] + rng.int(cfg.itemsPerScreen[1] - cfg.itemsPerScreen[0] + 1);
+      for (let i = 0; i < n && spots.length; i++) {
+        const { x, y } = spots.splice(rng.int(spots.length), 1)[0];
+        makeItem(world, cfg.itemTypes[rng.int(cfg.itemTypes.length)], x, y);
+      }
     }
   }
 }
@@ -225,8 +256,26 @@ export function tileAt(world, x, y) {
   return world.tiles[y * world.w + x];
 }
 
+// Does the tile block movement? On an editor map the layers decide: an object that blocks, a
+// structure that blocks (a bridge or steps make any ground walkable), else the ground.
 export function tileBlocks(world, x, y) {
-  return !inBounds(world, x, y) || TILE_INFO[tileAt(world, x, y)].blocks;
+  if (!inBounds(world, x, y)) return true;
+  const i = y * world.w + x;
+  if (world.struct) {
+    if (objectInfo(world.obj[i]).blocks) return true;
+    const s = structInfo(world.struct[i]);
+    if (s.pass) return false;
+    if (s.blocks) return true;
+  }
+  return TILE_INFO[world.tiles[i]].blocks;
+}
+
+// Height (editor maps): can you step from one tile to the next? A change in height is a cliff
+// unless steps connect it or you're hopping down off a ledge. Everything that moves (you,
+// zombies, knockback) goes by this.
+export function heightAllows(world, fx, fy, tx, ty) {
+  if (!world.height || !inBounds(world, tx, ty) || !inBounds(world, fx, fy)) return true;
+  return heightStep(world.height, world.struct, fy * world.w + fx, ty * world.w + tx);
 }
 
 export function blockerAt(world, x, y) {

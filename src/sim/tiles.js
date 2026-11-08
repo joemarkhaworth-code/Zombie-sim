@@ -60,6 +60,7 @@ const GROUND = [
   ['PARAPET',    true,  false, { muffles: false }], // a bridge's or the trestle's parapet (never a gate)
   ['PADLOCK',    true,  false, { muffles: false }], // a padlocked gate (bolt cutters, step 20)
   ['MARSH',      false, false],                     // the swamp: reeds and mud
+  ['GRAVEL',     false, false],                     // gravel (editor maps)
 ];
 
 const ROOF_MATS = ['SLATE', 'TILES', 'METAL'];

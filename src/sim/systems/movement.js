@@ -1,5 +1,5 @@
-// One step for anything: 4-way only, refused into walls, blockers and off the map.
-import { tileBlocks, blockerAt } from '../world.js';
+// One step for anything: 4-way only, refused into walls, blockers, up cliffs and off the map.
+import { tileBlocks, blockerAt, heightAllows } from '../world.js';
 import { makeNoise } from './noise.js';
 
 // Returns 'moved', 'blocked' or 'invalid'.
@@ -7,6 +7,10 @@ export function tryStep(world, e, dx, dy) {
   dx = Math.sign(dx); dy = Math.sign(dy);
   if ((dx === 0) === (dy === 0)) return 'invalid'; // standing still or diagonal
   const nx = e.Position.x + dx, ny = e.Position.y + dy;
+  if (!heightAllows(world, e.Position.x, e.Position.y, nx, ny)) {
+    world.events.emit('move_blocked', { id: e.id, x: nx, y: ny, blockerId: 0, cliff: true });
+    return 'blocked';
+  }
   const blocker = tileBlocks(world, nx, ny) ? null : blockerAt(world, nx, ny);
   if (tileBlocks(world, nx, ny) || blocker) {
     world.events.emit('move_blocked', { id: e.id, x: nx, y: ny, blockerId: blocker ? blocker.id : 0 });

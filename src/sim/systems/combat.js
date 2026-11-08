@@ -6,7 +6,7 @@
 // Forced movement goes through pushEntity(), which emits entity_pushed, so later systems (water,
 // fire) can react to where something lands without knowing why it moved.
 import { CONFIG } from '../../config.js';
-import { tileBlocks, blockerAt, addEntity } from '../world.js';
+import { tileBlocks, blockerAt, addEntity, heightAllows } from '../world.js';
 import { makeNoise } from './noise.js';
 import { lineClear } from './vision.js';
 import { meleeStats } from './items.js';
@@ -26,6 +26,7 @@ export function stagger(world, e, actions) {
 // Push e one tile by (dx, dy). Returns null if it moved, or { blockerId } (0 = a wall) if not.
 export function pushEntity(world, e, dx, dy, byId) {
   const from = { ...e.Position }, nx = from.x + dx, ny = from.y + dy;
+  if (!heightAllows(world, from.x, from.y, nx, ny)) return { blockerId: 0, x: nx, y: ny };   // a cliff stops it like a wall
   const blocker = tileBlocks(world, nx, ny) ? null : blockerAt(world, nx, ny);
   if (tileBlocks(world, nx, ny) || blocker) return { blockerId: blocker ? blocker.id : 0, x: nx, y: ny };
   e.Position.x = nx; e.Position.y = ny;
