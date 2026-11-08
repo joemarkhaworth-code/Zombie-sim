@@ -265,7 +265,128 @@ export function buildBuilding(map, r, preset, set) {
       set('roof', i, roof);
     }
   }
+  furnish(map, r, preset.key, doorX, set);
   return null;
+}
+
+// --- Inside: rooms and furniture that fit the size you drew --------------------------------------
+// Fixed rules, no dice: the same rectangle always gives the same building. Partitions get
+// doorways; every piece of furniture is tried, and left out if it would cut any part of the
+// inside off from the front door (or stand in the doorway).
+function furnish(map, r, kind, doorX, set) {
+  const { w } = map;
+  const ix0 = r.x0 + 1, iy0 = r.y0 + 1, ix1 = r.x1 - 1, iy1 = r.y1 - 1;
+  const iw = ix1 - ix0 + 1, ih = iy1 - iy0 + 1;
+  if (iw < 2 || ih < 2) return;
+  const entry = { x: doorX, y: iy1 };                  // just inside the front door
+  const inside = (x, y) => x >= ix0 && x <= ix1 && y >= iy0 && y <= iy1;
+  const connected = () => {
+    const seen = new Set([entry.y * w + entry.x]), stack = [entry];
+    while (stack.length) {
+      const { x, y } = stack.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, k = ny * w + nx;
+        if (!inside(nx, ny) || seen.has(k) || cellBlocks(map, k)) continue;
+        seen.add(k); stack.push({ x: nx, y: ny });
+      }
+    }
+    for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) if (!cellBlocks(map, y * w + x) && !seen.has(y * w + x)) return false;
+    return true;
+  };
+  // A piece of furniture, only if it fits, stays clear of the entry and keeps every room reachable.
+  const put = (kindKey, x, y, rot = 0, extra = {}) => {
+    const k = O[kindKey], fp = footprint(k, rot);
+    if (x < ix0 || y < iy0 || x + fp.w - 1 > ix1 || y + fp.h - 1 > iy1) return false;
+    if (entry.x >= x && entry.x < x + fp.w && entry.y >= y && entry.y < y + fp.h) return false;
+    if (checkPlace(map, 'object', k, x, y, rot)) return false;
+    const o = placeObject(map, { kind: k, x, y, w: fp.w, h: fp.h, ...extra });
+    if (!connected()) { removeObject(map, o); return false; }
+    return true;
+  };
+  const wallH = (y, xa, xb, doors) => { for (let x = xa; x <= xb; x++) set('struct', y * w + x, doors.includes(x) ? S.DOOR : S.WALL); };
+  const wallV = (x, ya, yb, doors) => { for (let y = ya; y <= yb; y++) set('struct', y * w + x, doors.includes(y) ? S.DOOR : S.WALL); };
+
+  if (kind === 'house' || kind === 'cabin') {
+    // Small: one room. Taller: a front room by the door, back rooms behind a partition. Wide too:
+    // the back split in two (bedroom and kitchen), each with its own doorway.
+    const split = kind === 'house' ? ih >= 5 && iw >= 3 : ih >= 6 && iw >= 5;
+    if (!split) {
+      put('BED', ix0, iy0); put('STOVE', ix1, iy0); put('TABLE', ix0 + 1, iy0 + Math.min(2, ih - 1)); put('CHAIR', ix1, iy1 - 1);
+      return;
+    }
+    const py = iy0 + Math.floor((ih - 1) / 2);
+    const two = iw >= 7;
+    const mid = ix0 + Math.floor(iw / 2);
+    const leftDoor = two ? ix0 + ((mid - ix0) >> 1) : Math.min(Math.max(doorX, ix0), ix1);
+    const rightDoor = two ? mid + 1 + ((ix1 - mid - 1) >> 1) : -1;
+    wallH(py, ix0, ix1, two ? [leftDoor, rightDoor] : [leftDoor]);
+    if (two) wallV(mid, iy0, py - 1, []);
+    // Back left: the bedroom. Back right (or the whole back): the kitchen.
+    put('BED', ix0, iy0);
+    if (two) { put('DESK', mid - 2, iy0); put('STOVE', ix1, iy0); put('FRIDGE', ix1 - 1, iy0); put('TABLE', mid + 1, py - 1); }
+    else { put('STOVE', ix1, iy0); put('FRIDGE', ix1, iy0 + 1); }
+    // Front: the living room.
+    if (ih >= 9) put('BATH', ix0, py - 1);
+    put('SOFA', ix0, py + 1); put('CHAIR', ix1, py + 1); put('STOVE', ix1, iy1);
+    return;
+  }
+  if (kind === 'store') {
+    // Shelf aisles running north-south, a counter by the door, a stockroom behind if it's deep.
+    let top = iy0;
+    if (ih >= 9) { wallH(iy0 + 2, ix0, ix1, [doorX]); put('CRATE', ix0, iy0); put('CRATE', ix1, iy0); put('CRATE', ix0 + 1, iy0); top = iy0 + 3; }
+    for (let x = ix0 + 1; x <= ix1 - 1; x += 2) {
+      if (Math.abs(x - doorX) < 1) continue;
+      for (let y = top + 1; y <= iy1 - 3; y++) put('CRATE', x, y);
+    }
+    for (let x = ix0; x <= Math.min(ix1, doorX - 2); x++) put('COUNTER', x, iy1 - 1);
+    return;
+  }
+  if (kind === 'diner') {
+    // The counter along the back with stools before it (the kitchen behind it, if there's room),
+    // tables along the front windows.
+    const cy = ih >= 6 ? iy0 + 1 : iy0;
+    if (ih >= 6) { put('STOVE', ix0, iy0); put('FRIDGE', ix0 + 1, iy0); }
+    for (let x = ix0 + (ih >= 6 ? 0 : 0); x <= ix1 - 1; x++) put('COUNTER', x, cy);
+    for (let x = ix0; x <= ix1 - 1; x += 2) put('CHAIR', x, cy + 1);
+    for (let x = ix0; x + 1 <= ix1; x += 3) if (Math.abs(x - doorX) > 1 && Math.abs(x + 1 - doorX) > 1) put('TABLE', x, iy1 - 1);
+    return;
+  }
+  if (kind === 'barn') {
+    // A central aisle from the doors; stalls either side, hay along the back.
+    for (let y = iy0 + 2; y <= iy1 - 2; y += 3) {
+      for (let x = ix0; x <= doorX - 2; x++) set('struct', y * w + x, S.FENCE);
+      for (let x = doorX + 2; x <= ix1; x++) set('struct', y * w + x, S.FENCE);
+    }
+    for (let x = ix0; x <= ix1; x++) if (Math.abs(x - doorX) > 1) put('HAY', x, iy0);
+    return;
+  }
+  if (kind === 'garage') {
+    // A truck in the bay if it fits, a workbench along the back, drums in a corner.
+    if (iw >= 4 && ih >= 5) put('PICKUP', doorX - 1, iy1 - 3, 1);
+    for (let x = ix0; x <= ix1; x++) put('COUNTER', x, iy0);
+    put('DRUM', ix0, iy1); put('CRATE', ix1, iy1 - 1);
+    return;
+  }
+  if (kind === 'mill') {
+    // An office in the back corner if it's big; machine rows across the floor.
+    let x0m = ix0;
+    if (iw >= 8 && ih >= 6) { wallV(ix0 + 4, iy0, iy0 + 2, [iy0 + 1]); wallH(iy0 + 3, ix0, ix0 + 4, []); put('DESK', ix0, iy0); put('CHAIR', ix0 + 1, iy0 + 1); x0m = ix0 + 6; }
+    for (let y = iy0 + 1; y <= iy1 - 2; y += 3) for (let x = Math.max(x0m, ix0 + 1); x <= ix1 - 1; x++) if (Math.abs(x - doorX) > 1) put('CRATE', x, y);
+    return;
+  }
+  if (kind === 'church') {
+    // The altar at the north end, pews either side of the aisle up the middle.
+    put('TABLE', doorX - (iw >= 4 ? 1 : 0), iy0);
+    for (let y = iy0 + 2; y <= iy1 - 1; y += 2) {
+      for (let x = ix0; x + 1 <= doorX - 1; x += 2) put('BENCH', x, y);
+      for (let x = doorX + 1; x + 1 <= ix1; x += 2) put('BENCH', x, y);
+    }
+    return;
+  }
+  if (kind === 'shed') {
+    for (let x = ix0; x <= ix1; x++) put('CRATE', x, iy0);
+    put('WOODPILE', ix0, iy1);
+  }
 }
 // Knock a rectangle back to grass: walls, floor and roof gone (objects too, separately).
 export function demolish(map, r, set) {

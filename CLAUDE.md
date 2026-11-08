@@ -354,3 +354,17 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - Footsteps by surface (noise.js surfaceStep): gravel, dead leaves, a rocky stream, a dock and the tracks are loud (+3 strength: heard about twice as far); moss, pine needles and carpet are quiet (-2). Still a footstep (level 1), so never a distraction.
 - Every kind has a deadpan inspect line ("Shag carpet. Brown, of course.", "A gas pump. 1.29 a gallon.", "A pickup. Gun rack, empty.", "A fridge. Don't open it.") and says what stops you ("A window. It's not a door.", "The garage door's down.").
 - Tests: unique characters per layer; a house from a rectangle (walls, floor, roof, south door, windows), 3 x 3 minimum, demolish; what blocks movement and sight for windows, walls, fences, docks, vehicles, trees and shrubs; footsteps further on gravel, less on moss; gates and windows need something either side; loot spots; every ground, structure, object and roof drawn and with a short inspect line.
+
+### Buildings lay themselves out for the size you draw - built
+- Playtest: "I should be able to draw the size and it should change layout respectively, in a way that makes sense." While you drag a Bldg rectangle, the building is rebuilt every time it changes size, so you watch the rooms and furniture rearrange (roofs see-through meanwhile); release to keep it. Undo takes the whole building back.
+- Fixed rules per type (map.js furnish), the same rectangle always giving the same building. Partitions get doorways; each piece of furniture is tried and left out if it would cut any part of the inside off from the front door or stand just inside it.
+  - House: small, one room (bed, stove, table, chair). Taller, a partition: back rooms behind, the living room by the door (sofa, chair, wood stove). Wide too, the back splits into a bedroom (bed, desk; a bath when it's big) and a kitchen (stove, fridge, table).
+  - Cabin: one room; a bedroom split off when it's big.
+  - Store: shelf aisles north-south (more the bigger it is), a counter by the door, a stockroom behind when it's deep.
+  - Diner: the counter along the back with stools, the kitchen behind it when there's room, tables along the front windows.
+  - Barn: an aisle up the middle from the doors, stalls either side, hay along the back.
+  - Garage: a pickup in the bay if it fits, a workbench along the back, an oil drum and shelves.
+  - Mill: an office in the back corner when it's big, machine rows across the floor.
+  - Church: the altar at the north end, pews either side of the aisle (more the longer it is).
+  - Shed: shelves along the back, a woodpile.
+- Tests: every type at every size from 3x3 to 14x13 keeps everything inside reachable from the door; a small house is one room, a bigger one has a bedroom and a kitchen behind a partition; a longer church has more pews; a bigger store has more shelves and a counter.

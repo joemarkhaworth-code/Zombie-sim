@@ -83,6 +83,12 @@ function endStroke() {
   stroke = null;
   hint(); render();
 }
+// Undo what this stroke has done so far, but keep the stroke going (Bldg redraws as you drag).
+function resetStroke() {
+  for (const [l, i, old] of stroke.cells.values()) map[l][i] = old;
+  stroke.cells.clear();
+  restoreLists(stroke.objects, stroke.markers);
+}
 function cancelStroke() {
   if (!stroke) return;
   for (const [l, i, old] of stroke.cells.values()) map[l][i] = old;
@@ -209,16 +215,17 @@ function shapeApply(tiles, erase) {
   for (const t of tiles) paintTile(t.x, t.y, erase);
 }
 
+// The building for the rectangle a..b, laid out for its size. Returns a message if it can't be
+// built there. While you drag, it's rebuilt every time the rectangle changes, so you see the
+// rooms and furniture rearrange as you size it.
 function doBuilding(a, b) {
   const r = rectCells(a, b);
   if (preset === 'demolish') {
     demolish(map, r, setCell);
     for (const o of [...map.objects]) if (o.x >= r.x0 && o.x + o.w - 1 <= r.x1 && o.y >= r.y0 && o.y + o.h - 1 <= r.y1) removeObject(map, o);
-    return say('Cleared.');
+    return null;
   }
-  const p = BUILDINGS.find(q => q.key === preset);
-  const msg = buildBuilding(map, r, p, setCell);
-  say(msg || `${p.label} built: ${r.x1 - r.x0 + 1} x ${r.y1 - r.y0 + 1}.`);
+  return buildBuilding(map, r, BUILDINGS.find(q => q.key === preset), setCell);
 }
 
 // Pick: copy what's on a tile into the current layer's brush.
@@ -250,7 +257,8 @@ function render() {
 function preview() {
   if (!stroke || !stroke.start || !stroke.last) return null;
   if (tool === 'line') return lineTiles(stroke.start, stroke.last);
-  if (tool === 'rect' || tool === 'building') return rectTiles(stroke.start, stroke.last, false);
+  if (tool === 'rect' || (tool === 'building' && preset === 'demolish')) return rectTiles(stroke.start, stroke.last, false);
+  if (tool === 'building') return [];
   if (tool === 'box') return rectTiles(stroke.start, stroke.last, true);
   return null;
 }
@@ -277,7 +285,7 @@ function draw() {
   if (shown.object) for (const o of map.objects) if (o.x + o.w > x0 && o.x <= x1 && o.y + o.h > y0 && o.y <= y1) drawObject(ctx, o, px(o.x), py(o.y), t, false);
   // Roofs: solid on the roof layer, see-through while you work on what's under them.
   if (shown.roof && !hideRoofs) {
-    ctx.globalAlpha = layer === 'roof' ? 0.95 : 0.35;
+    ctx.globalAlpha = layer === 'roof' && tool !== 'building' ? 0.95 : 0.35;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (map.roof[y * map.w + x]) drawRoofTile(ctx, map, x, y, px(x), py(y), t, false);
     ctx.globalAlpha = 1;
   }
@@ -326,7 +334,7 @@ function hint(extra) {
     rect: `Drag a rectangle of ${b}.`,
     box: `Drag the outline of a rectangle in ${b}.`,
     fill: `Tap to fill an area with ${b}.`,
-    building: preset === 'demolish' ? 'Drag over buildings to clear them.' : `Drag a rectangle: a whole ${p ? p.label.toLowerCase() : 'building'}, door to the south.`,
+    building: preset === 'demolish' ? 'Drag over buildings to clear them.' : `Drag out a ${p ? p.label.toLowerCase() : 'building'}: the rooms fit the size you draw.`,
     pick: `Tap a tile to copy its ${layer === 'struct' ? 'structure' : layer}.`,
     erase: `Tap or drag to clear the ${LAYER_NAMES[layer].toLowerCase()} layer.`,
     hand: 'Drag to look around. Pinch to zoom.',
@@ -389,6 +397,7 @@ canvas.addEventListener('pointerdown', ev => {
     if (thing) { stroke.moving = layer === 'object' ? { object: thing, grab: { x: tl.x - thing.x, y: tl.y - thing.y } } : { marker: thing, grab: { x: 0, y: 0 } }; render(); return; }
   }
   if (tool === 'paint' || tool === 'erase') paintAt(tl.x, tl.y, tool === 'erase');
+  else if (tool === 'building') stroke.refused = doBuilding(tl, tl);
   else if (tool === 'fill') fillAt(tl.x, tl.y);
   else if (tool === 'pick') pickAt(tl.x, tl.y);
   render();
@@ -423,9 +432,11 @@ canvas.addEventListener('pointermove', ev => {
     }
   }
   stroke.last = tl;
+  if (tool === 'building') { resetStroke(); stroke.refused = doBuilding(stroke.start, tl); }
   if (tool === 'rect' || tool === 'box' || tool === 'building' || tool === 'line') {
     const r = rectCells(stroke.start, tl);
-    hint(tool === 'line' ? `${lineTiles(stroke.start, tl).length} long.` : `${r.x1 - r.x0 + 1} x ${r.y1 - r.y0 + 1}.`);
+    const sizeText = tool === 'line' ? `${lineTiles(stroke.start, tl).length} long.` : `${r.x1 - r.x0 + 1} x ${r.y1 - r.y0 + 1}.`;
+    hint(tool === 'building' && stroke.refused ? `${sizeText} ${stroke.refused}` : sizeText);
   }
   render();
 });
@@ -445,7 +456,10 @@ function pointerUp(ev) {
   else if (tool === 'line') shapeApply(lineTiles(stroke.start, stroke.last), false);
   else if (tool === 'rect') { if (!gridLayer()) say('Rect works on height, ground, structures and roofs.'); else shapeApply(rectTiles(stroke.start, stroke.last, false), false); }
   else if (tool === 'box') shapeApply(rectTiles(stroke.start, stroke.last, true), false);
-  else if (tool === 'building') doBuilding(stroke.start, stroke.last);
+  else if (tool === 'building') {
+    if (stroke.refused) { say(stroke.refused); resetStroke(); }
+    else if (preset !== 'demolish') { const r = rectCells(stroke.start, stroke.last); say(`${BUILDINGS.find(q => q.key === preset).label}: ${r.x1 - r.x0 + 1} x ${r.y1 - r.y0 + 1}.`); }
+  }
   stroke.moving = null;
   endStroke();
 }

@@ -1181,11 +1181,41 @@ function townLayoutChecks(a) {
   check(mapLib.buildBuilding(bm, { x0: 1, y0: 1, x1: 2, y1: 2 }, housePreset, bset) === 'A building needs at least 3 x 3.', 'a building needs 3 x 3');
   check(mapLib.buildBuilding(bm, { x0: 2, y0: 3, x1: 8, y1: 9 }, housePreset, bset) === null, 'a house from a rectangle');
   const at2 = (l, x, y) => bm[l][y * bm.w + x];
-  check(at2('struct', 5, 9) === Sx.DOOR && at2('struct', 2, 3) === Sx.CLAPBOARD && at2('ground', 5, 6) === Gx.FLOOR && at2('roof', 5, 6) && !at2('struct', 5, 6),
+  check(at2('struct', 5, 9) === Sx.DOOR && at2('struct', 2, 3) === Sx.CLAPBOARD && at2('ground', 5, 6) === Gx.FLOOR && at2('roof', 5, 6) && !at2('struct', 4, 8),
     'walls round the edge, floor inside, a roof over it, the door in the middle of the south wall');
   let wins = 0;
   for (let i = 0; i < bm.struct.length; i++) if (bm.struct[i] === Sx.WINDOW) wins++;
   check(wins >= 4, `windows in the walls (${wins})`);
+  // Inside fits the size: every type at many sizes keeps every part of the inside reachable from
+  // the door; a small house is one room, a bigger one has rooms behind a partition; a longer
+  // church has more pews.
+  let cutOff = 0;
+  const built = {};
+  for (const pr of mapLib.BUILDINGS) {
+    for (let W = 3; W <= 14; W++) for (let H = 3; H <= 13; H++) {
+      const tm = createMap(3, 2), r2 = { x0: 1, y0: 1, x1: W, y1: H };
+      if (mapLib.buildBuilding(tm, r2, pr, (l, i, v) => { tm[l][i] = v; })) continue;
+      const door = { x: (r2.x0 + r2.x1) >> 1, y: r2.y1 - 1 };
+      const seen = new Set([door.y * tm.w + door.x]), st3 = [door];
+      while (st3.length) {
+        const q = st3.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = q.x + dx, ny = q.y + dy, k = ny * tm.w + nx;
+          if (nx <= r2.x0 || ny <= r2.y0 || nx >= r2.x1 || ny >= r2.y1 || seen.has(k) || mapLib.cellBlocks(tm, k)) continue;
+          seen.add(k); st3.push({ x: nx, y: ny });
+        }
+      }
+      for (let y = r2.y0 + 1; y < r2.y1; y++) for (let x = r2.x0 + 1; x < r2.x1; x++) if (!mapLib.cellBlocks(tm, y * tm.w + x) && !seen.has(y * tm.w + x)) { cutOff++; y = 1e9; break; }
+      built[`${pr.key} ${W}x${H}`] = tm;
+    }
+  }
+  check(!cutOff, `every building type, 3x3 to 14x13: nothing inside is cut off from the door (${cutOff})`);
+  const walls = (tm, l) => { let n = 0; for (let y = 2; y < l; y++) for (let x = 2; x < l; x++) if (tm.struct[y * tm.w + x] === Sx.WALL) n++; return n; };
+  const count = (tm, k) => tm.objects.filter(o => o.kind === k).length;
+  check(walls(built['house 5x5'], 5) === 0 && walls(built['house 9x8'], 8) > 0 && count(built['house 9x8'], Ox.BED) === 1 && count(built['house 9x8'], Ox.FRIDGE) === 1,
+    'a small house is one room; a bigger one has a bedroom and a kitchen behind a partition');
+  check(count(built['church 9x13'], Ox.BENCH) > count(built['church 9x7'], Ox.BENCH), 'a longer church has more pews');
+  check(count(built['store 12x9'], Ox.CRATE) > count(built['store 7x7'], Ox.CRATE) && count(built['store 7x7'], Ox.COUNTER) >= 1, 'a bigger store has more shelves; there is a counter');
   mapLib.demolish(bm, { x0: 0, y0: 0, x1: bm.w - 1, y1: bm.h - 1 }, (l, i, v) => { bm[l][i] = v; });
   check(bm.struct.every(v => !v) && bm.roof.every(v => !v), 'demolish clears it');
   // Structures and objects block what they should.
