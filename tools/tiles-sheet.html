@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Tile sheet</title>
+<style>body{margin:0;background:#f2ead6;font:12px system-ui,sans-serif}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// Every tile as the game draws it now, labelled: the picture for docs/tiles.md.
+// Screenshot it (tools/tiles-sheet.html) to make docs/tiles.png.
+import { GROUND, STRUCT, OBJECT, MARKER, ROOF, createMap, groundTile, footprint } from '../src/sim/map.js';
+import { drawTile } from '../src/render/tiles.js';
+import { drawHeightAndStruct, drawObject, drawRoofTile, drawMarker } from '../src/render/layers.js';
+const T = 40, COLW = 250, PAD = 16, cols = 4;
+const sections = [
+  ['Ground', GROUND.map(([c, , n], k) => ({ c, n, kind: 'ground', k }))],
+  ['Structures', STRUCT.slice(1).map(([c, , n], k) => ({ c, n, kind: 'struct', k: k + 1 }))],
+  ['Objects', OBJECT.slice(1).map(([c, , n], k) => ({ c, n, kind: 'object', k: k + 1 }))],
+  ['Roofs', ROOF.slice(1).map(([c, , n], k) => ({ c, n, kind: 'roof', k: k + 1 }))],
+  ['Markers', MARKER.slice(1).map(([c, , n], k) => ({ c, n, kind: 'marker', k: k + 1 }))],
+  ['Height', [0, 1, 2, 3].map(k => ({ c: String(k), n: `level ${k} (cliff below a higher tile)`, kind: 'height', k }))],
+];
+const rowH = it => (it.kind === 'object' ? Math.max(1, footprint(it.k, 0).h) * T + (footprint(it.k, 0).w * T > COLW - 90 ? 16 : 0) : T) + 12;
+let H = PAD;
+const layout = [];
+for (const [title, items] of sections) {
+  layout.push({ title, y: H }); H += 28;
+  for (let i = 0; i < items.length; i += cols) {
+    const row = items.slice(i, i + cols), h = Math.max(...row.map(rowH));
+    row.forEach((it, j) => layout.push({ it, x: PAD + j * COLW, y: H }));
+    H += h;
+  }
+  H += 10;
+}
+const cv = document.getElementById('c');
+cv.width = PAD * 2 + cols * COLW; cv.height = H + PAD;
+const ctx = cv.getContext('2d');
+ctx.fillStyle = '#f2ead6'; ctx.fillRect(0, 0, cv.width, cv.height);
+for (const L of layout) {
+  if (L.title) { ctx.fillStyle = '#222'; ctx.font = 'bold 18px system-ui'; ctx.fillText(L.title, PAD, L.y + 20); continue; }
+  const { it, x, y } = L;
+  // A little 3 x 3 patch of map round the tile, so structures and edges have neighbours.
+  const m = createMap(1, 1), W = m.w, cx = 1, cy = 1;
+  let wTiles = 1;
+  if (it.kind === 'ground') m.ground.fill(it.k);
+  if (it.kind === 'struct') { for (let k = 0; k < 3; k++) m.struct[cy * W + k] = it.k; wTiles = 3; if (STRUCT[it.k][1] === 'BRIDGE' || STRUCT[it.k][1] === 'DOCK') for (let k = 0; k < 3; k++) m.ground[cy * W + k] = GROUND.findIndex(g => g[1] === 'WATER'); if (STRUCT[it.k][3].opening) { m.struct[cy * W] = 2; m.struct[cy * W + 2] = 2; } if (STRUCT[it.k][1] === 'STEPS' || STRUCT[it.k][1] === 'LEDGE') { for (let k = 0; k < 3; k++) { m.height[k] = 1; m.height[W + k] = 1; } m.struct[cy * W] = 0; m.struct[cy * W + 2] = 0; wTiles = 3; } }
+  if (it.kind === 'roof') { for (let k = 0; k < 3; k++) m.roof[cy * W + k] = it.k; wTiles = 3; }
+  if (it.kind === 'height') { m.height[cy * W + 1] = it.k; m.height[(cy - 1) * W + 1] = Math.min(3, it.k + 1); wTiles = 1; }
+  const fp = it.kind === 'object' ? footprint(it.k, 0) : { w: wTiles, h: 1 };
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, fp.w * T, fp.h * T); ctx.clip();
+  for (let yy = 0; yy < fp.h; yy++) for (let xx = 0; xx < fp.w; xx++) {
+    const mx = it.kind === 'struct' || it.kind === 'roof' ? xx : cx, my = cy + yy;
+    const px = x + xx * T, py = y + yy * T, i = my * W + mx;
+    drawTile(ctx, null, groundTile(m.ground[i]), mx, my, px, py, T, false);
+    if (it.kind !== 'object') drawHeightAndStruct(ctx, m, mx, my, px, py, T, false);
+    if (it.kind === 'roof') drawRoofTile(ctx, m, mx, my, px, py, T, false);
+  }
+  if (it.kind === 'object') drawObject(ctx, { kind: it.k, x: 0, y: 0, w: fp.w, h: fp.h, text: 'GAS' }, x, y, T, false);
+  if (it.kind === 'marker') drawMarker(ctx, { kind: it.k, x: 0, y: 0, text: 'Haverly' }, x, y, T);
+  ctx.restore();
+  ctx.strokeStyle = '#0003'; ctx.strokeRect(x + 0.5, y + 0.5, fp.w * T - 1, fp.h * T - 1);
+  ctx.fillStyle = '#222'; ctx.font = '12px system-ui';
+  const wide = fp.w * T > COLW - 90;   // a long vehicle: label underneath
+  const tx = wide ? x : x + fp.w * T + 6;
+  if (wide) { ctx.font = 'bold 13px monospace'; ctx.fillText(`${it.c}  ${it.n}`, x, y + fp.h * T + 12); document.title = document.title; }
+  else ctx.font = 'bold 13px monospace', ctx.fillText(it.c, tx, y + 15);
+  ctx.font = '12px system-ui';
+  if (wide) continue;
+  const words = it.n.split(' '); let line = '', ly = y + 30;
+  for (const wd of words) { if (ctx.measureText(line + wd).width > COLW - fp.w * T - 14) { ctx.fillText(line, tx, ly); ly += 14; line = ''; } line += wd + ' '; }
+  ctx.fillText(line, tx, ly);
+}
+document.title = 'sheet ready';
+</script></body></html>
