@@ -10,7 +10,7 @@
 //   roof    covers a building; shown while you're outside it, hidden while you're inside.
 // Pure data and rules: no DOM. The editor and the game both use this module.
 import { CONFIG } from '../config.js';
-import { TILE } from './tiles.js';
+import { TILE, TILE_INFO } from './tiles.js';
 
 // [char, key, label]. Ground keys are tile keys (tiles.js), so the game's tile rules and
 // drawing work on them unchanged. Characters are what the map text uses: never change one.
@@ -134,6 +134,95 @@ export const G = Object.fromEntries(GROUND.map(([, k], i) => [k, i]));
 export const structInfo = s => STRUCT[s][3];
 export const objectInfo = o => OBJECT[o][3];
 export const groundTile = g => TILE[GROUND[g][1]];
+
+// --- New kinds, made by Joe in the tile art builder (tileart/) ------------------------------------
+// A kind is a plain definition: { layer: ground|struct|object|roof, key, char, name, w, h (objects),
+// blocks, opaque (blocks sight; also muffles noise), step ('', 'loud', 'quiet'), type (structures:
+// 'plain', 'wall' (doors and windows go in it), 'fence' (gates go in it), 'over' (walkable on
+// anything, like a bridge)), text (its inspect line) }. They live in the art text (art/tiles.json,
+// and the builder's autosave) and in any map that uses them, so a map always carries its own.
+// registerKind adds one to the tables above (or updates it), so everything that reads the tables
+// (the editor's palettes, the game's rules, drawing, the map text) takes it as it takes the rest.
+export const KIND_LAYERS = ['ground', 'struct', 'object', 'roof'];
+export const KIND_TYPES = ['plain', 'wall', 'fence', 'over'];
+const KIND_TABLES = { ground: GROUND, struct: STRUCT, object: OBJECT, roof: ROOF };
+const KIND_INDEX = { ground: G, struct: S, object: O, roof: null };
+const KIND_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!$&*?/<>()[]{};\'`';
+export const kinds = new Map();   // 'layer:KEY' -> the definition, in the order they were added
+
+export function cleanKind(d) {
+  if (!d || !KIND_LAYERS.includes(d.layer) || !/^[A-Z][A-Z0-9_]*$/.test(d.key || '') || typeof d.char !== 'string' || d.char.length !== 1 || d.char === '.' || d.char === ' ') return null;
+  const out = { layer: d.layer, key: d.key, char: d.char, name: String(d.name || d.key.toLowerCase()).slice(0, 30) };
+  if (d.layer === 'object') { out.w = Math.max(1, Math.min(8, d.w | 0 || 1)); out.h = Math.max(1, Math.min(8, d.h | 0 || 1)); }
+  if (d.layer !== 'roof') { out.blocks = !!d.blocks; out.opaque = !!d.opaque; }
+  if (d.layer === 'ground' || d.layer === 'struct') out.step = d.step === 'loud' || d.step === 'quiet' ? d.step : '';
+  if (d.layer === 'struct') out.type = KIND_TYPES.includes(d.type) ? d.type : 'plain';
+  if (d.text) out.text = String(d.text).slice(0, 30);
+  return out;
+}
+// The rules a kind gives the game (the same shape as the built-in kinds' info).
+function kindInfo(d) {
+  if (d.layer === 'ground') return { key: d.key, blocks: d.blocks, opaque: d.opaque, muffles: d.opaque, ...(d.step ? { step: d.step } : {}), custom: d };
+  if (d.layer === 'struct') {
+    return { blocks: d.type !== 'over' && d.blocks, opaque: d.opaque, muffles: d.opaque, wall: d.type === 'wall', fence: d.type === 'fence', pass: d.type === 'over',
+      ...(d.step ? { step: d.step } : {}), ...(d.type === 'wall' ? { colour: 'plaster' } : {}), look: 'custom', custom: d };
+  }
+  if (d.layer === 'object') return { w: d.w, h: d.h, blocks: d.blocks, opaque: d.opaque, muffles: d.opaque, look: 'custom', custom: d };
+  return { custom: d };
+}
+// Adds a kind, or updates the rules and name of one already added (its key and character never
+// change). keep: leave one that's already there alone (a map's copy doesn't override the builder's).
+// Returns null, or a message if it can't be added.
+export function registerKind(raw, { keep = false } = {}) {
+  const d = cleanKind(raw);
+  if (!d) return 'That kind is broken.';
+  const table = KIND_TABLES[d.layer], id = `${d.layer}:${d.key}`;
+  const k = table.findIndex(e => e[1] === d.key);
+  if (k >= 0 && !kinds.has(id)) return `${d.key} is already a ${d.layer} kind.`;
+  if (k >= 0) {
+    if (keep) return null;
+    const old = kinds.get(id);
+    d.char = old.char;
+    Object.assign(old, d);
+    for (const f of ['w', 'h', 'step', 'text']) if (!(f in d)) delete old[f];
+    table[k][2] = old.name;
+    const info = kindInfo(old);
+    if (d.layer === 'ground') { const t = TILE_INFO[TILE[d.key]]; for (const f of Object.keys(t)) delete t[f]; Object.assign(t, info); }
+    else { const t = table[k][3]; for (const f of Object.keys(t)) delete t[f]; Object.assign(t, info); }
+    return null;
+  }
+  const clash = table.find(e => e[0] === d.char);
+  if (clash) return `The ${d.layer} character '${d.char}' is taken by ${clash[2]}.`;
+  if (table.length >= 255 || (d.layer === 'ground' && TILE_INFO.length >= 255)) return `No room for more ${d.layer} kinds.`;
+  const info = kindInfo(d);
+  if (d.layer === 'ground') { TILE[d.key] = TILE_INFO.length; TILE_INFO.push(info); table.push([d.char, d.key, d.name]); }
+  else table.push([d.char, d.key, d.name, info]);
+  if (KIND_INDEX[d.layer]) KIND_INDEX[d.layer][d.key] = table.length - 1;
+  kinds.set(id, d);
+  return null;
+}
+// Forgets a kind (the tables keep its row until the page reloads, so maps loaded already still read).
+export function forgetKind(id) { kinds.delete(id); }
+// The definition behind a table row, if it's a new kind.
+export function kindOf(layer, v) {
+  const e = KIND_TABLES[layer] && KIND_TABLES[layer][v];
+  if (!e) return null;
+  return (layer === 'ground' ? TILE_INFO[TILE[e[1]]].custom : e[3] && e[3].custom) || null;
+}
+// A free map character and an unused key for a new kind on a layer.
+export function freeChar(layer) {
+  const used = new Set(KIND_TABLES[layer].map(e => e[0]));
+  for (const d of kinds.values()) if (d.layer === layer) used.add(d.char);
+  return [...KIND_CHARS].find(c => !used.has(c)) || null;
+}
+export function freeKey(layer, name) {
+  const base = 'X' + String(name).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
+  const taken = k => KIND_TABLES[layer].some(e => e[1] === k) || kinds.has(`${layer}:${k}`);
+  if (!taken(base)) return base;
+  for (let n = 2; ; n++) if (!taken(base + n)) return base + n;
+}
+// Which new kinds are in the tables, in order: saves record it (tile numbers depend on it).
+export const kindSignature = () => KIND_LAYERS.map(l => KIND_TABLES[l].filter((e, v) => kindOf(l, v)).map(e => e[1]).join(',')).join('|');
 
 // Map sizes are whole screens (they overlap: CONFIG.world), so the flip-screen camera fits.
 export function sizeForScreens(sx, sy) {
@@ -491,6 +580,13 @@ export function checkPlace(map, layer, kind, x, y, rot = 0) {
 // with their properties. Copy and paste this; the game reads it from maps/*.txt. -----------------
 export function serializeMap(map) {
   const out = ['# Zombie Survival map v1', `size ${map.w} ${map.h}`];
+  // The new kinds this map uses, so it reads anywhere.
+  const used = new Map();
+  for (const l of KIND_LAYERS) {
+    const arr = map[l];
+    for (let i = 0; i < arr.length; i++) { const d = arr[i] && kindOf(l, arr[i]); if (d) used.set(`${l}:${d.key}`, d); }
+  }
+  for (const d of used.values()) out.push('kind ' + JSON.stringify(cleanKind(d)));
   out.push('legend height 0:0 1:1 2:2 3:3');
   for (const [l, table] of Object.entries(TABLES)) out.push(`legend ${l} ` + table.map(([c, , label]) => `${c}:${label.replace(/ /g, '_')}`).join(' '));
   const charOf = { ground: GROUND, struct: STRUCT, object: OBJECT, marker: MARKER, roof: ROOF };
@@ -527,8 +623,9 @@ export function parseMap(text) {
   const { sx, sy } = screensForSize(w, h);
   const map = createMap(sx, sy);
   if (map.w !== w || map.h !== h) throw new Error(`Map size ${w}x${h} isn't whole screens.`);
-  const fromChar = {};
-  for (const [l, table] of Object.entries(TABLES)) fromChar[l] = Object.fromEntries(table.map(([c], i) => [c, i]));
+  let fromChar = {};
+  const chars = () => { for (const [l, table] of Object.entries(TABLES)) fromChar[l] = Object.fromEntries(table.map(([c], i) => [c, i])); };
+  chars();
   const objects = [], markers = [];
   let section = null;
   for (let line = next(); line !== undefined; line = next()) {
@@ -546,6 +643,14 @@ export function parseMap(text) {
           if (section !== 'object' && section !== 'marker') map[section][y * w + x] = v;
         }
       }
+      continue;
+    }
+    if (line.startsWith('kind ')) {
+      let d = null;
+      try { d = JSON.parse(line.slice(5)); } catch (e) { throw new Error('A broken kind line.'); }
+      const err = registerKind(d, { keep: true });
+      if (err) throw new Error(err);
+      chars();
       continue;
     }
     if (line === 'objects' || line === 'markers') { section = line; continue; }

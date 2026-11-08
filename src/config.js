@@ -22,6 +22,12 @@ export const CONFIG = {
     mapFile: null,             // a map from maps/ (made in the editor) to play by default, e.g. 'main'
   },
 
+  // Joe's tile art (tileart/): the file in the repo, and the builder's autosave on the phone.
+  art: {
+    file: 'art/tiles.json',
+    key: 'zombie-tile-art',
+  },
+
   // The map editor (editor.html).
   editor: {
     saveKey: 'zombie-map-editor',   // its autosave

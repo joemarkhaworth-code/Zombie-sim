@@ -1326,6 +1326,86 @@ function townLayoutChecks(a) {
   check(picks.size === 3 && ta.versionAt(3, 5, 5) === ta.versionAt(3, 5, 5), 'versions are spread over the map, the same one at the same spot');
 }
 
+// New kinds, made by Joe in the tile art builder: they go in the tables, so the editor lists them,
+// the game plays by their rules, maps carry them, and the art text keeps them. (Last: it adds
+// rows to the shared tables.)
+{
+  const ml = await import('../src/sim/map.js');
+  const ta = await import('../tileart/catalogue.js');
+  const { useArt } = await import('../src/render/art.js');
+  const { surfaceStep } = await import('../src/sim/systems/noise.js');
+  const sig0 = ml.kindSignature();
+  const mk = (layer, name, rest) => ({ layer, name, key: ml.freeKey(layer, name), char: ml.freeChar(layer), ...rest });
+  const wagon = mk('object', 'hay wagon', { w: 3, h: 2, blocks: true, opaque: false, text: 'A hay wagon. No horse.' });
+  const boards = mk('ground', 'loose boards', { blocks: false, opaque: false, step: 'loud' });
+  const stoneW = mk('struct', 'granite wall', { blocks: true, opaque: true, type: 'wall' });
+  const tarp = mk('roof', 'blue tarp', {});
+  const art = ta.emptyArt();
+  art.kinds = [wagon, boards, stoneW, tarp];
+  art.tiles[`object:${wagon.key}`] = { w: 3, h: 2, variants: { main: [ta.encode(new Array(48 * 32).fill(2))] } };
+  const errs = useArt(ta.parseArt(ta.serializeArt(art)));
+  check(!errs.length, `new kinds register from the art text (${errs.join('; ')})`);
+  const O2 = ml.O[wagon.key], G2 = ml.G[boards.key], S2 = ml.S[stoneW.key], R2 = ml.ROOF.findIndex(e => e[1] === tarp.key);
+  check(O2 > 0 && G2 > 0 && S2 > 0 && R2 > 0 && ml.OBJECT[O2][3].w === 3 && ml.STRUCT[S2][3].wall, 'each is a row in its layer\'s table');
+  for (const [l, T] of [['ground', ml.GROUND], ['struct', ml.STRUCT], ['object', ml.OBJECT], ['roof', ml.ROOF]]) check(new Set(T.map(e => e[0])).size === T.length, `${l} characters still unique`);
+  check(/taken/.test(ml.registerKind({ layer: 'object', key: 'XCLASH', char: ml.OBJECT[1][0], name: 'clash' }) || ''), 'a kind can\'t take a character already used');
+  check(/already/.test(ml.registerKind({ layer: 'object', key: 'CAR', char: '~', name: 'car' }) || ''), 'or a built-in kind\'s key');
+  check(ml.freeKey('object', 'hay wagon') !== wagon.key, 'a second hay wagon gets its own key');
+  const list = ta.catalogue(), entry = list.find(i => i.id === `object:${wagon.key}`);
+  check(entry && entry.custom && entry.variants.join() === 'main,turned' && list.some(i => i.id === `ground:${boards.key}` && i.custom), 'the art builder lists them to draw (turned too)');
+  // A map using them.
+  const km = ml.createMap(1, 1), W = km.w;
+  for (let x = 0; x < W; x++) km.ground[7 * W + x] = G2;
+  ml.placeObject(km, { kind: O2, x: 4, y: 2, w: 3, h: 2 });
+  for (let x = 1; x <= 5; x++) km.struct[11 * W + x] = S2;
+  check(ml.checkPlace(km, 'struct', ml.S.DOOR, 3, 11) === null, 'a door goes in a new wall');
+  km.struct[11 * W + 3] = ml.S.DOOR;
+  for (let y = 9; y <= 11; y++) for (let x = 1; x <= 5; x++) km.roof[y * W + x] = R2;
+  ml.placeMarker(km, { kind: ml.M.START, x: 5, y: 5 });
+  const text = ml.serializeMap(km);
+  check((text.match(/^kind /gm) || []).length === 4, 'the map text carries the 4 kinds it uses');
+  check(ml.serializeMap(ml.parseMap(text)) === text, 'and survives text and back');
+  // A map with a kind this game has never seen registers it.
+  const alien = text.replace(/^size .*$/m, l => `${l}\nkind {"layer":"object","key":"XALIENPOD","char":"${ml.freeChar('object')}","name":"pod","w":1,"h":1,"blocks":true,"opaque":true}`);
+  check(!!ml.parseMap(alien) && ml.O.XALIENPOD > 0, 'a map brings its own kinds with it');
+  // The game plays by their rules.
+  const kw = createWorld(3, { map: 'file:kinds', mapData: ml.parseMap(text) }), kp = player(kw), klog = createMessageLog(kw);
+  for (const z of zombies(kw)) kw.entities.delete(z.id);
+  check(tileBlocks(kw, 5, 3) && !opaqueAt(kw, 5, 3), 'the hay wagon blocks walking, not sight');
+  check(describeTile(kw, 4, 2) === 'A hay wagon. No horse.', `its own inspect line ("${describeTile(kw, 4, 2)}")`);
+  kp.Position.x = 5; kp.Position.y = 4; updatePlayerView(kw);
+  klog.clear(); const t0 = kw.turn; applyInput(kw, { type: 'move', dx: 0, dy: -1 });
+  check(kw.turn === t0 && klog.text === 'A hay wagon is in the way.', `walking into it ("${klog.text}")`);
+  check(surfaceStep(kw, 2, 7) > 0, 'loose boards are loud underfoot');
+  check(tileBlocks(kw, 2, 11) && opaqueAt(kw, 2, 11) && !tileBlocks(kw, 3, 11), 'the new wall blocks; its door lets you through');
+  check(describeTile(kw, 8, 7) === 'Loose boards.', `with no line of its own, ground says its name for its inspect line ("${describeTile(kw, 8, 7)}")`);
+  // Editing a kind keeps its character; the game follows the new rules.
+  ml.registerKind({ ...wagon, opaque: true, char: 'Z' });
+  check(ml.OBJECT[O2][0] === wagon.char && opaqueAt(kw, 5, 3), 'editing a kind keeps its character and changes its rules');
+  // Saves: a save made with other kinds starts a new game rather than reading wrong tiles.
+  const saved = saveWorld(kw);
+  check(!!loadWorld((sd, o) => createWorld(sd, { ...o, mapData: ml.parseMap(text) }), saved), 'a save with new kinds loads');
+  ml.registerKind({ layer: 'ground', key: 'XLATER', char: ml.freeChar('ground'), name: 'later' });
+  let refused = false;
+  try { loadWorld((sd, o) => createWorld(sd, { ...o, mapData: ml.parseMap(text) }), saved); } catch (e) { refused = /kinds/.test(e.message); }
+  check(refused && sig0 === '|||', 'a save made with a different set of kinds is refused (new game)');
+  // Drawing them never throws (art or placeholder).
+  const { drawObject, drawHeightAndStruct, drawRoofTile } = await import('../src/render/layers.js');
+  const { drawTile } = await import('../src/render/tiles.js');
+  const fake = new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => ({ width: 10 })), set: (o, k, v) => { o[k] = v; return true; } });
+  let crashed = null;
+  try {
+    for (const mem of [false, true]) {
+      drawTile(fake, kw, kw.tiles[7 * W + 2], 2, 7, 0, 0, 32, mem);
+      drawHeightAndStruct(fake, kw, 2, 11, 0, 0, 32, mem);
+      drawObject(fake, { kind: O2, x: 4, y: 2, w: 3, h: 2 }, 0, 0, 32, mem);
+      drawObject(fake, { kind: O2, x: 4, y: 2, w: 2, h: 3 }, 0, 0, 32, mem);
+      drawRoofTile(fake, kw, 2, 10, 0, 0, 32, mem);
+    }
+  } catch (e) { crashed = e; }
+  check(!crashed, `drawing new kinds never throws (${crashed && crashed.stack})`);
+}
+
 // Zombies only chase what they see, so a random walker isn't always found; most are.
 check(reached >= SEEDS * 0.7, `the zombie reaches the random walker in most runs (${reached}/${SEEDS})`);
 

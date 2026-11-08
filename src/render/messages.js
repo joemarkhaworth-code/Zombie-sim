@@ -1,7 +1,7 @@
 // Turns sim events into the one-line status bar, and tiles into inspect text.
 // All player-facing wording lives here. The sim only emits data.
 import { TILE, TILE_INFO } from '../sim/tiles.js';
-import { S, O, STRUCT, OBJECT, roofRegion } from '../sim/map.js';
+import { S, O, STRUCT, OBJECT, ROOF, roofRegion } from '../sim/map.js';
 const OBJECT_LABEL = o => OBJECT[o][2];
 import { canNotice } from '../sim/systems/vision.js';
 
@@ -217,22 +217,25 @@ const OBJECT_TEXT = {
   [O.SOFA]: 'A sofa. Plaid.', [O.COUNTER]: 'A counter.', [O.STOVE]: 'A wood stove. Cold.', [O.FRIDGE]: "A fridge. Don't open it.",
   [O.BATH]: 'A bathtub. Ring round it.', [O.DESK]: 'A desk.',
 };
+// A new kind (Joe's): its own line, else its name.
+const kindLine = d => { const t = d.text || (d.layer === 'ground' ? `${d.name}.` : `${/^[aeiou]/i.test(d.name) ? 'An' : 'A'} ${d.name}.`); return (t[0].toUpperCase() + t.slice(1)).slice(0, 30); };
+const kindBlocked = d => { const t = `${/^[aeiou]/i.test(d.name) ? 'An' : 'A'} ${d.name} is in the way.`; return t.length <= 30 ? t[0].toUpperCase() + t.slice(1) : "Something's in the way."; };
 const objectBlocked = o => { const n = OBJECT_LABEL(o); const t2 = `A ${n} is in the way.`; return t2.length <= 30 ? t2 : "Something's in the way."; };
 const STRUCT_BLOCKED = {
   [S.WINDOW]: "A window. It's not a door.", [S.GARAGEDOOR]: "The garage door's down.", [S.HEDGE]: 'The hedge is too thick.',
   [S.BARBED]: 'Barbed wire. Not that way.', [S.STONEWALL]: 'A stone wall blocks the way.', [S.GUARDRAIL]: 'A guardrail blocks the way.',
 };
-const structBlocked = st => STRUCT_BLOCKED[st] || (STRUCT[st][3].wall ? 'A wall blocks the way.' : STRUCT[st][3].fence ? 'A fence blocks the way.' : null);
+const structBlocked = st => STRUCT_BLOCKED[st] || (STRUCT[st][3].custom && !STRUCT[st][3].wall && !STRUCT[st][3].fence ? kindBlocked(STRUCT[st][3].custom) : STRUCT[st][3].wall ? 'A wall blocks the way.' : STRUCT[st][3].fence ? 'A fence blocks the way.' : null);
 function layeredText(world, x, y) {
   const i = y * world.w + x, p = world.entities.get(world.playerId);
-  if (world.roof[i] && !roofRegion(world.roof, world.w, world.h, p.Position.y * world.w + p.Position.x).has(i)) return 'A roof. Shingles missing.';
+  if (world.roof[i] && !roofRegion(world.roof, world.w, world.h, p.Position.y * world.w + p.Position.x).has(i)) return ROOF[world.roof[i]][3] ? kindLine(ROOF[world.roof[i]][3].custom) : 'A roof. Shingles missing.';
   const o = world.obj[i];
   if (o === O.SIGN) {
     const sg = world.layout.objects.find(q => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
     return `A sign: ${(sg && sg.text) || 'blank'}.`.slice(0, 30);
   }
-  if (o) return OBJECT_TEXT[o];
-  if (world.struct[i]) return STRUCT_TEXT[world.struct[i]];
+  if (o) return OBJECT_TEXT[o] || (OBJECT[o][3].custom ? kindLine(OBJECT[o][3].custom) : 'Something.');
+  if (world.struct[i]) return STRUCT_TEXT[world.struct[i]] || (STRUCT[world.struct[i]][3].custom ? kindLine(STRUCT[world.struct[i]][3].custom) : null);
   return null;
 }
 
@@ -242,7 +245,7 @@ function tileText(world, x, y, tile) {
   if (b) return buildingText(b);
   const sign = world.layout && world.layout.signs.find(s => s.x === x && s.y === y);
   if (sign) return `A sign: ${sign.text}.`;
-  return TILE_TEXT[TILE_INFO[tile].key] || 'Nothing much.';
+  return TILE_TEXT[TILE_INFO[tile].key] || (TILE_INFO[tile].custom ? kindLine(TILE_INFO[tile].custom) : 'Nothing much.');
 }
 export function blockedText(world, x, y) {
   if (x < 0 || y < 0 || x >= world.w || y >= world.h) return 'A wall blocks the way.';
@@ -255,7 +258,7 @@ export function blockedText(world, x, y) {
   }
   if (info.part === 'door') return "The door's locked. For now.";
   if (info.part) return "A building's in the way.";
-  return BLOCKED_TEXT[info.key] || 'A wall blocks the way.';
+  return BLOCKED_TEXT[info.key] || (info.custom ? kindBlocked(info.custom) : 'A wall blocks the way.');
 }
 const THING_TEXT = {
   zombie: 'A zombie. Not a people person.',

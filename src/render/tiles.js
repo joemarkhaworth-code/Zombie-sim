@@ -6,6 +6,7 @@
 // their ridge and chimney stacks, then the south-facing wall with its door and windows.
 import { CONFIG } from '../config.js';
 import { TILE, TILE_INFO } from '../sim/tiles.js';
+import { drawKind } from './art.js';
 
 const COL = CONFIG.colours.tiles;
 
@@ -39,6 +40,7 @@ const isRail = t => t === TILE.RAIL || t === TILE.CROSSING;
 export function drawTile(ctx, world, tile, x, y, px, py, t, mem) {
   const info = TILE_INFO[tile];
   if (!info) { rect(ctx, '#ff00ff', px, py, t, t); return; }
+  if (info.custom) return drawKind(ctx, info.custom, 'main', x, y, px, py, t, t, mem);   // a new kind (Joe's)
   if (info.part === 'roof') return drawRoof(ctx, info, px, py, t, mem);
   if (info.part) return drawWall(ctx, info, px, py, t, mem);
   const key = info.key;

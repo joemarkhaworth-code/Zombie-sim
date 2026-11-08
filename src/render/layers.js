@@ -7,8 +7,9 @@
 // next tile up is higher, a cliff face is drawn on this, the lower tile, on that side (tall on
 // the north side, where you look at the face; a lip on the others).
 import { CONFIG } from '../config.js';
-import { S, O, M, STRUCT, OBJECT, MARKER } from '../sim/map.js';
+import { S, O, M, STRUCT, OBJECT, MARKER, ROOF } from '../sim/map.js';
 import { drawSign } from './tiles.js';
+import { drawKind } from './art.js';
 
 const C = CONFIG.colours.layers;
 const greyCache = new Map();
@@ -57,6 +58,7 @@ export function drawHeightAndStruct(ctx, src, x, y, px, py, t, mem) {
   const lineVert = test => (near(0, -1, test) || near(0, 1, test)) && !(near(-1, 0, test) || near(1, 0, test));
   const wallish = v => v > 0 && (STRUCT[v][3].wall || STRUCT[v][3].opening);
   switch (info.look) {
+    case 'custom': drawKind(ctx, info.custom, info.fence && lineVert(same) ? 'north-south' : info.fence ? 'east-west' : 'main', x, y, px, py, t, t, mem); break;
     case 'wall': {
       const [b, m] = C.walls[info.colour];
       rect(ctx, col(b, mem), px, py, t, t);
@@ -180,6 +182,7 @@ export function drawObject(ctx, o, px, py, t, mem) {
   const circle = (x0, y0, r, colour) => { ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(x0, y0, r, 0, Math.PI * 2); ctx.fill(); };
   const horiz = W >= H;
   switch (info.look) {
+    case 'custom': drawKind(ctx, info.custom, o.w !== info.w || o.h !== info.h ? 'turned' : 'main', o.x, o.y, px, py, W, H, mem); break;
     case 'vehicle': {
       ctx.fillStyle = c; ctx.strokeStyle = dark; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -320,6 +323,8 @@ export function drawRoofTile(ctx, src, x, y, px, py, t, mem) {
   const { w, h } = src, i = y * w + x;
   const r = src.roof[i];
   if (!r) return;
+  const kd = ROOF[r] && ROOF[r][3] && ROOF[r][3].custom;   // a new kind (Joe's)
+  if (kd) { const south = y + 1 < h && src.roof[i + w]; drawKind(ctx, kd, south ? 'middle' : 'edge (eaves)', x, y, px, py, t, t, mem); return; }
   const pal = C.roofs[r] || C.roofs[1];
   rect(ctx, col(pal[0], mem), px, py, t, t);
   for (let k = 1; k < 3; k++) rect(ctx, col(pal[1], mem), px, py + (k * t) / 3, t, 1);

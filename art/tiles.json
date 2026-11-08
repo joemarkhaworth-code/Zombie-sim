@@ -1,0 +1,11 @@
+{
+ "version": 2,
+ "px": 16,
+ "palette": [
+  "#000000",
+  "#ffffff",
+  "#ff0000"
+ ],
+ "kinds": [],
+ "tiles": {}
+}

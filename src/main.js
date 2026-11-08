@@ -13,6 +13,7 @@ import { validThrowTargets } from './sim/systems/throwing.js';
 import { saveWorld, loadWorld } from './sim/save.js';
 import { createMessageLog, describeTile } from './render/messages.js';
 import { parseMap } from './sim/map.js';
+import { loadArt } from './render/art.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -24,6 +25,8 @@ const ctx = canvas.getContext('2d');
 // Which map: ?map=NAME loads maps/NAME.txt (made in the map editor, editor.html), with its own
 // save; ?map=editor plays the map the editor just sent ("Play from here"), never saved;
 // otherwise CONFIG.world.mapFile if set, else the built-in region.
+// Joe's new kinds and their art first, so maps that use them read and draw.
+await loadArt();
 const params = new URLSearchParams(location.search);
 let mapName = params.get('map') || CONFIG.world.mapFile || null;
 let mapData = null, mapNote = '';

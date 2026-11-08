@@ -25,7 +25,7 @@
     .sw { width: 32px; min-width: 32px; height: 32px; padding: 0; border-radius: 5px; border: 2px solid #0008; }
     .sw.on { outline: 3px solid #ffdd33; outline-offset: 1px; }
     .sw.clear { background: repeating-conic-gradient(#555 0 25%, #333 0 50%) 0 0 / 10px 10px; }
-    #list, #menu { position: absolute; inset: 0; background: #0a1a66f4; overflow-y: auto; display: none; z-index: 4; padding: 10px; }
+    #list, #menu, #kindForm { position: absolute; inset: 0; background: #0a1a66f4; overflow-y: auto; display: none; z-index: 4; padding: 10px; }
     #list h3 { color: #ffdd33; margin: 12px 0 6px; font-size: 15px; }
     #list button { margin: 0 5px 5px 0; height: 34px; }
     #list button .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #555; margin-right: 6px; }
@@ -33,19 +33,28 @@
     #menu h2 { color: #ffdd33; margin: 4px 0 10px; font-size: 17px; }
     #menu .grp { margin-bottom: 14px; } #menu .grp button { margin: 0 6px 6px 0; }
     #menu p { margin: 4px 0; color: #ccd; line-height: 1.35; }
+    #kindForm h2 { color: #ffdd33; margin: 4px 0 10px; font-size: 17px; }
+    #kindForm .grp { margin-bottom: 12px; } #kindForm .grp button { margin: 0 6px 6px 0; }
+    #kindForm p { margin: 4px 0; color: #ccd; line-height: 1.35; }
+    #kindForm input[type=text] { width: 100%; max-width: 320px; height: 34px; font: inherit; box-sizing: border-box; }
+    #kindForm input[type=number] { width: 56px; height: 34px; font: inherit; }
+    #kindForm { position: fixed; z-index: 6; }
+    #kindRow { display: none; }
     #menu textarea { width: 100%; height: 120px; font: 11px monospace; box-sizing: border-box; }
   </style>
 </head>
 <body>
   <div id="app">
     <div class="row">
-      <button id="prev">◀</button><button id="title">Pick a tile</button><button id="next">▶</button><button id="nextTodo">Next to do</button>
+      <button id="prev">◀</button><button id="title">Pick a tile</button><button id="next">▶</button><button id="nextTodo">Next to do</button><button id="newKind">+ New</button>
     </div>
     <div id="info"></div>
+    <div class="row" id="kindRow"><button id="editKind">Edit this kind</button><span id="kindNote" style="color:#aab;font-size:12px"></span></div>
     <div class="row" id="variants"></div>
     <div class="row" id="versions"></div>
     <div id="stage"><canvas id="edit"></canvas><div id="status"></div>
       <div id="list"></div>
+      <div id="kindForm"></div>
       <div id="menu">
         <h2>Tile art</h2>
         <div class="grp"><p>This tile:</p>
@@ -55,6 +64,9 @@
           <button id="flipH">Flip ↔</button><button id="flipV">Flip ↕</button></div>
         <div class="grp"><p>Colours: bright red, black and white only (and transparent).</p>
           <button id="grid">Grid on/off</button></div>
+        <div class="grp"><p>New kinds: <b>+ New</b> makes a new ground, structure, object or roof, with its own rules (does it block
+          walking? sight? loud underfoot?). It goes in the map editor's lists and works in the game. They travel inside the art text.</p>
+          <button id="newKind2">+ New tile or object</button></div>
         <div class="grp"><p>All the art, as text (to put in the game: art/tiles.json):</p>
           <button id="copy">Copy art</button> <button id="paste">Paste art</button> <button id="download">Download file</button>
           <textarea id="text" spellcheck="false" placeholder="Paste art here, then tap Paste art."></textarea></div>

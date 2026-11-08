@@ -6,6 +6,7 @@
 // Tile arrays are run-length encoded and map memory saves only remembered tiles, so saves stay
 // small on the 110 x 150 town.
 import { CONFIG } from '../config.js';
+import { kindSignature } from './map.js';
 import { updatePlayerView } from './systems/vision.js';
 import { zombieComponents, createWorld as makeWorld } from './world.js';
 import { itemComponents } from './systems/items.js';
@@ -100,6 +101,7 @@ export function saveWorld(world) {
   return JSON.stringify({
     version: CONFIG.save.version,
     map: world.map,
+    kinds: kindSignature(),   // the new kinds' order: tile numbers depend on it
     seed: world.seed,
     turn: world.turn,
     tick: world.tick,
@@ -120,6 +122,7 @@ export function saveWorld(world) {
 export function loadWorld(createWorld, json) {
   const s = JSON.parse(json);
   if (!s || s.version !== CONFIG.save.version) throw new Error('save version');
+  if ((s.kinds ?? '|||') !== kindSignature()) throw new Error('save kinds');   // made with other new kinds
   const world = createWorld(s.seed, { map: s.map });
   const size = world.w * world.h;
   for (let i = 0; i < s.tiles.length; i += 2) world.tiles[s.tiles[i]] = s.tiles[i + 1];

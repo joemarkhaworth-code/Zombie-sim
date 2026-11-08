@@ -4,22 +4,23 @@
 // autosaves on the phone; Copy art gives the text that goes into the repo as art/tiles.json.
 import { CONFIG } from '../src/config.js';
 import { TILE } from '../src/sim/tiles.js';
-import { createMap, S, O, G } from '../src/sim/map.js';
+import { createMap, S, O, G, ROOF, kinds, registerKind, forgetKind, freeChar, freeKey, cleanKind, KIND_LAYERS } from '../src/sim/map.js';
+import { loadArt, useArt } from '../src/render/art.js';
 import { drawTile } from '../src/render/tiles.js';
 import { drawHeightAndStruct, drawObject, drawRoofTile } from '../src/render/layers.js';
 import { PX, catalogue, emptyArt, encode, decode, serializeArt, parseArt, nearestColour, versionAt } from './catalogue.js';
 
-const KEY = 'zombie-tile-art';
+const KEY = CONFIG.art.key;
 const $ = id => document.getElementById(id);
-const items = catalogue();
-let art = load() || emptyArt();
+// The art: the repo's art/tiles.json with this phone's autosave over it; its new kinds registered.
+let art = await loadArt('../');
+let items = catalogue();
 let index = 0, variant = 0, version = 0;
 let colour = 0;           // palette index (black, white, red); -1 = transparent (the eraser)
 let tool = 'pencil', mirror = false, grid = true;
 let zoom = 1, pan = { x: 0, y: 0 };
 const undo = [], redo = [];
 
-function load() { try { const t = localStorage.getItem(KEY); return t ? parseArt(t) : null; } catch (e) { return null; } }
 let saveTimer = 0;
 function save() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, serializeArt(art)); } catch (e) { say('Not saved: storage full or blocked.'); } }, 250); }
 let sayTimer = 0;
@@ -236,7 +237,7 @@ function traceLook() {
   } else if (kind === 'object') {
     drawObject(g, { kind: O[key], x: 0, y: 0, w: w / PX, h: h / PX, text: 'GAS' }, 0, 0, PX, false);
   } else if (kind === 'roof') {
-    const cx = 4, cy = 4, k = ['', 'RED', 'SLATE', 'BROWN', 'GREEN', 'TIN', 'WHITE'].indexOf(key);
+    const cx = 4, cy = 4, k = ROOF.findIndex(e => e[1] === key);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) m.roof[(cy + dy) * W + cx + dx] = k;
     if (/edge/.test(v)) m.roof[(cy + 1) * W + cx] = 0;
     drawRoofTile(g, m, cx, cy, 0, 0, PX, false);
@@ -262,6 +263,8 @@ function refresh() {
   const done = items.filter(isDone).length;
   const nv = versions().length;
   $('info').textContent = `${it.char ? `'${it.char}'  ` : ''}${w} x ${h} px${nv > 1 ? `, ${nv} versions` : ''}. ${it.notes}.   ${done} of ${items.length} drawn.`;
+  $('kindRow').style.display = it.custom ? 'flex' : 'none';
+  if (it.custom) $('kindNote').textContent = 'Your kind: in the map editor\'s lists.';
   const vr = $('variants'); vr.innerHTML = '';
   if (it.variants.length > 1) it.variants.forEach((v, k) => {
     const b = document.createElement('button');
@@ -376,13 +379,120 @@ $('paste').onclick = async () => {
   let text = $('text').value;
   if (!text.trim()) { try { text = await navigator.clipboard.readText(); } catch (e) { /* use the box */ } }
   if (!text.trim()) return say('Paste the art into the box first.');
-  try { art = parseArt(text); save(); buildPalette(); $('menu').style.display = 'none'; refresh(); say('Art pasted.'); } catch (e) { say(e.message); }
+  try { art = parseArt(text); useArt(art); rebuildItems(); save(); buildPalette(); $('menu').style.display = 'none'; refresh(); say('Art pasted.'); } catch (e) { say(e.message); }
 };
 $('download').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([serializeArt(art)], { type: 'application/json' }));
   a.download = 'tiles.json'; a.click();
 };
+
+// --- New kinds: ground, structures, objects and roofs of Joe's own ----------------------------------------
+const GROUP_OF = { ground: 'Ground', struct: 'Structure', object: 'Object', roof: 'Roof' };
+function rebuildItems(keepId) {
+  const id = keepId || (items[index] && items[index].id);
+  items = catalogue();
+  const i = items.findIndex(q => q.id === id);
+  index = i >= 0 ? i : Math.min(index, items.length - 1);
+  variant = Math.min(variant, item().variants.length - 1);
+}
+const syncKinds = () => { art.kinds = [...kinds.values()].map(cleanKind); };
+// An object's pictures when its size changes: what fits is kept, from the top-left.
+function resizeArt(id, w, h) {
+  const t = art.tiles[id];
+  if (!t || (t.w === w && t.h === h)) return;
+  for (const [v, list] of Object.entries(t.variants)) {
+    const turned = v === 'turned';
+    const ow = (turned ? t.h : t.w) * PX, oh = (turned ? t.w : t.h) * PX, nw = (turned ? h : w) * PX, nh = (turned ? w : h) * PX;
+    t.variants[v] = list.map(text => {
+      const src = decode(text, ow * oh), out = new Array(nw * nh).fill(-1);
+      for (let y = 0; y < Math.min(oh, nh); y++) for (let x = 0; x < Math.min(ow, nw); x++) out[y * nw + x] = src[y * ow + x];
+      return encode(out);
+    });
+  }
+  t.w = w; t.h = h;
+}
+function kindForm(existing) {
+  const el = $('kindForm');
+  const d = existing ? { ...existing } : { layer: 'object', name: '', w: 1, h: 1, blocks: true, opaque: false, step: '', type: 'plain', text: '' };
+  const draw = () => {
+    el.innerHTML = '';
+    const h2 = document.createElement('h2'); h2.textContent = existing ? `Edit: ${existing.name}` : 'A new tile or object'; el.append(h2);
+    const grp = (label) => { const g = document.createElement('div'); g.className = 'grp'; if (label) { const p = document.createElement('p'); p.innerHTML = label; g.append(p); } el.append(g); return g; };
+    const btn = (g, label, on, fn) => { const b = document.createElement('button'); b.textContent = label; if (on) b.className = 'on'; b.onclick = () => { fn(); draw(); }; g.append(b); return b; };
+    if (!existing) {
+      const g = grp('What is it?');
+      btn(g, 'Ground', d.layer === 'ground', () => { d.layer = 'ground'; d.blocks = false; d.opaque = false; });
+      btn(g, 'Structure', d.layer === 'struct', () => { d.layer = 'struct'; });
+      btn(g, 'Object', d.layer === 'object', () => { d.layer = 'object'; });
+      btn(g, 'Roof', d.layer === 'roof', () => { d.layer = 'roof'; });
+      const p = document.createElement('p'); p.style.fontSize = '12px';
+      p.textContent = { ground: 'What you walk on: fills the whole tile (grass, a floor, a road).', struct: 'One tile on top of the ground: walls, fences, doors, a bridge.',
+        object: 'A thing with a footprint: a car, a tree, furniture.', roof: 'Covers a building; hidden while you\'re inside.' }[d.layer];
+      g.append(p);
+    }
+    const gn = grp('Name (what the editor calls it):');
+    const name = document.createElement('input'); name.type = 'text'; name.maxLength = 30; name.value = d.name; name.placeholder = 'e.g. hay wagon';
+    name.oninput = () => { d.name = name.value; }; gn.append(name);
+    if (d.layer === 'object') {
+      const g = grp('Size in tiles (width x height):');
+      const num = (f) => { const n = document.createElement('input'); n.type = 'number'; n.min = 1; n.max = 8; n.value = d[f]; n.oninput = () => { d[f] = Math.max(1, Math.min(8, n.value | 0 || 1)); }; return n; };
+      g.append(num('w'), ' x ', num('h'));
+    }
+    if (d.layer !== 'roof') {
+      const g = grp('Rules:');
+      btn(g, d.blocks ? 'Blocks walking ✓' : 'Walkable', d.blocks, () => { d.blocks = !d.blocks; });
+      btn(g, d.opaque ? 'Blocks sight ✓' : 'See-through', d.opaque, () => { d.opaque = !d.opaque; });
+      const p = document.createElement('p'); p.style.fontSize = '12px'; p.textContent = 'Blocking sight also muffles noise.'; g.append(p);
+    }
+    if (d.layer === 'ground' || d.layer === 'struct') {
+      const g = grp('Footsteps on it:');
+      btn(g, 'Normal', !d.step, () => { d.step = ''; });
+      btn(g, 'Loud (gravel)', d.step === 'loud', () => { d.step = 'loud'; });
+      btn(g, 'Quiet (moss)', d.step === 'quiet', () => { d.step = 'quiet'; });
+    }
+    if (d.layer === 'struct') {
+      const g = grp('What sort of structure?');
+      btn(g, 'Plain', d.type === 'plain', () => { d.type = 'plain'; });
+      btn(g, 'A wall (doors and windows go in it)', d.type === 'wall', () => { d.type = 'wall'; d.blocks = true; d.opaque = true; });
+      btn(g, 'A fence (gates go in it)', d.type === 'fence', () => { d.type = 'fence'; d.blocks = true; });
+      btn(g, 'Walk over anything (like a bridge)', d.type === 'over', () => { d.type = 'over'; d.blocks = false; });
+    }
+    const gt = grp('What a long-press says (30 letters at most, dry):');
+    const text = document.createElement('input'); text.type = 'text'; text.maxLength = 30; text.value = d.text || ''; text.placeholder = 'e.g. A hay wagon. No horse.';
+    text.oninput = () => { d.text = text.value; }; gt.append(text);
+    const gb = grp('');
+    btn(gb, existing ? 'Save' : 'Make it', true, () => {
+      d.name = d.name.trim().toLowerCase(); d.text = (d.text || '').trim();
+      if (!d.name) return say('Give it a name first.');
+      if (!existing) {
+        d.char = freeChar(d.layer); d.key = freeKey(d.layer, d.name);
+        if (!d.char) return say(`No characters left for more ${GROUP_OF[d.layer].toLowerCase()} kinds.`);
+      }
+      const err = registerKind(d);
+      if (err) return say(err);
+      const id = `${d.layer}:${d.key}`;
+      if (d.layer === 'object') resizeArt(id, d.w, d.h);
+      syncKinds(); save();
+      el.style.display = 'none';
+      rebuildItems(id); variant = 0; version = 0; zoom = 1; pan = { x: 0, y: 0 }; refresh();
+      say(existing ? 'Saved.' : `Made the ${d.name}. Now draw it.`);
+    });
+    btn(gb, 'Cancel', false, () => { el.style.display = 'none'; });
+    if (existing) btn(gb, 'Delete this kind', false, () => {
+      if (!confirm(`Delete the ${existing.name} and its art? Maps that use it keep their own copy.`)) return;
+      const id = `${existing.layer}:${existing.key}`;
+      forgetKind(id); delete art.tiles[id]; syncKinds(); save();
+      el.style.display = 'none'; rebuildItems(); go(index); say('Deleted.');
+    });
+  };
+  draw();
+  el.style.display = 'block';
+}
+$('newKind').onclick = () => kindForm(null);
+$('newKind2').onclick = () => { $('menu').style.display = 'none'; kindForm(null); };
+$('editKind').onclick = () => { const [l, k] = item().id.split(':'); const d = kinds.get(`${l}:${k}`); if (d) kindForm(d); };
+void KIND_LAYERS; void emptyArt;
 
 window.addEventListener('resize', refresh);
 buildPalette(); buildTools(); refresh();

@@ -9,17 +9,21 @@
 // opens the game on it.
 import { CONFIG } from '../config.js';
 import {
-  GROUND, STRUCT, OBJECT, MARKER, ROOF, LAYERS, BUILDINGS, S, O, M, G, createMap, resizeMap, cloneMap, parseMap, serializeMap,
+  GROUND, STRUCT, OBJECT, MARKER, ROOF, LAYERS, BUILDINGS, S, O, M, G, kindOf, kinds, createMap, resizeMap, cloneMap, parseMap, serializeMap,
   checkPlace, placeObject, removeObject, objectAt, placeMarker, removeMarker, markerAt, footprint, groundTile,
   screensForSize, cellBlocks, buildBuilding, demolish,
 } from '../sim/map.js';
 import { drawTile } from '../render/tiles.js';
+import { loadArt, placeholderColour } from '../render/art.js';
 import { drawHeightAndStruct, drawObject, drawRoofTile, drawMarker } from '../render/layers.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('map'), ctx = canvas.getContext('2d');
 const E = CONFIG.editor;
 const TABLES = { ground: GROUND, struct: STRUCT, object: OBJECT, marker: MARKER, roof: ROOF };
+
+// Joe's new kinds (made in the tile art builder) and their art, before the palettes are built.
+await loadArt();
 
 // --- State ------------------------------------------------------------------------------------
 let map = loadSaved() || createMap(...E.screens);
@@ -245,7 +249,7 @@ function pickAt(x, y) {
 // --- Drawing ----------------------------------------------------------------------------------------
 const tileAtCss = (cx, cy) => ({ x: Math.floor((cx + view.ox) / view.scale), y: Math.floor((cy + view.oy) / view.scale) });
 const SIMPLE = { GRASS: '#5d8a3c', ROAD: '#2e2f33', PAVEMENT: '#8d8b83', PATH: '#b0a07c', GRAVEL: '#9a948a', FIELD: '#a89a52', WATER: '#2f62a8', FLOOR: '#8a6a44' };
-const simpleColour = g => { const k = GROUND[g][1]; return (CONFIG.colours.tiles[k] && CONFIG.colours.tiles[k][0]) || SIMPLE[k] || '#555'; };
+const simpleColour = g => { const k = GROUND[g][1]; const kd = kindOf('ground', g); if (kd) return placeholderColour(kd.key); return (CONFIG.colours.tiles[k] && CONFIG.colours.tiles[k][0]) || SIMPLE[k] || '#555'; };
 
 let pending = false;
 function render() {
@@ -489,6 +493,8 @@ const LAYER_NAMES = { height: 'Height', ground: 'Ground', struct: 'Struct', obje
 const swatch = colour => (colour ? `<span class="sw" style="background:${colour}"></span>` : '');
 const C = CONFIG.colours;
 function brushColour(l, k) {
+  const kd = l !== 'height' && l !== 'marker' && kindOf(l, k);
+  if (kd) return placeholderColour(kd.key);   // a new kind (made in the tile art builder)
   if (l === 'ground') return simpleColour(k);
   if (l === 'roof') return C.layers.roofs[k] && C.layers.roofs[k][0];
   if (l === 'struct') {
@@ -549,7 +555,8 @@ function buildPalette() {
   if (layer === 'object') add(rot ? 'Turned ↻' : 'Turn ↻', null, !!rot, () => { rot = rot ? 0 : 1; buildAll(); });
   TABLES[layer].forEach(([, , text], k) => {
     if (k === 0) return;
-    add(text, brushColour(layer, k), brush[layer] === k, () => { brush[layer] = k; buildAll(); });
+    if (layer !== 'marker' && kindOf(layer, k) && !kinds.has(`${layer}:${kindOf(layer, k).key}`)) return;   // deleted in the builder
+    add((layer !== 'marker' && kindOf(layer, k) ? '★ ' : '') + text, brushColour(layer, k), brush[layer] === k, () => { brush[layer] = k; buildAll(); });
   });
 }
 // Fill and Rect only make sense on the grid layers.
