@@ -1302,6 +1302,22 @@ function townLayoutChecks(a) {
   check(!crashed, `drawing an editor map never throws (${crashed && crashed.stack})`);
 }
 
+// The tile art builder (tileart/): its list covers every kind the game draws, and the art
+// survives being copied out as text and pasted back.
+{
+  const ta = await import('../tileart/catalogue.js');
+  const mapLib2 = await import('../src/sim/map.js');
+  const list = ta.catalogue(), ids = new Set(list.map(i => i.id));
+  const want = [...mapLib2.GROUND.map(g => `ground:${g[1]}`), ...mapLib2.STRUCT.slice(1).map(g => `struct:${g[1]}`),
+    ...mapLib2.OBJECT.slice(1).map(g => `object:${g[1]}`), ...mapLib2.ROOF.slice(1).map(g => `roof:${g[1]}`),
+    ...Object.keys(CONFIG.items).map(k => `item:${k}`), 'creature:player', 'creature:zombie'];
+  check(want.every(id => ids.has(id)) && ids.size === list.length, `the tile art list has every ground, structure, object, roof, creature and item (${list.length})`);
+  const art = ta.emptyArt();
+  art.tiles['object:CAR'] = { w: 3, h: 2, variants: { main: ta.encode(Array.from({ length: 48 * 32 }, (_, i) => (i % 40) - 1)) } };
+  const back2 = ta.parseArt(ta.serializeArt(art));
+  check(back2.tiles['object:CAR'].variants.main === art.tiles['object:CAR'].variants.main && back2.palette.length === art.palette.length, 'tile art survives copy and paste');
+}
+
 // Zombies only chase what they see, so a random walker isn't always found; most are.
 check(reached >= SEEDS * 0.7, `the zombie reaches the random walker in most runs (${reached}/${SEEDS})`);
 

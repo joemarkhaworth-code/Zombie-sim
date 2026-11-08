@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <title>Tile art</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 13px system-ui, sans-serif; overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: 100%; }
+    .row { display: flex; gap: 4px; padding: 4px; overflow-x: auto; background: #181818; flex: none; align-items: center; }
+    .row::-webkit-scrollbar { display: none; }
+    button { flex: none; min-width: 40px; height: 38px; padding: 0 8px; border: 1px solid #333; border-radius: 6px; background: #252525;
+      color: #ddd; font: inherit; font-weight: 600; touch-action: manipulation; }
+    button.on { background: #ffdd33; color: #000; border-color: #ffdd33; }
+    #title { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #info { padding: 4px 8px; color: #aab; font-size: 12px; background: #181818; flex: none; }
+    #status { position: absolute; left: 6px; right: 6px; top: 6px; padding: 6px 8px; border-radius: 6px; background: #000c; color: #ffdd33;
+      font-weight: 600; pointer-events: none; display: none; z-index: 3; }
+    #stage { flex: 1; min-height: 0; overflow: hidden; position: relative; background: #0a0a0a; }
+    #edit { position: absolute; touch-action: none; image-rendering: pixelated; }
+    #previews { display: flex; gap: 8px; padding: 6px; background: #181818; flex: none; overflow-x: auto; align-items: flex-end; }
+    #previews figure { margin: 0; text-align: center; color: #889; font-size: 10px; }
+    #previews canvas { display: block; image-rendering: pixelated; border: 1px solid #333; }
+    .sw { width: 32px; min-width: 32px; height: 32px; padding: 0; border-radius: 5px; border: 2px solid #0008; }
+    .sw.on { outline: 3px solid #ffdd33; outline-offset: 1px; }
+    .sw.clear { background: repeating-conic-gradient(#555 0 25%, #333 0 50%) 0 0 / 10px 10px; }
+    #list, #menu { position: absolute; inset: 0; background: #0a1a66f4; overflow-y: auto; display: none; z-index: 4; padding: 10px; }
+    #list h3 { color: #ffdd33; margin: 12px 0 6px; font-size: 15px; }
+    #list button { margin: 0 5px 5px 0; height: 34px; }
+    #list button .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #555; margin-right: 6px; }
+    #list button.done .dot { background: #3c3; }
+    #menu h2 { color: #ffdd33; margin: 4px 0 10px; font-size: 17px; }
+    #menu .grp { margin-bottom: 14px; } #menu .grp button { margin: 0 6px 6px 0; }
+    #menu p { margin: 4px 0; color: #ccd; line-height: 1.35; }
+    #menu textarea { width: 100%; height: 120px; font: 11px monospace; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="row">
+      <button id="prev">◀</button><button id="title">Pick a tile</button><button id="next">▶</button><button id="nextTodo">Next to do</button>
+    </div>
+    <div id="info"></div>
+    <div class="row" id="variants"></div>
+    <div id="stage"><canvas id="edit"></canvas><div id="status"></div>
+      <div id="list"></div>
+      <div id="menu">
+        <h2>Tile art</h2>
+        <div class="grp"><p>This tile:</p>
+          <button id="fromLook">Start from the current look</button> <button id="fromVariant">Copy the other variant</button> <button id="clear">Clear</button></div>
+        <div class="grp"><p>Shift the picture (it wraps round: for seamless ground):</p>
+          <button data-shift="-1,0">◀</button><button data-shift="1,0">▶</button><button data-shift="0,-1">▲</button><button data-shift="0,1">▼</button>
+          <button id="flipH">Flip ↔</button><button id="flipV">Flip ↕</button></div>
+        <div class="grp"><p>Colours: tap a swatch to use it; Edit changes the one selected (every tile using it changes too).</p>
+          <button id="grid">Grid on/off</button></div>
+        <div class="grp"><p>All the art, as text (to put in the game: art/tiles.json):</p>
+          <button id="copy">Copy art</button> <button id="paste">Paste art</button> <button id="download">Download file</button>
+          <textarea id="text" spellcheck="false" placeholder="Paste art here, then tap Paste art."></textarea></div>
+        <div class="grp"><p>Pencil draws, Fill floods, Line and Rect drag out shapes, Pick copies a colour, Mirror draws both
+          halves at once. The previews show the tile at size, tiled 3 x 3 (do the edges meet?), in grey (how it looks
+          remembered, out of sight) and on grass. One finger draws; + and − zoom; two fingers move the picture.</p></div>
+        <button id="close" class="on">Done</button>
+      </div>
+    </div>
+    <div id="previews"></div>
+    <div class="row" id="palette"></div>
+    <div class="row" id="tools"></div>
+  </div>
+  <script type="module" src="./tileart.js"></script>
+</body>
+</html>

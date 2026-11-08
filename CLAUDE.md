@@ -368,3 +368,12 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
   - Church: the altar at the north end, pews either side of the aisle (more the longer it is).
   - Shed: shelves along the back, a woodpile.
 - Tests: every type at every size from 3x3 to 14x13 keeps everything inside reachable from the door; a small house is one room, a bigger one has a bedroom and a kitchen behind a partition; a longer church has more pews; a bigger store has more shelves and a counter.
+
+### Tile art builder - built
+- Playtest: "build me a tile art builder that I can use to build all the tiles we need one by one; put it somewhere else in the repo." tileart/index.html (tileart/tileart.js, tileart/catalogue.js), deployed with the game at /tileart/. For Joe to draw the art pass (step 27) himself.
+- The list of what's needed comes from the game's own data (catalogue.js): every ground, structure, object and roof in the editor, the cliff face, you, the zombie, the corpse and every item (113 tiles, 156 pictures with variants). Prev / next / "Next to do" (the next undrawn); the list shows what's drawn per group.
+- 16 x 16 pixels per map tile (objects their footprint: a car 48 x 32). Variants where a tile needs them: east-west and north-south (fences, hedges, bridges, docks, track, gates, stone walls), in an east-west or north-south wall (doors, windows, garage doors), a turned version of every object that isn't square, drop south / east-west (ledge), middle and edge (roofs), north face / side / lip (the cliff).
+- Tools: pencil, erase (transparent), fill, line, rect, pick, mirror, undo, redo, zoom; menu: start from the current look (the game's greybox drawing traced into the palette), copy the other variant (a quarter turn), clear, shift with wrap-round (seamless ground), flip. Previews: at size, tiled 3 x 3 (do the edges meet?), remembered (the dark grey the game draws out of sight), and on grass (using the grass art once there is some).
+- The palette: PICO-8's sixteen plus sixteen Maine tones, editable, up to 62 colours (editing a colour changes it everywhere).
+- The art: autosaves on the phone; Copy art / Paste art / Download as text (JSON: the palette, then per tile and variant the rows of pixels, one character per pixel indexing the palette, '.' transparent). It goes in the repo as art/tiles.json; the game will draw it at the art pass.
+- Tests: the list has every kind the game draws; art survives copy and paste.
