@@ -7,14 +7,14 @@ import { TILE } from '../src/sim/tiles.js';
 import { createMap, S, O, G } from '../src/sim/map.js';
 import { drawTile } from '../src/render/tiles.js';
 import { drawHeightAndStruct, drawObject, drawRoofTile } from '../src/render/layers.js';
-import { PX, catalogue, emptyArt, encode, decode, serializeArt, parseArt } from './catalogue.js';
+import { PX, catalogue, emptyArt, encode, decode, serializeArt, parseArt, nearestColour, versionAt } from './catalogue.js';
 
 const KEY = 'zombie-tile-art';
 const $ = id => document.getElementById(id);
 const items = catalogue();
 let art = load() || emptyArt();
-let index = 0, variant = 0;
-let colour = 7;           // palette index; -1 = transparent (the eraser)
+let index = 0, variant = 0, version = 0;
+let colour = 0;           // palette index (black, white, red); -1 = transparent (the eraser)
 let tool = 'pencil', mirror = false, grid = true;
 let zoom = 1, pan = { x: 0, y: 0 };
 const undo = [], redo = [];
@@ -31,29 +31,38 @@ const vname = () => item().variants[variant];
 // The turned variant of an object is h x w.
 const dimsOf = v => { const it = item(); const turned = v === 'turned'; return { w: (turned ? it.h : it.w) * PX, h: (turned ? it.w : it.h) * PX }; };
 const dims = () => dimsOf(vname());
-function pixels() {
-  const it = item(), { w, h } = dims();
-  const t = art.tiles[it.id];
-  const text = t && t.variants[vname()];
+// The versions (duplicates) of the current variant: encoded pictures.
+const versions = (v = vname()) => { const t = art.tiles[item().id]; return (t && t.variants[v]) || []; };
+function pixels(v = vname(), k = version) {
+  const { w, h } = dimsOf(v);
+  const text = versions(v)[k];
   return text ? decode(text, w * h) : new Array(w * h).fill(-1);
 }
 function store(px) {
   const it = item();
   if (!art.tiles[it.id]) art.tiles[it.id] = { w: it.w, h: it.h, variants: {} };
-  if (px.every(p => p < 0)) delete art.tiles[it.id].variants[vname()];
-  else art.tiles[it.id].variants[vname()] = encode(px);
+  const list = art.tiles[it.id].variants[vname()] || (art.tiles[it.id].variants[vname()] = []);
+  list[version] = encode(px);
+  // An empty picture isn't kept (its version goes, unless it's the only one).
+  if (px.every(p => p < 0)) { list.splice(version, 1); version = Math.max(0, Math.min(version, list.length - 1)); }
+  if (!list.length) delete art.tiles[it.id].variants[vname()];
   if (!Object.keys(art.tiles[it.id].variants).length) delete art.tiles[it.id];
   save();
 }
 const isDone = it => !!(art.tiles[it.id] && Object.keys(art.tiles[it.id].variants).length);
-function snapshot() { undo.push({ id: item().id, v: vname(), px: pixels() }); if (undo.length > 200) undo.shift(); redo.length = 0; }
+function snapshot() { undo.push({ id: item().id, v: vname(), k: version, list: versions().slice() }); if (undo.length > 200) undo.shift(); redo.length = 0; }
 function restore(from, to) {
   const e = from.pop();
   if (!e) return say(from === undo ? 'Nothing to undo.' : 'Nothing to redo.');
   const i = items.findIndex(q => q.id === e.id);
   if (i !== index || vname() !== e.v) { index = i; variant = Math.max(0, item().variants.indexOf(e.v)); }
-  to.push({ id: e.id, v: e.v, px: pixels() });
-  store(e.px); refresh();
+  to.push({ id: e.id, v: e.v, k: version, list: versions().slice() });
+  const it = item();
+  if (!art.tiles[it.id]) art.tiles[it.id] = { w: it.w, h: it.h, variants: {} };
+  if (e.list.length) art.tiles[it.id].variants[e.v] = e.list.slice(); else delete art.tiles[it.id].variants[e.v];
+  if (!Object.keys(art.tiles[it.id].variants).length) delete art.tiles[it.id];
+  version = Math.min(e.k, Math.max(0, versions().length - 1));
+  save(); refresh();
 }
 
 // --- Drawing on the pixels ---------------------------------------------------------------------------
@@ -178,8 +187,9 @@ function paint(c2, px, w, h, scale, ox = 0, oy = 0, greyed = false) {
   }
 }
 function grassUnder(c2, w, h, scale) {
-  const g = art.tiles['ground:GRASS'] && art.tiles['ground:GRASS'].variants.main;
+  const gs = art.tiles['ground:GRASS'] && art.tiles['ground:GRASS'].variants.main;
   for (let ty = 0; ty < h / PX; ty++) for (let tx = 0; tx < w / PX; tx++) {
+    const g = gs && gs[versionAt(gs.length, tx, ty)];
     if (g) paint(c2, decode(g, PX * PX), PX, PX, scale, tx * PX * scale, ty * PX * scale);
     else { c2.fillStyle = CONFIG.colours.tiles.GRASS[0]; c2.fillRect(tx * PX * scale, ty * PX * scale, PX * scale, PX * scale); }
   }
@@ -194,20 +204,20 @@ function drawPreviews() {
   };
   const s = w > PX * 2 ? 1 : 2;
   fig('size', w * s, h * s, g => paint(g, px, w, h, s));
-  if (w === PX && h === PX) fig('tiled', w * 3, h * 3, g => { for (let k = 0; k < 9; k++) paint(g, px, w, h, 1, (k % 3) * w, ((k / 3) | 0) * h); });
+  if (w === PX && h === PX) {
+    const vs = versions().map(t => decode(t, w * h));
+    if (!vs.length) vs.push(px);
+    vs[version] = px;
+    fig(vs.length > 1 ? `tiled, ${vs.length} versions mixed` : 'tiled', w * 4, h * 4, g => {
+      for (let k = 0; k < 16; k++) { const tx = k % 4, ty = (k / 4) | 0; paint(g, vs[versionAt(vs.length, tx, ty)], w, h, 1, tx * w, ty * h); }
+    });
+  }
   fig('remembered', w * s, h * s, g => { g.fillStyle = '#000'; g.fillRect(0, 0, w * s, h * s); paint(g, px, w, h, s, 0, 0, true); });
   if (!item().id.startsWith('ground:')) fig('on grass', w * s, h * s, g => { grassUnder(g, w, h, s); paint(g, px, w, h, s); });
 }
 
 // --- Start from the current look: the game's greybox drawing, traced into pixels --------------------------
-function nearest(r, g, b) {
-  let best = 0, bd = Infinity;
-  art.palette.forEach((hex, i) => {
-    const n = parseInt(hex.slice(1), 16), d = (r - (n >> 16)) ** 2 + (g - ((n >> 8) & 255)) ** 2 + (b - (n & 255)) ** 2;
-    if (d < bd) { bd = d; best = i; }
-  });
-  return best;
-}
+const nearest = nearestColour;
 function traceLook() {
   const it = item(), { w, h } = dims(), v = vname();
   const off = document.createElement('canvas'); off.width = w; off.height = h;
@@ -250,15 +260,35 @@ function refresh() {
   const it = item(), { w, h } = dims();
   $('title').textContent = `${isDone(it) ? '● ' : '○ '}${it.name}  (${it.group})`;
   const done = items.filter(isDone).length;
-  $('info').textContent = `${it.char ? `'${it.char}'  ` : ''}${w} x ${h} px. ${it.notes}.   ${done} of ${items.length} drawn.`;
+  const nv = versions().length;
+  $('info').textContent = `${it.char ? `'${it.char}'  ` : ''}${w} x ${h} px${nv > 1 ? `, ${nv} versions` : ''}. ${it.notes}.   ${done} of ${items.length} drawn.`;
   const vr = $('variants'); vr.innerHTML = '';
   if (it.variants.length > 1) it.variants.forEach((v, k) => {
     const b = document.createElement('button');
-    const has = art.tiles[it.id] && art.tiles[it.id].variants[v];
+    const has = versions(v).length;
     b.textContent = (has ? '● ' : '○ ') + v; if (k === variant) b.className = 'on';
-    b.onclick = () => { variant = k; refresh(); }; vr.append(b);
+    b.onclick = () => { variant = k; version = 0; refresh(); }; vr.append(b);
   });
   vr.style.display = it.variants.length > 1 ? 'flex' : 'none';
+  // Versions: duplicates to change a little, so the map doesn't repeat.
+  const vs = $('versions'); vs.innerHTML = '';
+  const n = Math.max(1, versions().length);
+  for (let k = 0; k < n; k++) {
+    const b = document.createElement('button'); b.textContent = `#${k + 1}`; if (k === version) b.className = 'on';
+    b.onclick = () => { version = k; refresh(); }; vs.append(b);
+  }
+  const dup = document.createElement('button'); dup.textContent = '+ Duplicate';
+  dup.onclick = () => {
+    const px = pixels(); if (px.every(p => p < 0)) return say('Draw this one first, then duplicate it.');
+    snapshot(); const list = art.tiles[it.id].variants[vname()]; list.splice(version + 1, 0, encode(px)); version++; save(); refresh();
+    say(`Version #${version + 1}: change it a little.`);
+  };
+  vs.append(dup);
+  if (versions().length > 1) {
+    const del = document.createElement('button'); del.textContent = 'Delete #' + (version + 1);
+    del.onclick = () => { if (!confirm(`Delete version #${version + 1}?`)) return; snapshot(); versions().splice(version, 1); version = Math.max(0, version - 1); save(); refresh(); };
+    vs.append(del);
+  }
   layoutCanvas(); drawEditor(); drawPreviews();
 }
 function buildPalette() {
@@ -273,12 +303,6 @@ function buildPalette() {
   };
   add(-1);
   art.palette.forEach((_, i) => add(i));
-  const picker = document.createElement('input'); picker.type = 'color'; picker.style.display = 'none';
-  const edit = document.createElement('button'); edit.textContent = 'Edit';
-  edit.onclick = () => { if (colour < 0) return say('Pick a colour to edit.'); picker.value = art.palette[colour]; picker.oninput = () => { art.palette[colour] = picker.value; save(); buildPalette(); refresh(); }; picker.click(); };
-  const plus = document.createElement('button'); plus.textContent = '+ Colour';
-  plus.onclick = () => { if (art.palette.length >= 62) return say('The palette is full (62).'); picker.value = '#888888'; picker.oninput = null; picker.onchange = () => { art.palette.push(picker.value); colour = art.palette.length - 1; picker.onchange = null; save(); buildPalette(); }; picker.click(); };
-  el.append(edit, plus, picker);
 }
 function buildTools() {
   const el = $('tools'); el.innerHTML = '';
@@ -295,7 +319,7 @@ function buildTools() {
 }
 
 // --- Moving through the list ---------------------------------------------------------------------------------
-function go(i) { index = (i + items.length) % items.length; variant = 0; zoom = 1; pan = { x: 0, y: 0 }; refresh(); }
+function go(i) { index = (i + items.length) % items.length; variant = 0; version = 0; zoom = 1; pan = { x: 0, y: 0 }; refresh(); }
 $('prev').onclick = () => go(index - 1);
 $('next').onclick = () => go(index + 1);
 $('nextTodo').onclick = () => {
@@ -323,10 +347,10 @@ const edit = fn => { const px = pixels(); snapshot(); fn(px); store(px); refresh
 $('fromLook').onclick = () => { snapshot(); store(traceLook()); $('menu').style.display = 'none'; refresh(); say('Traced from the game. Now make it yours.'); };
 $('fromVariant').onclick = () => {
   const it = item();
-  const other = it.variants.find(v => v !== vname() && art.tiles[it.id] && art.tiles[it.id].variants[v]);
+  const other = it.variants.find(v => v !== vname() && versions(v).length);
   if (!other) return say('No other variant drawn yet.');
   const { w, h } = dims(), so = dimsOf(other);
-  const src = decode(art.tiles[it.id].variants[other], so.w * so.h);
+  const src = pixels(other, 0);
   let px;
   if (it.id.startsWith('roof:')) px = src.slice(0, w * h);   // middle and edge: the same way round
   else {

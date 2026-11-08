@@ -48,16 +48,17 @@ export function catalogue() {
 // Characters index the palette: 0-9 a-z A-Z (62 colours); '.' is transparent.
 export const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-// A starting palette: PICO-8's sixteen, then earthy Maine tones.
-export const DEFAULT_PALETTE = [
-  '#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
-  '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa',
-  '#2a4d22', '#4e7a32', '#7a9a4a', '#a89a52', '#8e7a58', '#6a4a2a', '#3a2a1a', '#8a847c',
-  '#c8b890', '#a8463a', '#e8e4d8', '#5c636b', '#2f62a8', '#c05a28', '#d8b860', '#1e4418',
-];
+// The palette (Joe): bright red, black and white only (plus transparent).
+export const PALETTE = ['#000000', '#ffffff', '#ff0000'];
+
+// The nearest of the three: reds stay red, then dark to black and light to white.
+export function nearestColour(r, g, b) {
+  if (r > 140 && r > g * 1.6 && r > b * 1.6) return 2;
+  return 0.299 * r + 0.587 * g + 0.114 * b < 110 ? 0 : 1;
+}
 
 export function emptyArt() {
-  return { version: 1, px: PX, palette: DEFAULT_PALETTE.slice(), tiles: {} };
+  return { version: 2, px: PX, palette: PALETTE.slice(), tiles: {} };
 }
 
 // Pixels (palette indices, -1 transparent) <-> the text.
@@ -70,27 +71,45 @@ export function decode(text, n) {
   return out;
 }
 
-// The art file as text (copy and paste it; art/tiles.json in the repo). Rows of pixels are
-// split into lines so it reads as a picture.
+// The art file as text (copy and paste it; art/tiles.json in the repo). Each tile has its
+// variants; each variant a list of versions (duplicates the game picks between, so a field of
+// grass doesn't repeat); each version its rows of pixels, one line a row, so it reads as a picture.
 export function serializeArt(art) {
   const tiles = {};
   for (const [id, t] of Object.entries(art.tiles)) {
     tiles[id] = { w: t.w, h: t.h, variants: {} };
-    for (const [v, text] of Object.entries(t.variants)) {
-      const rowLen = t.w * art.px, rows = [];
-      for (let i = 0; i < text.length; i += rowLen) rows.push(text.slice(i, i + rowLen));
-      tiles[id].variants[v] = rows;
+    const rowLen = t.w * art.px;
+    for (const [v, versions] of Object.entries(t.variants)) {
+      tiles[id].variants[v] = versions.map(text => {
+        const rows = [];
+        for (let i = 0; i < text.length; i += rowLen) rows.push(text.slice(i, i + rowLen));
+        return rows;
+      });
     }
   }
   return JSON.stringify({ version: art.version, px: art.px, palette: art.palette, tiles }, null, 1);
 }
+// Reads version 1 (one picture per variant, any palette) too: its colours are mapped to the three.
 export function parseArt(text) {
   const j = JSON.parse(text);
   if (!j || !Array.isArray(j.palette) || typeof j.tiles !== 'object') throw new Error("That isn't tile art.");
-  const art = { version: j.version || 1, px: j.px || PX, palette: j.palette, tiles: {} };
+  const art = emptyArt();
+  art.px = j.px || PX;
+  const same = j.palette.length === PALETTE.length && j.palette.every((c, i) => c.toLowerCase() === PALETTE[i]);
+  const remap = j.palette.map(hex => { const n = parseInt(hex.slice(1), 16); return nearestColour(n >> 16, (n >> 8) & 255, n & 255); });
+  const fix = str => (same ? str : [...str].map(ch => (ch === '.' ? '.' : CHARS[remap[CHARS.indexOf(ch)] ?? 0])).join(''));
   for (const [id, t] of Object.entries(j.tiles)) {
     art.tiles[id] = { w: t.w, h: t.h, variants: {} };
-    for (const [v, rows] of Object.entries(t.variants)) art.tiles[id].variants[v] = Array.isArray(rows) ? rows.join('') : rows;
+    for (const [v, val] of Object.entries(t.variants)) {
+      // v2: [[rows...], [rows...]]; v1: [rows...] or a string.
+      const versions = typeof val === 'string' ? [val] : Array.isArray(val[0]) ? val.map(r => r.join('')) : [val.join('')];
+      art.tiles[id].variants[v] = versions.map(fix);
+    }
   }
   return art;
+}
+
+// Which version the game draws at map tile (x, y): fixed per spot, so it never flickers.
+export function versionAt(count, x, y) {
+  return count <= 1 ? 0 : (((x * 73856093) ^ (y * 19349663)) >>> 0) % count;
 }

@@ -1313,9 +1313,17 @@ function townLayoutChecks(a) {
     ...Object.keys(CONFIG.items).map(k => `item:${k}`), 'creature:player', 'creature:zombie'];
   check(want.every(id => ids.has(id)) && ids.size === list.length, `the tile art list has every ground, structure, object, roof, creature and item (${list.length})`);
   const art = ta.emptyArt();
-  art.tiles['object:CAR'] = { w: 3, h: 2, variants: { main: ta.encode(Array.from({ length: 48 * 32 }, (_, i) => (i % 40) - 1)) } };
+  const pic = k => ta.encode(Array.from({ length: 48 * 32 }, (_, i) => ((i + k) % 4) - 1));
+  art.tiles['object:CAR'] = { w: 3, h: 2, variants: { main: [pic(0), pic(1)] } };
   const back2 = ta.parseArt(ta.serializeArt(art));
-  check(back2.tiles['object:CAR'].variants.main === art.tiles['object:CAR'].variants.main && back2.palette.length === art.palette.length, 'tile art survives copy and paste');
+  check(back2.tiles['object:CAR'].variants.main.join() === art.tiles['object:CAR'].variants.main.join() && back2.palette.join() === '#000000,#ffffff,#ff0000',
+    'tile art (two versions of a tile) survives copy and paste; three colours');
+  // Old art (one picture, any colours) comes in as three colours.
+  const old = { version: 1, px: 16, palette: ['#000000', '#ff1010', '#f0f0f0', '#202020'], tiles: { 'ground:GRASS': { w: 1, h: 1, variants: { main: ['0123'.repeat(64)] } } } };
+  const mig = ta.parseArt(JSON.stringify(old)).tiles['ground:GRASS'].variants.main[0];
+  check(mig.slice(0, 4) === '0210', `old art's colours map to black, red, white (${mig.slice(0, 4)})`);
+  const picks = new Set(); for (let x = 0; x < 20; x++) picks.add(ta.versionAt(3, x, 7));
+  check(picks.size === 3 && ta.versionAt(3, 5, 5) === ta.versionAt(3, 5, 5), 'versions are spread over the map, the same one at the same spot');
 }
 
 // Zombies only chase what they see, so a random walker isn't always found; most are.

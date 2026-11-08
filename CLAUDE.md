@@ -377,3 +377,7 @@ Other zombie types, a sneak mode or hiding spots (tried, step 7), morale, factio
 - The palette: PICO-8's sixteen plus sixteen Maine tones, editable, up to 62 colours (editing a colour changes it everywhere).
 - The art: autosaves on the phone; Copy art / Paste art / Download as text (JSON: the palette, then per tile and variant the rows of pixels, one character per pixel indexing the palette, '.' transparent). It goes in the repo as art/tiles.json; the game will draw it at the art pass.
 - Tests: the list has every kind the game draws; art survives copy and paste.
+- Playtest (Joe): "colours should only be bright red, black and white; I may need multiple tiles to stop repetition, so I should be able to duplicate them."
+  - The palette is fixed: black #000000, white #ffffff, bright red #ff0000, and transparent. No editing or adding colours. Older art and "start from the current look" map to the nearest of the three (reds stay red; dark to black, light to white).
+  - Versions: every tile (and each of its variants) can have several versions (#1, #2...): + Duplicate copies the one you're on to change a little; Delete removes one. The game will pick a version per map tile from its position (catalogue.js versionAt: the same spot always gets the same one), so fields and fences don't repeat. The tiled preview (4 x 4) mixes the versions the same way.
+  - The art text is version 2: per tile, per variant, a list of versions, each its rows of pixels. Version 1 art still pastes in (one version, colours mapped to the three).

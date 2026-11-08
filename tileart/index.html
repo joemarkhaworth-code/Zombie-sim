@@ -43,6 +43,7 @@
     </div>
     <div id="info"></div>
     <div class="row" id="variants"></div>
+    <div class="row" id="versions"></div>
     <div id="stage"><canvas id="edit"></canvas><div id="status"></div>
       <div id="list"></div>
       <div id="menu">
@@ -52,14 +53,16 @@
         <div class="grp"><p>Shift the picture (it wraps round: for seamless ground):</p>
           <button data-shift="-1,0">◀</button><button data-shift="1,0">▶</button><button data-shift="0,-1">▲</button><button data-shift="0,1">▼</button>
           <button id="flipH">Flip ↔</button><button id="flipV">Flip ↕</button></div>
-        <div class="grp"><p>Colours: tap a swatch to use it; Edit changes the one selected (every tile using it changes too).</p>
+        <div class="grp"><p>Colours: bright red, black and white only (and transparent).</p>
           <button id="grid">Grid on/off</button></div>
         <div class="grp"><p>All the art, as text (to put in the game: art/tiles.json):</p>
           <button id="copy">Copy art</button> <button id="paste">Paste art</button> <button id="download">Download file</button>
           <textarea id="text" spellcheck="false" placeholder="Paste art here, then tap Paste art."></textarea></div>
         <div class="grp"><p>Pencil draws, Fill floods, Line and Rect drag out shapes, Pick copies a colour, Mirror draws both
           halves at once. The previews show the tile at size, tiled 3 x 3 (do the edges meet?), in grey (how it looks
-          remembered, out of sight) and on grass. One finger draws; + and − zoom; two fingers move the picture.</p></div>
+          remembered, out of sight) and on grass. One finger draws; + and − zoom; two fingers move the picture.</p>
+          <p>Versions: Duplicate makes another version of the tile (#2, #3...) to change a little, so a field of grass or a
+          row of fences doesn't repeat. The game picks one for each spot, the same one every time. The tiled preview mixes them.</p></div>
         <button id="close" class="on">Done</button>
       </div>
     </div>
